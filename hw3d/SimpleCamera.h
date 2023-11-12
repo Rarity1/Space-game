@@ -21,39 +21,23 @@ public:
     SimpleCamera();
 
     void Init(XMVECTOR position);
-    void Update(float elapsedSeconds);
+    void Update(XMFLOAT4* pos, float* yaw, float* pitch, float* roll, XMFLOAT4* rupdirection);
     XMMATRIX GetViewMatrix();
     XMMATRIX GetProjectionMatrix(float fov, float aspectRatio, float nearPlane = 1.0f, float farPlane = 1000.0f);
     void SetMoveSpeed(float unitsPerSecond);
     void SetTurnSpeed(float radiansPerSecond);
 
-    void OnKeyDown(unsigned char key);
-    void OnKeyUp(unsigned char key);
-
 private:
     void Reset();
 
-    struct KeysPressed
-    {
-        bool w;
-        bool a;
-        bool s;
-        bool d;
 
-        bool left;
-        bool right;
-        bool up;
-        bool down;
-    };
-
-    XMVECTOR m_initialPosition;
     XMVECTOR m_position;
     float m_yaw;                // Relative to the +z axis.
     float m_pitch;                // Relative to the xz plane.
+    float m_roll;
     XMVECTOR m_lookDirection;
     XMVECTOR m_upDirection;
     float m_moveSpeed;            // Speed at which the camera moves, in units per second.
     float m_turnSpeed;            // Speed at which the camera turns, in radians per second.
 
-    KeysPressed m_keysPressed;
 };

@@ -10,6 +10,7 @@
 #include "resource.h"
 #include <thread>
 #include "GraphicsErrors.h"
+#include "Engine.h"
 
 
 //Window Class
@@ -56,6 +57,7 @@ public:
 	void SetTitle(const std::string& title);
 	static std::optional<WPARAM> ProcessMessages();
 	Graphics& Gfx();
+	Engine& Eng();
 	
 private:
 	static LRESULT CALLBACK HandleMsgSetup(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
@@ -70,6 +72,7 @@ private:
 	int height;
 	HWND hWnd;
 	std::unique_ptr<Graphics> pGfx;
+	std::unique_ptr<Engine> sEng;
 };
 
 

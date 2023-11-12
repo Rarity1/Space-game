@@ -1,6 +1,7 @@
 #pragma once
 #include "Window.h"
 #include "EngineTime.h"
+#include "Engine.h"
 
 class App {
 public:

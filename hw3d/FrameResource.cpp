@@ -19,16 +19,16 @@ FrameResource::FrameResource(Microsoft::WRL::ComPtr<ID3D12Device> pDevice, std::
 
     openbuffers.resize(std::size(models));
     cbvbuff.resize(std::size(models));
-        auto temp = 0;
+    auto temp = 0;
         for (auto& m : models) {
             vertexBufferView.emplace_back(D3D12_VERTEX_BUFFER_VIEW{
                 .BufferLocation = m->vbuffer->GetGPUVirtualAddress(),
-                .SizeInBytes = m->fsize,
+                .SizeInBytes = m->uData->fSize().fSize,
                 .StrideInBytes = (UINT)sizeof(ReadX3D::Vertex)
                 });
             indexBufferView.emplace_back(D3D12_INDEX_BUFFER_VIEW{
                 .BufferLocation = m->ibuffer->GetGPUVirtualAddress(),
-                .SizeInBytes = (UINT)std::size(m->indexData) * (UINT)sizeof(WORD),
+                .SizeInBytes = (UINT)std::size(m->uData->indexData()) * (UINT)sizeof(WORD),
                 .Format = DXGI_FORMAT_R16_UINT
                 });
 
@@ -45,7 +45,6 @@ FrameResource::FrameResource(Microsoft::WRL::ComPtr<ID3D12Device> pDevice, std::
             }
             CD3DX12_RANGE readRange(0, 0);
             openbuffers[temp]->Map(0, &readRange, reinterpret_cast<void**>(&cbvbuff[temp])) >> chk;
-            //Load texture data
             temp++;
         }
 }
@@ -72,24 +71,6 @@ void FrameResource::InitBundle(ID3D12Device* pDevice, ID3D12PipelineState* pPso1
     bundle->Close()>>chk;
 }
 
-void FrameResource::UpdatePositions(std::vector<RStorage::bmResource*> models) {
-    
-    for (auto& m : models) {
-        switch (m->changepos) {
-        case RStorage::BOTH: {
-            m->cmatrix = XMMatrixTranslation(0, 0, 0) * XMMatrixRotationRollPitchYaw(m->rotation.pitch, m->rotation.yaw, m->rotation.roll);
-            m->cmatrix *= XMMatrixTranslation(m->position.x, m->position.y, m->position.z);
-            break;
-        }
-        case RStorage::POSITION: {
-            break;
-        }
-        case RStorage::ROTATION: {
-            break;
-        }
-        }
-    }
-}
 
 
 
@@ -120,7 +101,7 @@ void FrameResource::PopulateCommandList(ID3D12GraphicsCommandList* pCommandList,
             cbvSrvHandle.Offset(cbvSrvDescriptorSize);
             pCommandList->SetGraphicsRootDescriptorTable(0, cbvSrvHandle);
             cbvSrvHandle.Offset(cbvSrvDescriptorSize);
-            pCommandList->DrawIndexedInstanced(std::size(m->indexData), 1, 0, 0, 0);
+            pCommandList->DrawIndexedInstanced(std::size(m->uData->indexData()), 1, 0, 0, 0);
             
         
         
@@ -131,10 +112,8 @@ void FrameResource::PopulateCommandList(ID3D12GraphicsCommandList* pCommandList,
 
 void XM_CALLCONV FrameResource::UpdateConstantBuffers(FXMMATRIX view, CXMMATRIX projection, std::vector<RStorage::bmResource*> Modls)
 {
-    UpdatePositions(Modls);
-    UINT temp = 0;
-    XMMATRIX model;
     XMFLOAT4X4 mvp;
+    auto temp = 0;
         for (auto& m : Modls)
         {
             

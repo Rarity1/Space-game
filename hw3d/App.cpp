@@ -3,11 +3,10 @@
 App::App()
 	:
 	wnd(1000, 750, "Game Window")
-{};
+{
+};
 
 int App::Go() {
-	wnd.Gfx().OnInit();
-	
 	while (wnd.ProcessMessages() != WM_QUIT) {
 		App::DoFrame();
 	}
@@ -15,6 +14,13 @@ int App::Go() {
 }
 
 void App::DoFrame() {
-		wnd.Gfx().OnUpdate();
-		wnd.Gfx().RenderFrame();
+	if (timer.Peek() > 16) {
+		wnd.Eng().Update();
+		timer.Mark();
+	}
+	if(!wnd.Eng().engInit)
+	wnd.Gfx().RenderFrame();
+	else {
+		wnd.Eng().iLoad();
+	}
 }

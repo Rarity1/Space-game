@@ -9,27 +9,32 @@ class Graphics
 {
 public:
 	static const UINT bufferCount = 3;
-	Graphics(HWND* hWnd, int height, int widthm, Keyboard* kbd);
-	virtual void OnInit();
+	Graphics(HWND* hWnd, int height, int widthm);
 	Graphics(const Graphics&) = delete;
 	Graphics& operator=(const Graphics&) = delete;
 	~Graphics();
-	
+	struct pCamera {
+		XMFLOAT4 position = {0,0,0,0};
+		RStorage::aRotation rotation = {0,0,0};
+		XMFLOAT4 upDirection = { 0,0,1,0 };
+	};
 	struct rpVect {
 		XMFLOAT3 position;
 		RStorage::aRotation rotation;
 		RStorage::pChange which;
 		RStorage::bmResource* model;
 	};
-	void SetModelPosition(std::string name, XMFLOAT3 position, RStorage::aRotation rotation, RStorage::pChange which);
-	//Only use this version if you dont hate perfomance
-	void SetModelPosition(RStorage::bmResource* model, XMFLOAT3 position, RStorage::aRotation rotation, RStorage::pChange which);
+	void SetModelPosition(RStorage::bmResource* model, XMFLOAT3 position, RStorage::aRotation rotation);
 	void SetModelVectPositions(std::vector<rpVect> rpVect);
 	void OnUpdate();
 	void RenderFrame();
+	void LoadResources();
+	void LoadPipeline();
+	void loadModels(UINT umID, RStorage::bmResource* model);
+	pCamera curCamera;
+	std::vector<std::string> loadbuff;
+	std::vector<RStorage::bmResource*> modelVect;
 
-	
-	
 private:
 
 	float Max(float number, float maximum);
@@ -37,15 +42,15 @@ private:
 	float RotateHelper(float& rNumber);
 	float timesincestart;
 	void CreateFrameResources();
-	void LoadPipeline();
-	void LoadResources();
+
+
 	void PopCommandList(FrameResource* backBuffer);
 	GErrors::CheckerToken chk;
 	UINT width;
 	UINT height;
 	HWND* hWnd;
-	std::unique_ptr<RStorage> lModels;
-	std::vector<RStorage::bmResource*> modelVect;
+	RStorage lModels;
+
 	static const bool UseBundles = true;
 	std::vector<FrameResource*> frameResources;
 	struct PipelineStateStream
@@ -68,10 +73,9 @@ private:
 	Microsoft::WRL::ComPtr<IDXGIFactory4> dxgiFactory;
 	Microsoft::WRL::ComPtr<IDXGISwapChain4> swapChain;
 	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> rtvDescriptorHeap;
-	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> srvDescriptorHeap;
 	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> dsvDescriptorHeap;
 	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> samplerDescriptorHeap;
-	
+	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> srvDescriptorHeap;
 	Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue;
 	
 	Microsoft::WRL::ComPtr<ID3D12CommandAllocator> commandAllocator;

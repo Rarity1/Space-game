@@ -6,7 +6,7 @@
 
 class RStorage {
 public:
-	RStorage(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList, Microsoft::WRL::ComPtr<ID3D12Device> pDevice, Microsoft::WRL::ComPtr<ID3D12CommandAllocator> commandAllocator, Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue);
+	RStorage();
 	virtual void OnInit();
 	RStorage(const RStorage&) = delete;
 	RStorage& operator=(const RStorage&) = delete;
@@ -15,39 +15,47 @@ public:
 		NONE = 0,
 		ROTATION = 1,
 		POSITION = 2,
-		BOTH = 3
+		BOTH = 3,
+		INIT = 4
 	};
 	struct aRotation {
 		float pitch;
 		float yaw;
 		float roll;
 	};
-	struct bmResource {
-		std::string name;
+	struct unmappedData {
+		std::filesystem::path texture;
 		std::filesystem::path model;
-		Microsoft::WRL::ComPtr<ID3D12Resource> vbuffer;
-		Microsoft::WRL::ComPtr<ID3D12Resource> ibuffer;
 		std::vector<ReadX3D::Vertex> vertexData;
 		std::vector<ReadX3D::vFaceData> indexData;
 		UINT fsize;
 		UINT vCount;
-		std::filesystem::path texture;
-		Microsoft::WRL::ComPtr<ID3D12Resource> tbuffer;
-		DirectX::XMFLOAT3 position = {0, 0, 0};
-		aRotation rotation = {0, 0, 0};
-		Microsoft::WRL::ComPtr<ID3D12Resource> uvbuffer;
-		Microsoft::WRL::ComPtr<ID3D12Resource> uibuffer;
-		pChange changepos = NONE;
-		DirectX::XMMATRIX cmatrix;
+		UINT umID;
+		bool mappedBuffer;
+		ID3D12Resource* vbuffer;
+		ID3D12Resource* ibuffer;
+		ID3D12Resource* tbuffer;
 	};
-
-	RStorage::bmResource* Read(std::string name);
+	struct bmResource {
+		std::string name;
+		ID3D12Resource* vbuffer;
+		ID3D12Resource* ibuffer;
+		ID3D12Resource* tbuffer;
+		ID3D12Resource* uvbuffer;
+		ID3D12Resource* uibuffer;
+		ReadX3D* uData;
+		pChange changepos = INIT;
+		DirectX::XMMATRIX cmatrix;
+		UINT umID;
+	};
+	std::vector<RStorage::bmResource*> modelVect;
 	void Delete(RStorage::bmResource* bm);
-	RStorage::bmResource* lModel(std::string name) noexcept;
+	void lModel(UINT umID, RStorage::bmResource* model) noexcept;
 	//Always call after read
-	void CreateBuffers(std::vector<RStorage::bmResource*> bm);
+	void CreateBuffers(std::vector<RStorage::bmResource*> bm, Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList, Microsoft::WRL::ComPtr<ID3D12Device> pDevice, Microsoft::WRL::ComPtr<ID3D12CommandAllocator> commandAllocator, Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue,  UINT buffercount);
 private:
-	std::vector<bmResource> Models;
+	std::vector<ID3D12Resource*> vbufferPtrs;
+	std::vector<unmappedData> Models;
 	struct DDS_HEADER {
 		uint32_t dwSize;
 		uint32_t dwFlags;
@@ -59,13 +67,9 @@ private:
 		uint32_t dwReserved1[11];
 		// ... other members are not shown for brevity
 	};
-	std::vector<RStorage::bmResource*> modelVect;
-	RStorage::bmResource* UpCDStorage(RStorage::bmResource* bm);
+
+
 	GErrors::CheckerToken chk;
-	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList;
-	Microsoft::WRL::ComPtr<ID3D12Device> pDevice;
-	Microsoft::WRL::ComPtr<ID3D12CommandAllocator> commandAllocator;
-	Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue;
 
 	bmResource* cModel;
 	

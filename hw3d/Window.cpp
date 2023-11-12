@@ -1,6 +1,7 @@
 #include "Window.h"
 
 
+
 Window::WindowClass Window::WindowClass::wndClass;
 
 Window::WindowClass::WindowClass():
@@ -73,7 +74,8 @@ Window::Window(int width, int height, const char* name)
 	);
 	// newly created windows start off as hidden
 
-	pGfx = std::make_unique<Graphics>(&hWnd, height, width, &kbd);
+	pGfx = std::make_unique<Graphics>(&hWnd, height, width);
+	sEng = std::make_unique<Engine>(pGfx.get(), &kbd);
 	ShowWindow(hWnd, SW_SHOWDEFAULT);
 	//Create graphics object
 	
@@ -109,6 +111,11 @@ std::optional<WPARAM> Window::ProcessMessages() {
 Graphics& Window::Gfx()
 {
 	return *pGfx;
+}
+
+Engine& Window::Eng()
+{
+	return *sEng;
 }
 
 LRESULT CALLBACK Window::HandleMsgSetup(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
