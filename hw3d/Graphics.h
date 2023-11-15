@@ -19,12 +19,16 @@ public:
 		XMFLOAT4 upDirection = { 0,0,1,0 };
 	};
 	struct rpVect {
-		XMFLOAT3 position;
-		RStorage::aRotation rotation;
-		RStorage::pChange which;
+		XMFLOAT3 position = {0,0,0};
+		RStorage::aRotation rotation = {0,0,0};
+		RStorage::aRotation orbit = { 0,0,0 };
+		RStorage::pChange which = RStorage::INIT;
 		RStorage::bmResource* model;
+		XMFLOAT3 lastposition = { 0,0,0 };
+		RStorage::aRotation lastrotation = { 0,0,0 };
+		RStorage::aRotation lastorbit = { 0,0,0 };
 	};
-	void SetModelPosition(RStorage::bmResource* model, XMFLOAT3 position, RStorage::aRotation rotation);
+	void SetModelPosition(rpVect* model);
 	void SetModelVectPositions(std::vector<rpVect> rpVect);
 	void OnUpdate();
 	void RenderFrame();
@@ -64,6 +68,7 @@ private:
 		CD3DX12_PIPELINE_STATE_STREAM_RENDER_TARGET_FORMATS RTVFormats;
 	} pipelineStateStream;
 	UINT CurBackBuffer;
+	UINT cframeIndex;
 	
 	uint64_t fenceValue;
 	Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature;

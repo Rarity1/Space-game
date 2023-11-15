@@ -86,10 +86,10 @@ void ReadX3D::cvertexData()
 
 		}
 	}
-	auto c = 0;
+	auto c = std::size(tempindex)-1;
 	for (auto& i : tempindex) {
 		i.index = c;
-		c++;
+		c-=1;
 	}
 
 	for (auto i : idata) {

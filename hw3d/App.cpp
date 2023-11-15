@@ -7,6 +7,7 @@ App::App()
 };
 
 int App::Go() {
+	wnd.Eng().iLoad();
 	while (wnd.ProcessMessages() != WM_QUIT) {
 		App::DoFrame();
 	}
@@ -14,13 +15,7 @@ int App::Go() {
 }
 
 void App::DoFrame() {
-	if (timer.Peek() > 16) {
-		wnd.Eng().Update();
+		wnd.Eng().Update(timer.Peek());
 		timer.Mark();
-	}
-	if(!wnd.Eng().engInit)
-	wnd.Gfx().RenderFrame();
-	else {
-		wnd.Eng().iLoad();
-	}
+		wnd.Gfx().RenderFrame();
 }

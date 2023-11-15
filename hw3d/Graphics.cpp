@@ -11,6 +11,7 @@ Graphics::Graphics(HWND* hWnd, int height, int width)
 	scissorRect(0, 0, static_cast<LONG>(width), static_cast<LONG>(height)),
 	rtvDescriptorSize(0),
 	CurBackBuffer(0),
+	cframeIndex(0),
 	cbackBuffer(nullptr)
 {
 }
@@ -74,7 +75,7 @@ void Graphics::LoadPipeline() {
 
 	dxgiFactory->MakeWindowAssociation(*hWnd, DXGI_MWA_NO_ALT_ENTER) >> chk;
 	TswapChain.As(&swapChain) >> chk;
-	CurBackBuffer = swapChain->GetCurrentBackBufferIndex();
+	cframeIndex = swapChain->GetCurrentBackBufferIndex();
 
 
 	//rtv Descriptor heap
@@ -326,12 +327,12 @@ void Graphics::PopCommandList(FrameResource* backBuffer) {
 	commandList->RSSetScissorRects(1, &scissorRect);
 	{
 		auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-			renderTargets[CurBackBuffer].Get(),
+			renderTargets[cframeIndex].Get(),
 			D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
 		commandList->ResourceBarrier(1, &barrier);
 	}
 
-	CD3DX12_CPU_DESCRIPTOR_HANDLE rtv(rtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart(), CurBackBuffer, rtvDescriptorSize);
+	CD3DX12_CPU_DESCRIPTOR_HANDLE rtv(rtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart(), cframeIndex, rtvDescriptorSize);
 	CD3DX12_CPU_DESCRIPTOR_HANDLE dsv(dsvDescriptorHeap->GetCPUDescriptorHandleForHeapStart());
 	commandList->OMSetRenderTargets(1, &rtv, FALSE, &dsv);
 	const FLOAT clearColor[] = {
@@ -344,7 +345,7 @@ void Graphics::PopCommandList(FrameResource* backBuffer) {
 
 
 
-	if (false) {
+	if (true) {
 		commandList->ExecuteBundle(backBuffer->bundle.Get());
 	}
 	else
@@ -356,7 +357,7 @@ void Graphics::PopCommandList(FrameResource* backBuffer) {
 
 	{
 		auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-			renderTargets[CurBackBuffer].Get(),
+			renderTargets[cframeIndex].Get(),
 			D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT
 		);
 		commandList->ResourceBarrier(1, &barrier);
@@ -388,45 +389,73 @@ Graphics::~Graphics() {
 
 
 
-void Graphics::SetModelPosition(RStorage::bmResource* model, XMFLOAT3 position, RStorage::aRotation rotation) {
-		model->cmatrix = XMMatrixTranslation(0, 0, 0) * XMMatrixRotationRollPitchYaw(rotation.pitch, rotation.yaw, rotation.roll);
-		model->cmatrix *= XMMatrixTranslation(position.x, position.y, position.z);
+void Graphics::SetModelPosition(rpVect* model) {
+	auto bmodel = model->model;
+	
+	switch (model->which) {
+	case RStorage::INIT:
+		bmodel->cmatrix = XMMatrixTranslation(0, 0, 0) * XMMatrixRotationRollPitchYaw(model->rotation.pitch, model->rotation.yaw, model->rotation.roll);
+		bmodel->cmatrix *= XMMatrixTranslation(model->position.x, model->position.y, model->position.z);
+		model->which = RStorage::NONE;
+		break;
+	case RStorage::BOTH:
+		bmodel->cmatrix = XMMatrixTranslation(0, 0, 0) * XMMatrixRotationRollPitchYaw(model->rotation.pitch, model->rotation.yaw, model->rotation.roll);
+		bmodel->cmatrix *= XMMatrixTranslation(model->position.x, model->position.y, model->position.z);
+		bmodel->cmatrix *= XMMatrixRotationRollPitchYaw(model->orbit.pitch, model->orbit.yaw, model->orbit.roll);
+		model->which = RStorage::NONE;
+		break;
+	case RStorage::ORBIT:
+		bmodel->cmatrix *= XMMatrixRotationRollPitchYaw(model->orbit.pitch, model->orbit.yaw, model->orbit.roll);
+		model->which = RStorage::NONE;
+		break;
+	case RStorage::POSITION:
+		bmodel->cmatrix = XMMatrixTranslation(0, 0, 0) * XMMatrixRotationRollPitchYaw(model->rotation.pitch, model->rotation.yaw, model->rotation.roll);
+		bmodel->cmatrix *= XMMatrixTranslation(model->position.x, model->position.y, model->position.z);
+		model->which = RStorage::NONE;
+		break;
+	case RStorage::NONE:
+		return;
+		break;
+	}
+		
 }
 
 //This will help you to update multiple models
 void Graphics::SetModelVectPositions(std::vector<rpVect> rpVects) {
 	for (auto& m : rpVects) {
-		SetModelPosition(m.model, m.position, m.rotation);
+		SetModelPosition(&m);
 	}
 }
 
 
 void Graphics::OnUpdate() {
-	CurBackBuffer = swapChain->GetCurrentBackBufferIndex();
+	const UINT64 lastCompletedFence = fence->GetCompletedValue();
+	
+	CurBackBuffer = (CurBackBuffer + 1) % bufferCount;
 	cbackBuffer = backBuffers[CurBackBuffer];
+	if (cbackBuffer->fenceValue != 0 && cbackBuffer->fenceValue > lastCompletedFence) {
+		fenceValue++;
+		fence->SetEventOnCompletion(cbackBuffer->fenceValue, fenceEvent);
+		WaitForSingleObject(fenceEvent, INFINITE);
+	}
+	
 	camera.Update(&curCamera.position,  &curCamera.rotation.yaw, &curCamera.rotation.pitch, &curCamera.rotation.roll, &curCamera.upDirection);
 	cbackBuffer->UpdateConstantBuffers(camera.GetViewMatrix(), camera.GetProjectionMatrix(1.333f, float(width) / float(height)), modelVect);
 }
 
 
 void Graphics::RenderFrame() {
-	PIXBeginEvent(commandQueue.Get(), 0, L"Render");
 	PopCommandList(cbackBuffer);
 	
 	ID3D12CommandList* commandLists[] = { commandList.Get() };
 	commandQueue->ExecuteCommandLists(_countof(commandLists), commandLists);
 
-	PIXEndEvent(commandQueue.Get());
 
+	swapChain->Present(0, 4) >> chk;
 
-	swapChain->Present(1, 0) >> chk;
+	cframeIndex = swapChain->GetCurrentBackBufferIndex();
+	cbackBuffer->fenceValue = ++fenceValue;
 	commandQueue->Signal(fence.Get(), ++fenceValue) >> chk;
-	fence->SetEventOnCompletion(fenceValue, fenceEvent) >> chk;
-	CurBackBuffer = swapChain->GetCurrentBackBufferIndex();
-	if (WaitForSingleObject(fenceEvent, INFINITE) == WAIT_FAILED) {
-		GetLastError() >> chk;
-	}
-	cbackBuffer->fenceValue = fenceValue;
 }
 
 

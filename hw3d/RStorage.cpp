@@ -152,9 +152,7 @@ void RStorage::CreateBuffers(std::vector<bmResource*> bm, Microsoft::WRL::ComPtr
 
 //Returns a model by its name
 void RStorage::Delete(RStorage::bmResource* bm) {
-	for (auto& m : modelVect) {
-		modelVect.erase(std::remove(modelVect.begin(), modelVect.end(), bm), modelVect.end());
-	}
+	//modelVect.erase(std::remove(modelVect.begin(), modelVect.end(), bm), modelVect.end());
 }
 
 
@@ -168,9 +166,7 @@ void RStorage::lModel(UINT umID, RStorage::bmResource* model) noexcept
 
 RStorage::~RStorage()
 {
-	for (auto& m : Models) {
 		for (auto& bm : modelVect) {
-			//modelVect.erase(std::remove(modelVect.begin(), modelVect.end(), bm), modelVect.end());
+			Delete(bm);
 		}
-	}
 }

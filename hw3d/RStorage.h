@@ -13,7 +13,7 @@ public:
 	~RStorage();
 	enum pChange {
 		NONE = 0,
-		ROTATION = 1,
+		ORBIT = 1,
 		POSITION = 2,
 		BOTH = 3,
 		INIT = 4
@@ -44,7 +44,6 @@ public:
 		ID3D12Resource* uvbuffer;
 		ID3D12Resource* uibuffer;
 		ReadX3D* uData;
-		pChange changepos = INIT;
 		DirectX::XMMATRIX cmatrix;
 		UINT umID;
 	};

@@ -85,12 +85,12 @@ void FrameResource::PopulateCommandList(ID3D12GraphicsCommandList* pCommandList,
     
     
     UINT frameResourceDescriptorOffset = (frameResourceIndex * (UINT)std::size(models)*2);
-    CD3DX12_GPU_DESCRIPTOR_HANDLE cbvSrvHandle(pCbvSrvDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
+    CD3DX12_GPU_DESCRIPTOR_HANDLE cbvSrvHandle(pCbvSrvDescriptorHeap->GetGPUDescriptorHandleForHeapStart(), frameResourceDescriptorOffset, cbvSrvDescriptorSize);
     
     pCommandList->SetGraphicsRootDescriptorTable(1, pSamplerDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
     pCommandList->SetPipelineState(pPso1);
 
-    PIXBeginEvent(pCommandList, 0, "Draw everything");
+    //PIXBeginEvent(pCommandList, 0, "Draw everything");
     auto temp = 0;
     for (auto& m : models) {
         
@@ -107,7 +107,7 @@ void FrameResource::PopulateCommandList(ID3D12GraphicsCommandList* pCommandList,
         
         temp++;
     }
-    PIXEndEvent(pCommandList);
+    //PIXEndEvent(pCommandList);
 }
 
 void XM_CALLCONV FrameResource::UpdateConstantBuffers(FXMMATRIX view, CXMMATRIX projection, std::vector<RStorage::bmResource*> Modls)

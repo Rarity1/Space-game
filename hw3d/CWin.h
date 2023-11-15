@@ -92,6 +92,7 @@
 #include <dstorage.h>
 #include <DDSTextureLoader.h>
 #include <ResourceUploadBatch.h>
+#include <complex>
 #include "GraphicsErrors.h"
 #include "Keyboard.h"
 #include "EngineTime.h"
