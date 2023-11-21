@@ -15,18 +15,19 @@ public:
 	~Graphics();
 	struct pCamera {
 		XMFLOAT4 position = {0,0,0,0};
-		RStorage::aRotation rotation = {0,0,0};
+		XMFLOAT4 rotation = {1,0,0,0};
 		XMFLOAT4 upDirection = { 0,0,1,0 };
+		XMFLOAT3 stupid = { 1,0,0 };
 	};
 	struct rpVect {
 		XMFLOAT3 position = {0,0,0};
-		RStorage::aRotation rotation = {0,0,0};
-		RStorage::aRotation orbit = { 0,0,0 };
+		XMFLOAT4 rotation = {0,0,0,0};
+		XMFLOAT4 orbit = { 0,0,0,0 };
 		RStorage::pChange which = RStorage::INIT;
 		RStorage::bmResource* model;
 		XMFLOAT3 lastposition = { 0,0,0 };
-		RStorage::aRotation lastrotation = { 0,0,0 };
-		RStorage::aRotation lastorbit = { 0,0,0 };
+		XMFLOAT3 lastrotation = { 1,0,0 };
+		XMFLOAT3 lastorbit = { 1,0,0 };
 	};
 	void SetModelPosition(rpVect* model);
 	void SetModelVectPositions(std::vector<rpVect> rpVect);

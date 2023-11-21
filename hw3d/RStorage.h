@@ -18,11 +18,7 @@ public:
 		BOTH = 3,
 		INIT = 4
 	};
-	struct aRotation {
-		float pitch;
-		float yaw;
-		float roll;
-	};
+
 	struct unmappedData {
 		std::filesystem::path texture;
 		std::filesystem::path model;

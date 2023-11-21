@@ -394,22 +394,23 @@ void Graphics::SetModelPosition(rpVect* model) {
 	
 	switch (model->which) {
 	case RStorage::INIT:
-		bmodel->cmatrix = XMMatrixTranslation(0, 0, 0) * XMMatrixRotationRollPitchYaw(model->rotation.pitch, model->rotation.yaw, model->rotation.roll);
+		bmodel->cmatrix = XMMatrixTranslation(0, 0, 0) * XMMatrixRotationQuaternion(XMLoadFloat4(&model->rotation));
 		bmodel->cmatrix *= XMMatrixTranslation(model->position.x, model->position.y, model->position.z);
+		bmodel->cmatrix *= XMMatrixRotationQuaternion(XMLoadFloat4(&model->orbit));
 		model->which = RStorage::NONE;
 		break;
 	case RStorage::BOTH:
-		bmodel->cmatrix = XMMatrixTranslation(0, 0, 0) * XMMatrixRotationRollPitchYaw(model->rotation.pitch, model->rotation.yaw, model->rotation.roll);
+		bmodel->cmatrix = XMMatrixTranslation(0, 0, 0) * XMMatrixRotationQuaternion(XMLoadFloat4(&model->rotation));
 		bmodel->cmatrix *= XMMatrixTranslation(model->position.x, model->position.y, model->position.z);
-		bmodel->cmatrix *= XMMatrixRotationRollPitchYaw(model->orbit.pitch, model->orbit.yaw, model->orbit.roll);
+		bmodel->cmatrix *= XMMatrixRotationQuaternion(XMLoadFloat4(&model->orbit));
 		model->which = RStorage::NONE;
 		break;
 	case RStorage::ORBIT:
-		bmodel->cmatrix *= XMMatrixRotationRollPitchYaw(model->orbit.pitch, model->orbit.yaw, model->orbit.roll);
+		bmodel->cmatrix *= XMMatrixRotationQuaternion(XMLoadFloat4(&model->orbit));
 		model->which = RStorage::NONE;
 		break;
 	case RStorage::POSITION:
-		bmodel->cmatrix = XMMatrixTranslation(0, 0, 0) * XMMatrixRotationRollPitchYaw(model->rotation.pitch, model->rotation.yaw, model->rotation.roll);
+		bmodel->cmatrix = XMMatrixTranslation(0, 0, 0) * XMMatrixRotationQuaternion(XMLoadFloat4(&model->rotation));
 		bmodel->cmatrix *= XMMatrixTranslation(model->position.x, model->position.y, model->position.z);
 		model->which = RStorage::NONE;
 		break;
@@ -439,7 +440,7 @@ void Graphics::OnUpdate() {
 		WaitForSingleObject(fenceEvent, INFINITE);
 	}
 	
-	camera.Update(&curCamera.position,  &curCamera.rotation.yaw, &curCamera.rotation.pitch, &curCamera.rotation.roll, &curCamera.upDirection);
+	camera.Update(&curCamera.position, &curCamera.rotation, &curCamera.upDirection);
 	cbackBuffer->UpdateConstantBuffers(camera.GetViewMatrix(), camera.GetProjectionMatrix(1.333f, float(width) / float(height)), modelVect);
 }
 

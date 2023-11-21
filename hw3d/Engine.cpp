@@ -17,7 +17,7 @@ void Engine::iLoad() {
     trackedModels.emplace_back(new eResource{ 1, "untitled" });
     //wrld is 1:50000
     trackedModels.emplace_back(new eResource{ 2, "wrld" , true});
-
+    plModel = trackedModels[1];
     //end model tracking.
     for (auto& m : trackedModels) {
         m->loadedModel.model = new RStorage::bmResource{m->name};
@@ -27,6 +27,7 @@ void Engine::iLoad() {
         XMFLOAT3 temp1;
         XMFLOAT3 temp2;
         XMFLOAT3 temp3;
+        XMFLOAT3 temp4 = {0,0,0};
         for (auto& v : m->loadedModel.model->uData->vertexData()) {
             switch (tempc%3) {
             case 0:
@@ -39,20 +40,30 @@ void Engine::iLoad() {
                 temp3 = v.position;
                 XMFLOAT3 tempcoll = { temp1.x + temp2.x + temp3.x / 3, temp1.y + temp2.y + temp3.y / 3, temp1.z + temp2.z + temp3.z / 3 };
                 m->collision.emplace_back(pCollision{ tempcoll, fDistance(tempcoll, temp1) });
+                temp4 = abs(temp3.x) > abs(temp4.x) && abs(temp3.y) > abs(temp4.y) && abs(temp3.z) > abs(temp4.z) ? temp3 : temp4;
                 break;
             }
+
+            m->gCollision = fDistance({0,0,0}, temp4);
             tempc++;
             
         }
         //testing
-        if (m->umID == 0) {
-            m->loadedModel.position = { 03,10,-200 };
+        if (m->umID == 1) {
+            m->loadedModel.position = { 0,168,168 };
             m->mworld = trackedModels[2];
-            m->mass = 10;
+            m->mass = 200;
         }
         else if (m->umID == 2) {
             m->mass = 8570000000;
+            m->mass *= 2000000;
         }
+        else if (m->umID == 0) {
+            m->loadedModel.position = { 04,10,138 };
+            m->mworld = trackedModels[2];
+            m->mass = 200;
+        }
+        m->loadedModel.lastposition = m->loadedModel.position;
         pGfx->SetModelPosition(&m->loadedModel);
     }
     pGfx->LoadResources();
@@ -64,100 +75,155 @@ void Engine::iLoad() {
 void Engine::Update(float frametime)
 {
     UControls();
-    timer += frametime;
-    if (timer >= 16) {
-        cMPosUpdate();
+    timer += frametime/1000;
+    if (timer >= 1/updaterate) {
+        
+        cPlayermodel();
+        eResource* tempproc = nullptr;
+        for (auto& m : trackedModels) {
+            
+            
+            cMPosUpdate(m, tempproc);
+        }
+
         UCampos();
         timer = 0;
     }
     pGfx->OnUpdate();
 }
 
+void Engine::procGenCollision(eResource* m, eResource* tempres) {
+        for (auto& m2 : trackedModels) {
+            if (m != m2 && m != tempres) {
+                tempres = m2;
+                auto temp = m->gCollision;
+                temp += m2->gCollision;
+                auto fdtemp = fDistance(m->loadedModel.position, m2->loadedModel.position);
+                
+                if (fdtemp <= temp) {
+                    
+                    pSpecCollison(m, m2, temp, fdtemp);
+                }
+            }
+        }
+}
+void Engine::pSpecCollison(eResource* obj1, eResource* obj2, float radialdist, float actualdist) {
+    double changex = (obj2->loadedModel.position.x - obj1->loadedModel.position.x);
+    double changey = (obj2->loadedModel.position.y - obj1->loadedModel.position.y);
+    double changez = (obj2->loadedModel.position.z - obj1->loadedModel.position.z);
+    auto mag = sqrt(pow(changex, 2) + pow(changey, 2) + pow(changez, 2));
+
+    changex /= mag;
+    changey /= mag;
+    changez /= mag;
+
+    auto mass1 = obj1->mass;
+    auto mass2 = obj2->mass;
+
+    auto masg = sqrt(pow(mass1, 2) + pow(mass2, 2));
+
+    mass1 /= masg;
+    mass2 /= masg;
+
+    auto newdist = radialdist - actualdist;
+
+
+    obj1->loadedModel.position.x -= mass2 * newdist * changex;
+    obj1->loadedModel.position.y -= mass2 * newdist * changey;
+    obj1->loadedModel.position.z -= mass2 * newdist * changez;
+    obj2->loadedModel.position.x += mass1 * newdist * changex;
+    obj2->loadedModel.position.y += mass1 * newdist * changex;
+    obj2->loadedModel.position.z += mass1 * newdist * changex;
+}
+
+
 void Engine::cPlayermodel()
 {
+    auto movespeed = 20.0;
+    Movement move;
+    if (m_keysPressed.w) {
+       move.forward += movespeed * timer;
+   }if (m_keysPressed.s) {
+       move.forward -= movespeed * timer;
+   }if (m_keysPressed.a) {
+       move.left += movespeed * timer;
+   }if (m_keysPressed.d) {
+       move.left -= movespeed * timer;
+   }
 
+   auto changex = move.forward * pGfx->curCamera.rotation.x;// (move.forward * cosf(pGfx->curCamera.rotation.pitch) * cosf(pGfx->curCamera.rotation.yaw)) + move.left * cosf(pGfx->curCamera.rotation.yaw + XM_PIDIV2);
+   auto changey = move.forward * pGfx->curCamera.rotation.y;// move.forward* cosf(pGfx->curCamera.rotation.pitch)* sinf(pGfx->curCamera.rotation.yaw) + move.left * sinf(pGfx->curCamera.rotation.yaw + XM_PIDIV2);
+   auto changez = move.forward * pGfx->curCamera.rotation.z;// move.forward* sinf(pGfx->curCamera.rotation.pitch);
 
+   plModel->loadedModel.position.x += changex;
+   plModel->loadedModel.position.y += changey;
+   plModel->loadedModel.position.z += changez;
 }
 
-void Engine::cMPosUpdate(){
-    for (auto& m : trackedModels) {
-        if (!m->isWorld && m->mworld != nullptr) {
-            m->loadedModel.lastposition = m->loadedModel.position;
-            cGravity(m);
-            m->loadedModel.position.x += m->speed.x;
-            m->loadedModel.position.y += m->speed.y;
-            m->loadedModel.position.z += m->speed.z;
-            m->loadedModel.which = RStorage::BOTH;
-        }
-        else if (!m->isWorld) {
-            m->loadedModel.lastposition = m->loadedModel.position;
-            m->loadedModel.position.x += m->speed.x;
-            m->loadedModel.position.y += m->speed.y;
-            m->loadedModel.position.z += m->speed.z;
-            m->loadedModel.which = RStorage::BOTH;
-        }
-    pGfx->SetModelPosition(&m->loadedModel);
+void Engine::cMPosUpdate(eResource* mUpdate, eResource* tempres){
+    cGravity(mUpdate);
+    procGenCollision(mUpdate, tempres);
+    bool tbool = (mUpdate->loadedModel.lastposition.x != mUpdate->loadedModel.position.x || mUpdate->loadedModel.lastposition.y != mUpdate->loadedModel.position.y || mUpdate->loadedModel.lastposition.z != mUpdate->loadedModel.position.z);
+    if (tbool || mUpdate->grav.w != 0) {
+        mMove(mUpdate);
+        mUpdate->loadedModel.lastposition = mUpdate->loadedModel.position;
     }
-   
+            
+            
 }
+
+void Engine::mMove(eResource* mUpdate) {
+
+
+
+
+
+    mUpdate->loadedModel.which = RStorage::BOTH;
+    pGfx->SetModelPosition(&mUpdate->loadedModel);
+}
+
+
+
 void Engine::UCampos() {
     //Link the camera position here to whatever you want.
-    pGfx->curCamera.position.x = trackedModels[1]->loadedModel.position.x;
-    pGfx->curCamera.position.y = trackedModels[1]->loadedModel.position.y;
-    pGfx->curCamera.position.z = trackedModels[1]->loadedModel.position.z;
+    pGfx->curCamera.position.x = plModel->loadedModel.position.x;
+    pGfx->curCamera.position.y = plModel->loadedModel.position.y;
+    pGfx->curCamera.position.z = plModel->loadedModel.position.z;
 
 
+    auto udir = XMLoadFloat4(&pGfx->curCamera.upDirection);
+    auto lookdir = XMLoadFloat4(&pGfx->curCamera.rotation);
 
-
-    XMFLOAT3 temppos{ 0,0,0 };
-    //free cam
-    Movement move{0,0,0};
-    /*if (m_keysPressed.w) {
-        move.forward += 1.0f;
-    }if (m_keysPressed.s) {
-        move.forward -= 1.0f;
-    }if (m_keysPressed.a) {
-        move.left += 1.0f;
-    }if (m_keysPressed.d) {
-        move.left -= 1.0f;
-    }*/
-    if (m_keysPressed.left) {
-        pGfx->curCamera.rotation.yaw += 0.1;
-    }
-   
-    if (m_keysPressed.right) {
-        pGfx->curCamera.rotation.yaw -= 0.1;
-    }
-       
-    if (m_keysPressed.up) {
-        pGfx->curCamera.rotation.pitch += 0.1;
-    }
+    XMFLOAT4 left(0,0,0,0);
+    XMFLOAT4 up(0,0,0,0);
+    auto pitch = 0.0;
+    auto yaw = 0.0;
+    if (m_keysPressed.left && !m_keysPressed.right) {
         
-    if (m_keysPressed.down) {
-        pGfx->curCamera.rotation.pitch -= 0.1;
+        XMStoreFloat4(&left, XMQuaternionRotationNormal(XMQuaternionMultiply(lookdir, udir), 2*timer));
+        left.w = 0;
+        XMStoreFloat4(&pGfx->curCamera.rotation, XMQuaternionNormalize(lookdir+XMLoadFloat4(&left)));
+    }else
+    if (m_keysPressed.right && !m_keysPressed.left) {
+        
+        XMStoreFloat4(&left, XMQuaternionRotationNormal(XMQuaternionMultiply(lookdir, udir), -2 * timer));
+        left.w = 0;
+        XMStoreFloat4(&pGfx->curCamera.rotation, XMQuaternionNormalize(lookdir + XMLoadFloat4(&left)));
     }
-    temppos.x = move.forward * cosf(pGfx->curCamera.rotation.pitch) * cosf(pGfx->curCamera.rotation.yaw);
-    temppos.y = move.forward * cosf( pGfx->curCamera.rotation.pitch) * sinf(pGfx->curCamera.rotation.yaw);
-    temppos.z = move.forward * sinf(pGfx->curCamera.rotation.pitch);
 
-    temppos.x += move.left * cosf(pGfx->curCamera.rotation.yaw+XM_PIDIV2);
-    temppos.y += move.left * sinf(pGfx->curCamera.rotation.yaw + XM_PIDIV2);
-    //temppos.z += move.left * (pGfx->curCamera.rotation.pitch);
-
-    if (temppos.x > 1) {
-        temppos.x /= 2;
+    if (m_keysPressed.up && !m_keysPressed.down) {
+        XMStoreFloat4(&up, XMQuaternionRotationNormal(lookdir+udir, 2 * timer));
+        up.w = 0;
+        XMStoreFloat4(&pGfx->curCamera.rotation, XMQuaternionNormalize(lookdir +XMLoadFloat4(&up)));
+    }else
+    if (m_keysPressed.down && !m_keysPressed.up) {
+        XMStoreFloat4(&up, XMQuaternionRotationNormal(lookdir + udir, -2 * timer));
+        up.w = 0;
+        
     }
-    if (temppos.y > 1) {
-        temppos.y /= 2;
-    }if (temppos.z > 1) {
-        temppos.z /= 2;
-    }
-    pGfx->curCamera.position.x += temppos.x;
-    pGfx->curCamera.position.y += temppos.y;
-    pGfx->curCamera.position.z += temppos.z;
-    //free cam end
+    
 
-	
+    XMStoreFloat4(&pGfx->curCamera.rotation, XMQuaternionNormalize(lookdir + XMLoadFloat4(&up)+XMLoadFloat4(&left)));
 }
 
 XMFLOAT3 Engine::rWorld(XMFLOAT3 pos1) {
@@ -235,32 +301,49 @@ void Engine::OnKeyUp(unsigned char key)
 }
 float Engine::fDistance(XMFLOAT3 pos1, XMFLOAT3 pos2) {
     auto x = pos2.x - pos1.x;
-    x *= x;
     auto y = pos2.y - pos1.y;
-    y *= y;
     auto z = pos2.z - pos1.z;
-    z *= z;
-    auto distance = sqrt(x+y+z);
-    return distance;
+    return sqrt(pow(x, 2) + pow(y, 2) + pow(z, 2));
 }
 
 void Engine::cGravity(eResource* obj) {
-    auto distance = fDistance(obj->loadedModel.position, obj->mworld->loadedModel.position);
-    auto gaccel = (GConst * (obj->mworld->mass)) / pow(distance, 2);
-    bool complex = false;
-    double changex = (obj->mworld->loadedModel.position.x-obj->loadedModel.position.x);
-    double changey =  (obj->mworld->loadedModel.position.y -obj->loadedModel.position.y);
-    double changez = (obj->mworld->loadedModel.position.z-obj->loadedModel.position.z);
-    auto mag = sqrt(pow(changex, 2) + pow(changey, 2) + pow(changez, 2));
+    if (obj->mworld != nullptr) {
+        float distance = -fDistance(obj->loadedModel.position, obj->mworld->loadedModel.position);
 
-    changex /= mag;
-    changey /= mag;
-    changez /= mag;
 
-    obj->loadedModel.position.x += gaccel*changex;
-    obj->loadedModel.position.y += gaccel*changey;
-    obj->loadedModel.position.z += gaccel*changez;
 
+        double changex = (obj->mworld->loadedModel.position.x - obj->loadedModel.position.x);
+        double changey = (obj->mworld->loadedModel.position.y - obj->loadedModel.position.y);
+        double changez = (obj->mworld->loadedModel.position.z - obj->loadedModel.position.z);
+
+
+        changex /= distance;
+        changey /= distance;
+        changez /= distance;
+
+        
+
+        obj->grav.w = -sqrt(((GConst * (obj->mworld->mass)) / pow(distance, 2)))*timer;
+        obj->grav.x = changex;
+        obj->grav.y = changey;
+        obj->grav.z = changez;
+
+
+        obj->speed += -sqrt(((GConst * (obj->mworld->mass)) / pow(distance, 2))) * timer;
+        obj->velDir.x += changex;
+        obj->velDir.y += changey;
+        obj->velDir.z += changez;
+
+        XMStoreFloat4(&obj->velDir, XMQuaternionNormalize(XMLoadFloat4(&obj->velDir)));
+        if (obj == plModel) {
+
+            pGfx->curCamera.upDirection.x += changex;
+            pGfx->curCamera.upDirection.y += changey;
+            pGfx->curCamera.upDirection.z += changez;
+
+            XMStoreFloat4(&pGfx->curCamera.upDirection, XMQuaternionNormalize(XMLoadFloat4(&pGfx->curCamera.upDirection)));
+        }
+    }
 }
 
 void Engine::UControls() {

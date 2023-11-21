@@ -21,7 +21,7 @@ public:
     SimpleCamera();
 
     void Init(XMVECTOR position);
-    void Update(XMFLOAT4* pos, float* yaw, float* pitch, float* roll, XMFLOAT4* rupdirection);
+    void Update(XMFLOAT4* pos, XMFLOAT4* rotation, XMFLOAT4* rupdirection);
     XMMATRIX GetViewMatrix();
     XMMATRIX GetProjectionMatrix(float fov, float aspectRatio, float nearPlane = 0.1f, float farPlane = 100000.0f);
     void SetMoveSpeed(float unitsPerSecond);
@@ -30,7 +30,7 @@ public:
 private:
     void Reset();
 
-
+    XMMATRIX cmatrix;
     XMVECTOR m_position;
     float m_yaw;                // Relative to the +z axis.
     float m_pitch;                // Relative to the xz plane.

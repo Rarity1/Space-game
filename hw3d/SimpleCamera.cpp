@@ -22,25 +22,14 @@ SimpleCamera::SimpleCamera() :
 {
 }
 
-void SimpleCamera::Update(XMFLOAT4* pos, float* yaw, float* pitch, float* roll, XMFLOAT4* rupdirection)
+void SimpleCamera::Update(XMFLOAT4* pos, XMFLOAT4* rotation, XMFLOAT4* rupdirection)
 {
-    // Calculate the move vector in camera space.
-    if (*pitch > (XM_PI-0.1)/2)
-        *pitch = (XM_PI-0.1)/2;
-    else if (*pitch <  ( - XM_PI + 0.1) / 2)
-        *pitch = ( - XM_PI + 0.1) / 2;
-    if (*yaw > XM_PI)
-        *yaw = -XM_PI;
-    else if (*yaw < -XM_PI)
-        *yaw = XM_PI;
 
+    m_upDirection = XMLoadFloat4(rupdirection);
 
-    m_upDirection = XMVectorSet(rupdirection->x, rupdirection->y, rupdirection->z, rupdirection->w);
+    m_position = XMLoadFloat4(pos);
 
-    m_position = XMVectorSet(pos->x, pos->y, pos->z, 0);
-
-    float r = cosf(*pitch); 
-    m_lookDirection = XMVectorSet(r * cosf(*yaw), r * sinf(*yaw), sinf(*pitch), 0);
+    m_lookDirection = XMLoadFloat4(rotation);
 }
 
 XMMATRIX SimpleCamera::GetViewMatrix()
