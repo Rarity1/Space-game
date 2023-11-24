@@ -22,14 +22,17 @@ SimpleCamera::SimpleCamera() :
 {
 }
 
-void SimpleCamera::Update(XMFLOAT4* pos, XMFLOAT4* rotation, XMFLOAT4* rupdirection)
+
+
+
+void  SimpleCamera::Update(XMFLOAT4* pos, XMFLOAT4* rotation, XMFLOAT4* rupdirection)
 {
 
     m_upDirection = XMLoadFloat4(rupdirection);
 
     m_position = XMLoadFloat4(pos);
 
-    m_lookDirection = XMLoadFloat4(rotation);
+    m_lookDirection = (XMLoadFloat4(rotation));
 }
 
 XMMATRIX SimpleCamera::GetViewMatrix()

@@ -439,7 +439,6 @@ void Graphics::OnUpdate() {
 		fence->SetEventOnCompletion(cbackBuffer->fenceValue, fenceEvent);
 		WaitForSingleObject(fenceEvent, INFINITE);
 	}
-	
 	camera.Update(&curCamera.position, &curCamera.rotation, &curCamera.upDirection);
 	cbackBuffer->UpdateConstantBuffers(camera.GetViewMatrix(), camera.GetProjectionMatrix(1.333f, float(width) / float(height)), modelVect);
 }

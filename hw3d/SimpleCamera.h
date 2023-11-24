@@ -27,6 +27,7 @@ public:
     void SetMoveSpeed(float unitsPerSecond);
     void SetTurnSpeed(float radiansPerSecond);
 
+
 private:
     void Reset();
 

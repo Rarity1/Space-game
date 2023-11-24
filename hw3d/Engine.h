@@ -17,6 +17,7 @@ public:
 		float gCollision = 1;
 		float speed;
 		XMFLOAT4 grav{0,0,0,0};
+		float gravpull;
 		XMFLOAT4 velDir;
 		float scale = 1;
 		eResource* mworld = nullptr;
@@ -52,6 +53,7 @@ private:
 	void cPlayermodel();
 	void procGenCollision(eResource* m, eResource* tempres);
 	void pSpecCollison(eResource* obj1, eResource* obj2, float radialdist, float actualdist);
+	void RotateCam(float Pitch = 0, float Yaw = 0, float Roll = 0);
 	Graphics* pGfx;
 	float timer;
 	float time2;
@@ -64,7 +66,7 @@ private:
 		bool a = false;
 		bool s = false;
 		bool d = false;
-
+		bool k = false;
 		bool left = false;
 		bool right = false;
 		bool up = false;

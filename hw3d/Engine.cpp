@@ -50,16 +50,17 @@ void Engine::iLoad() {
         }
         //testing
         if (m->umID == 1) {
-            m->loadedModel.position = { 0,168,168 };
+            m->loadedModel.position = { 0,0,168 };
             m->mworld = trackedModels[2];
             m->mass = 200;
         }
         else if (m->umID == 2) {
             m->mass = 8570000000;
-            m->mass *= 2000000;
+            m->mass *= 200000;
+            m->loadedModel.position = { 0,0,0 };
         }
         else if (m->umID == 0) {
-            m->loadedModel.position = { 04,10,138 };
+            m->loadedModel.position = { 0,10,138 };
             m->mworld = trackedModels[2];
             m->mass = 200;
         }
@@ -162,24 +163,25 @@ void Engine::cPlayermodel()
 
 void Engine::cMPosUpdate(eResource* mUpdate, eResource* tempres){
     cGravity(mUpdate);
-    procGenCollision(mUpdate, tempres);
-    bool tbool = (mUpdate->loadedModel.lastposition.x != mUpdate->loadedModel.position.x || mUpdate->loadedModel.lastposition.y != mUpdate->loadedModel.position.y || mUpdate->loadedModel.lastposition.z != mUpdate->loadedModel.position.z);
-    if (tbool || mUpdate->grav.w != 0) {
-        mMove(mUpdate);
+    if (mUpdate->speed != 0 || mUpdate->gravpull != 0) {
         mUpdate->loadedModel.lastposition = mUpdate->loadedModel.position;
+        mMove(mUpdate);
     }
-            
-            
+    procGenCollision(mUpdate, tempres);      
+    pGfx->SetModelPosition(&mUpdate->loadedModel);
 }
 
 void Engine::mMove(eResource* mUpdate) {
-
-
-
+    XMFLOAT4 vel = { mUpdate->velDir.x* mUpdate->speed ,mUpdate->velDir.y * mUpdate->speed, mUpdate->velDir.z* mUpdate->speed, mUpdate->velDir.w * mUpdate->speed };
+    XMFLOAT4 gravm = { mUpdate->grav.x * mUpdate->gravpull,mUpdate->grav.y * mUpdate->gravpull,mUpdate->grav.z * mUpdate->gravpull,mUpdate->grav.w * mUpdate->gravpull };
+    XMFLOAT4 both = { 0,0,0,0 };
+    XMStoreFloat4(&both, XMLoadFloat4(&vel) + XMLoadFloat4(&gravm));
+    
+    
+    mUpdate->loadedModel.position = { mUpdate->loadedModel.position.x + both.x, mUpdate->loadedModel.position.y + both.y, mUpdate->loadedModel.position.z + both.z };
 
 
     mUpdate->loadedModel.which = RStorage::BOTH;
-    pGfx->SetModelPosition(&mUpdate->loadedModel);
 }
 
 
@@ -191,40 +193,52 @@ void Engine::UCampos() {
     pGfx->curCamera.position.z = plModel->loadedModel.position.z;
 
 
-    auto udir = XMLoadFloat4(&pGfx->curCamera.upDirection);
-    auto lookdir = XMLoadFloat4(&pGfx->curCamera.rotation);
-
-    XMFLOAT4 left(0,0,0,0);
-    XMFLOAT4 up(0,0,0,0);
-    auto pitch = 0.0;
-    auto yaw = 0.0;
-    if (m_keysPressed.left && !m_keysPressed.right) {
-        
-        XMStoreFloat4(&left, XMQuaternionRotationNormal(XMQuaternionMultiply(lookdir, udir), 2*timer));
-        left.w = 0;
-        XMStoreFloat4(&pGfx->curCamera.rotation, XMQuaternionNormalize(lookdir+XMLoadFloat4(&left)));
-    }else
-    if (m_keysPressed.right && !m_keysPressed.left) {
-        
-        XMStoreFloat4(&left, XMQuaternionRotationNormal(XMQuaternionMultiply(lookdir, udir), -2 * timer));
-        left.w = 0;
-        XMStoreFloat4(&pGfx->curCamera.rotation, XMQuaternionNormalize(lookdir + XMLoadFloat4(&left)));
+    float pitch = 0;
+    float yaw = 0;
+    if (m_keysPressed.up) {
+        pitch += XM_PIDIV2 * timer;
+    }
+    if (m_keysPressed.down) {
+        pitch += -XM_PIDIV2 * timer;
+    }
+    if (m_keysPressed.left) {
+        yaw += XM_PIDIV2 * timer;
+    }
+    if (m_keysPressed.right) {
+        yaw += -XM_PIDIV2 * timer;
     }
 
-    if (m_keysPressed.up && !m_keysPressed.down) {
-        XMStoreFloat4(&up, XMQuaternionRotationNormal(lookdir+udir, 2 * timer));
-        up.w = 0;
-        XMStoreFloat4(&pGfx->curCamera.rotation, XMQuaternionNormalize(lookdir +XMLoadFloat4(&up)));
-    }else
-    if (m_keysPressed.down && !m_keysPressed.up) {
-        XMStoreFloat4(&up, XMQuaternionRotationNormal(lookdir + udir, -2 * timer));
-        up.w = 0;
-        
+
+    if(pitch != 0 || yaw != 0 || m_keysPressed.k)
+    RotateCam(pitch, yaw);
+    
+}
+
+void Engine::RotateCam(float Pitch, float Yaw, float Roll) {
+    if (m_keysPressed.k)
+        XMStoreFloat4(&pGfx->curCamera.upDirection, XMQuaternionInverse(XMLoadFloat4(&plModel->grav)));
+    auto updirect = XMLoadFloat4(&pGfx->curCamera.upDirection);
+    auto lookdirect = XMLoadFloat4(&pGfx->curCamera.rotation);
+
+    if (Yaw != 0) {
+        auto temp = XMQuaternionRotationNormal(XMQuaternionConjugate(updirect), Yaw);
+        auto qup = XMQuaternionMultiply(temp, lookdirect);
+        lookdirect = XMQuaternionMultiply(qup, XMQuaternionConjugate(temp));
+    }
+    if (Pitch != 0) {
+        auto temp = XMQuaternionRotationNormal(XMQuaternionMultiply(lookdirect, updirect), Pitch);
+        auto qup = XMQuaternionMultiply(temp, updirect);
+
+
+        updirect = XMQuaternionMultiply(qup, XMQuaternionConjugate((temp)));
+        auto left = XMQuaternionMultiply(temp, lookdirect);
+        lookdirect = XMQuaternionMultiply(left, XMQuaternionConjugate((temp)));
     }
     
-
-    XMStoreFloat4(&pGfx->curCamera.rotation, XMQuaternionNormalize(lookdir + XMLoadFloat4(&up)+XMLoadFloat4(&left)));
+    XMStoreFloat4(&pGfx->curCamera.rotation, lookdirect);
+    XMStoreFloat4(&pGfx->curCamera.upDirection, updirect);
 }
+
 
 XMFLOAT3 Engine::rWorld(XMFLOAT3 pos1) {
 	return  { cWorld.x+pos1.x,cWorld.y+pos1.y,cWorld.z+pos1.z};
@@ -240,6 +254,9 @@ void Engine::OnKeyDown(unsigned char key)
 {
     switch (key)
     {
+    case 'K':
+        m_keysPressed.k = true;
+        break;
     case 'W':
         m_keysPressed.w = true;
         break;
@@ -271,6 +288,9 @@ void Engine::OnKeyUp(unsigned char key)
 {
     switch (key)
     {
+    case 'K':
+        m_keysPressed.k = false;
+        break;
     case 'W':
         m_keysPressed.w = false;
         break;
@@ -311,38 +331,18 @@ void Engine::cGravity(eResource* obj) {
         float distance = -fDistance(obj->loadedModel.position, obj->mworld->loadedModel.position);
 
 
+        XMFLOAT4 change{0,0,0,0};
+         change.x = (obj->mworld->loadedModel.position.x - obj->loadedModel.position.x);
+         change.y = (obj->mworld->loadedModel.position.y - obj->loadedModel.position.y);
+         change.z = (obj->mworld->loadedModel.position.z - obj->loadedModel.position.z);
 
-        double changex = (obj->mworld->loadedModel.position.x - obj->loadedModel.position.x);
-        double changey = (obj->mworld->loadedModel.position.y - obj->loadedModel.position.y);
-        double changez = (obj->mworld->loadedModel.position.z - obj->loadedModel.position.z);
 
-
-        changex /= distance;
-        changey /= distance;
-        changez /= distance;
-
+        XMStoreFloat4(&change, XMQuaternionNormalize(XMLoadFloat4(&change)));
+        obj->grav = change;
         
 
-        obj->grav.w = -sqrt(((GConst * (obj->mworld->mass)) / pow(distance, 2)))*timer;
-        obj->grav.x = changex;
-        obj->grav.y = changey;
-        obj->grav.z = changez;
 
-
-        obj->speed += -sqrt(((GConst * (obj->mworld->mass)) / pow(distance, 2))) * timer;
-        obj->velDir.x += changex;
-        obj->velDir.y += changey;
-        obj->velDir.z += changez;
-
-        XMStoreFloat4(&obj->velDir, XMQuaternionNormalize(XMLoadFloat4(&obj->velDir)));
-        if (obj == plModel) {
-
-            pGfx->curCamera.upDirection.x += changex;
-            pGfx->curCamera.upDirection.y += changey;
-            pGfx->curCamera.upDirection.z += changez;
-
-            XMStoreFloat4(&pGfx->curCamera.upDirection, XMQuaternionNormalize(XMLoadFloat4(&pGfx->curCamera.upDirection)));
-        }
+        obj->gravpull = sqrt(((GConst * (obj->mworld->mass)) / pow(distance, 2))) * timer;
     }
 }
 
