@@ -4,7 +4,8 @@
 
 
 
-RStorage::RStorage()
+RStorage::RStorage():
+cModel(nullptr)
 {
 }
 
@@ -45,7 +46,7 @@ void RStorage::CreateBuffers(std::vector<bmResource*> bm, Microsoft::WRL::ComPtr
 		if (!Models[m->umID].mappedBuffer) {
 		{
 			const CD3DX12_HEAP_PROPERTIES heapProps{ D3D12_HEAP_TYPE_DEFAULT };
-			const auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(m->uData->fSize().fSize);
+			const auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(m->uData->fsize.fSize);
 			pDevice->CreateCommittedResource(
 				&heapProps,
 				D3D12_HEAP_FLAG_NONE,
@@ -57,7 +58,7 @@ void RStorage::CreateBuffers(std::vector<bmResource*> bm, Microsoft::WRL::ComPtr
 
 		{
 			const CD3DX12_HEAP_PROPERTIES heapProps{ D3D12_HEAP_TYPE_UPLOAD };
-			const auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(m->uData->fSize().fSize);
+			const auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(m->uData->fsize.fSize);
 			pDevice->CreateCommittedResource(
 				&heapProps,
 				D3D12_HEAP_FLAG_NONE,
@@ -69,7 +70,7 @@ void RStorage::CreateBuffers(std::vector<bmResource*> bm, Microsoft::WRL::ComPtr
 
 		{
 			const CD3DX12_HEAP_PROPERTIES heapProps{ D3D12_HEAP_TYPE_DEFAULT };
-			const auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(std::size(m->uData->indexData()) * sizeof(WORD));
+			const auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(std::size(m->uData->idata) * sizeof(WORD));
 			pDevice->CreateCommittedResource(
 				&heapProps,
 				D3D12_HEAP_FLAG_NONE,
@@ -81,7 +82,7 @@ void RStorage::CreateBuffers(std::vector<bmResource*> bm, Microsoft::WRL::ComPtr
 
 		{
 			const CD3DX12_HEAP_PROPERTIES heapProps{ D3D12_HEAP_TYPE_UPLOAD };
-			const auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(std::size(m->uData->indexData()) * sizeof(WORD));
+			const auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(std::size(m->uData->idata) * sizeof(WORD));
 			pDevice->CreateCommittedResource(
 				&heapProps,
 				D3D12_HEAP_FLAG_NONE,
@@ -100,13 +101,13 @@ void RStorage::CreateBuffers(std::vector<bmResource*> bm, Microsoft::WRL::ComPtr
 			m->uibuffer->Map(0, nullptr, reinterpret_cast<void**>(&mappedIndexData)) >> chk;
 
 
-			auto temporaryVertex = m->uData->vertexData();
+			auto& temporaryVertex = m->uData->vdata;
 			for (auto i = 0; i < std::size(temporaryVertex); i++) {
 				memcpy(&mappedVertexData[i], &temporaryVertex[i], sizeof(ReadX3D::Vertex));
 
 			}
 
-			auto temporaryIndex = m->uData->indexData();
+			auto& temporaryIndex = m->uData->idata;
 			for (auto i = 0; i < std::size(temporaryIndex); i++) {
 				memcpy(&mappedIndexData[i], &temporaryIndex[i].index, sizeof(WORD));
 			}
@@ -152,13 +153,12 @@ void RStorage::CreateBuffers(std::vector<bmResource*> bm, Microsoft::WRL::ComPtr
 
 //Returns a model by its name
 void RStorage::Delete(RStorage::bmResource* bm) {
-	//modelVect.erase(std::remove(modelVect.begin(), modelVect.end(), bm), modelVect.end());
+	modelVect.erase(std::remove(modelVect.begin(), modelVect.end(), bm), modelVect.end());
 }
 
 
 void RStorage::lModel(UINT umID, RStorage::bmResource* model) noexcept
 {
-			
 	model->uData = new ReadX3D(Models[umID].model.string());
 	modelVect.emplace_back(model);
 }
@@ -166,7 +166,4 @@ void RStorage::lModel(UINT umID, RStorage::bmResource* model) noexcept
 
 RStorage::~RStorage()
 {
-		for (auto& bm : modelVect) {
-			Delete(bm);
-		}
 }

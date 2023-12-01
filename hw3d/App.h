@@ -11,7 +11,7 @@ public:
 	void DoFrame();
 	
 private:
-	std::thread RenderThread;
+	std::thread EngThread;
 	Window wnd;
 	EngineTime timer;
 };

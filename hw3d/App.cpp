@@ -15,7 +15,9 @@ int App::Go() {
 }
 
 void App::DoFrame() {
-		wnd.Eng().Update(timer.Peek());
-		timer.Mark();
-		wnd.Gfx().RenderFrame();
+	EngThread = wnd.Eng().Update(timer.Peek());
+	timer.Mark();
+	wnd.Gfx().OnUpdate();
+	wnd.Gfx().RenderFrame();
+	EngThread.join();
 }

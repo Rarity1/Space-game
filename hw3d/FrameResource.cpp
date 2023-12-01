@@ -23,12 +23,12 @@ FrameResource::FrameResource(Microsoft::WRL::ComPtr<ID3D12Device> pDevice, std::
         for (auto& m : models) {
             vertexBufferView.emplace_back(D3D12_VERTEX_BUFFER_VIEW{
                 .BufferLocation = m->vbuffer->GetGPUVirtualAddress(),
-                .SizeInBytes = m->uData->fSize().fSize,
+                .SizeInBytes = m->uData->fsize.fSize,
                 .StrideInBytes = (UINT)sizeof(ReadX3D::Vertex)
                 });
             indexBufferView.emplace_back(D3D12_INDEX_BUFFER_VIEW{
                 .BufferLocation = m->ibuffer->GetGPUVirtualAddress(),
-                .SizeInBytes = (UINT)std::size(m->uData->indexData()) * (UINT)sizeof(WORD),
+                .SizeInBytes = (UINT)std::size(m->uData->idata) * (UINT)sizeof(WORD),
                 .Format = DXGI_FORMAT_R16_UINT
                 });
 
@@ -101,7 +101,7 @@ void FrameResource::PopulateCommandList(ID3D12GraphicsCommandList* pCommandList,
             cbvSrvHandle.Offset(cbvSrvDescriptorSize);
             pCommandList->SetGraphicsRootDescriptorTable(0, cbvSrvHandle);
             cbvSrvHandle.Offset(cbvSrvDescriptorSize);
-            pCommandList->DrawIndexedInstanced(std::size(m->uData->indexData()), 1, 0, 0, 0);
+            pCommandList->DrawIndexedInstanced(std::size(m->uData->idata), 1, 0, 0, 0);
             
         
         

@@ -378,13 +378,15 @@ Graphics::~Graphics() {
 		}
 		CloseHandle(fenceEvent);
 
-		for (UINT i = 0; i < backBuffers.size(); i++)
+		for (auto& f : backBuffers)
 		{
-			delete backBuffers.at(i);
+			delete f;
 		}
 
 		pDevice.Reset();
 	}
+
+
 }
 
 

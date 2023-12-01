@@ -17,6 +17,7 @@ public:
 		XMFLOAT4 position = {0,0,0,0};
 		XMFLOAT4 rotation = {1,0,0,0};
 		XMFLOAT4 upDirection = { 0,0,1,0 };
+		XMFLOAT4 forwardDirect = { 0,0,0,0 };
 	};
 	struct rpVect {
 		XMFLOAT3 position = {0,0,0};

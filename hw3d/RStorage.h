@@ -8,8 +8,8 @@ class RStorage {
 public:
 	RStorage();
 	virtual void OnInit();
-	RStorage(const RStorage&) = delete;
-	RStorage& operator=(const RStorage&) = delete;
+	//RStorage(const RStorage&) = delete;
+	//RStorage& operator=(const RStorage&) = delete;
 	~RStorage();
 	enum pChange {
 		NONE = 0,
