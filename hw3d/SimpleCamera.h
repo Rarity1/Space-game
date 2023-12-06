@@ -19,26 +19,12 @@ class SimpleCamera
 {
 public:
     SimpleCamera();
-
-    void Init(XMVECTOR position);
     void Update(XMFLOAT4* pos, XMFLOAT4* rotation, XMFLOAT4* rupdirection);
-    XMMATRIX GetViewMatrix();
-    XMMATRIX GetProjectionMatrix(float fov, float aspectRatio, float nearPlane = 0.1f, float farPlane = 100000.0f);
-    void SetMoveSpeed(float unitsPerSecond);
-    void SetTurnSpeed(float radiansPerSecond);
-
-
+    FXMMATRIX GetViewMatrix();
+    CXMMATRIX GetProjectionMatrix(float fov, float aspectRatio, float nearPlane = 0.1f, float farPlane = 100000.0f);
 private:
     void Reset();
-
-    XMMATRIX cmatrix;
     XMVECTOR m_position;
-    float m_yaw;                // Relative to the +z axis.
-    float m_pitch;                // Relative to the xz plane.
-    float m_roll;
     XMVECTOR m_lookDirection;
     XMVECTOR m_upDirection;
-    float m_moveSpeed;            // Speed at which the camera moves, in units per second.
-    float m_turnSpeed;            // Speed at which the camera turns, in radians per second.
-
 };

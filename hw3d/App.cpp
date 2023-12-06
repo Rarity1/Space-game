@@ -15,9 +15,10 @@ int App::Go() {
 }
 
 void App::DoFrame() {
-	EngThread = wnd.Eng().Update(timer.Peek());
+	wnd.Eng().timer.mtx.lock();
+	wnd.Eng().timer.time += timer.Peek()/1000;
 	timer.Mark();
-	wnd.Gfx().OnUpdate();
+	wnd.Eng().timer.mtx.unlock();
 	wnd.Gfx().RenderFrame();
-	EngThread.join();
+
 }

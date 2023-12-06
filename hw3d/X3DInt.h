@@ -5,6 +5,10 @@ class ReadX3D{
 public:
 	ReadX3D(std::string path);
 	~ReadX3D();
+	struct boneweight {
+		std::vector<int> bIndex;
+		std::vector<float> weight;
+	};
 	struct Vertex
 	{
 		DirectX::XMFLOAT3 position;
@@ -30,11 +34,7 @@ public:
 		std::string name;
 		int bIndex;
 		DirectX::XMFLOAT4X4 matrix;
-		struct boneweight {
-			int Index;
-			float weight;
-		};
-		std::vector<boneweight> Indices;
+		std::vector<int> Indices;
 	};
 
 	struct Node {

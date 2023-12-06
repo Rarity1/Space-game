@@ -71,7 +71,7 @@ private:
 	int width;
 	int height;
 	HWND hWnd;
-	std::unique_ptr<Graphics> pGfx;
+	std::shared_ptr<Graphics> pGfx;
 	std::unique_ptr<Engine> sEng;
 };
 

@@ -2,7 +2,6 @@
 #include "CWin.h"
 #include "FrameResource.h"
 #include "RStorage.h"
-#include "SimpleCamera.h"
 
 
 class Graphics
@@ -17,28 +16,20 @@ public:
 		XMFLOAT4 position = {0,0,0,0};
 		XMFLOAT4 rotation = {1,0,0,0};
 		XMFLOAT4 upDirection = { 0,0,1,0 };
-		XMFLOAT4 forwardDirect = { 0,0,0,0 };
+		XMFLOAT4 forwardDirect = { 1,0,0,0 };
+		XMMATRIX cmatrix;
 	};
-	struct rpVect {
-		XMFLOAT3 position = {0,0,0};
-		XMFLOAT4 rotation = {0,0,0,0};
-		XMFLOAT4 orbit = { 0,0,0,0 };
-		RStorage::pChange which = RStorage::INIT;
-		RStorage::bmResource* model;
-		XMFLOAT3 lastposition = { 0,0,0 };
-		XMFLOAT3 lastrotation = { 1,0,0 };
-		XMFLOAT3 lastorbit = { 1,0,0 };
-	};
-	void SetModelPosition(rpVect* model);
-	void SetModelVectPositions(std::vector<rpVect> rpVect);
+	
 	void OnUpdate();
 	void RenderFrame();
-	void LoadResources();
+	void LoadResources(int numLoadedSrv);
 	void LoadPipeline();
-	void loadModels(UINT umID, RStorage::bmResource* model);
+	void loadModels(UINT umID, RStorage::bmResource* model, bool init = false);
 	pCamera curCamera;
 	std::vector<std::string> loadbuff;
-	std::vector<RStorage::bmResource*> modelVect;
+	//std::vector<RStorage::bmResource*> modelVect;
+	std::mutex umodel;
+	std::unique_ptr<RStorage> lModels;
 
 private:
 
@@ -54,7 +45,7 @@ private:
 	UINT width;
 	UINT height;
 	HWND* hWnd;
-	RStorage lModels;
+	
 
 	static const bool UseBundles = true;
 	std::vector<FrameResource*> frameResources;
@@ -107,6 +98,5 @@ private:
 	UINT srvDescriptorSize;
 	UINT samplerDescriptorSize;
 	EngineTime timer;
-	SimpleCamera camera;
 	Keyboard* kbd;
 };

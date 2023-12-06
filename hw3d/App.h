@@ -8,10 +8,9 @@ public:
 	App();
 	//Master frame/ message loop
 	int Go();
-	void DoFrame();
-	
 private:
-	std::thread EngThread;
+	void DoFrame();
 	Window wnd;
 	EngineTime timer;
+	std::atomic<bool> ignKey;
 };

@@ -8,8 +8,8 @@ class RStorage {
 public:
 	RStorage();
 	virtual void OnInit();
-	//RStorage(const RStorage&) = delete;
-	//RStorage& operator=(const RStorage&) = delete;
+	RStorage(const RStorage&) = delete;
+	RStorage& operator=(const RStorage&) = delete;
 	~RStorage();
 	enum pChange {
 		NONE = 0,
@@ -33,21 +33,21 @@ public:
 		ID3D12Resource* tbuffer;
 	};
 	struct bmResource {
+		UINT umID;
+		ReadX3D* uData;
 		std::string name;
 		ID3D12Resource* vbuffer;
 		ID3D12Resource* ibuffer;
 		ID3D12Resource* tbuffer;
 		ID3D12Resource* uvbuffer;
 		ID3D12Resource* uibuffer;
-		ReadX3D* uData;
 		DirectX::XMMATRIX cmatrix;
-		UINT umID;
 	};
 	std::vector<RStorage::bmResource*> modelVect;
 	void Delete(RStorage::bmResource* bm);
-	void lModel(UINT umID, RStorage::bmResource* model) noexcept;
+	RStorage::bmResource* lModel(UINT umID) noexcept;
 	//Always call after read
-	void CreateBuffers(std::vector<RStorage::bmResource*> bm, Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList, Microsoft::WRL::ComPtr<ID3D12Device> pDevice, Microsoft::WRL::ComPtr<ID3D12CommandAllocator> commandAllocator, Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue,  UINT buffercount);
+	void CreateBuffers(std::vector<bmResource*> bm, Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList, Microsoft::WRL::ComPtr<ID3D12Device> pDevice, Microsoft::WRL::ComPtr<ID3D12CommandAllocator> commandAllocator, Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue,  UINT buffercount);
 private:
 	std::vector<ID3D12Resource*> vbufferPtrs;
 	std::vector<unmappedData> Models;
@@ -65,7 +65,5 @@ private:
 
 
 	GErrors::CheckerToken chk;
-
-	bmResource* cModel;
 	
 };

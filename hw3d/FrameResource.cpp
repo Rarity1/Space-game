@@ -110,13 +110,12 @@ void FrameResource::PopulateCommandList(ID3D12GraphicsCommandList* pCommandList,
     //PIXEndEvent(pCommandList);
 }
 
-void XM_CALLCONV FrameResource::UpdateConstantBuffers(FXMMATRIX view, CXMMATRIX projection, std::vector<RStorage::bmResource*> Modls)
+void FrameResource::UpdateConstantBuffers(FXMMATRIX view, CXMMATRIX projection, std::vector<RStorage::bmResource*> Modls)
 {
     XMFLOAT4X4 mvp;
     auto temp = 0;
         for (auto& m : Modls)
         {
-            
             // Compute the model-view-projection matrix.
             XMStoreFloat4x4(&mvp,  XMMatrixTranspose(m->cmatrix * view * projection));
             

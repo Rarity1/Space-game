@@ -11,70 +11,48 @@ Engine::Engine(Graphics* gfx, Keyboard* kbd):
 void Engine::iLoad() {
     phyx = std::make_unique<Physics>(&timer, trackedModels, &updaterate);
     phyx->upDist.store(true);
-    pGfx->~Graphics();
     pGfx->LoadPipeline();
+    pGfx->umodel.lock();
     //begin model tracking. load a gd default world mf
-    trackedModels.emplace_back(new Physics::eResource{ 0, "cube"});
-    trackedModels.emplace_back(new Physics::eResource{ 1, "untitled" });
+    trackedModels.emplace_back(new Physics::eResource{ "cube", pGfx->lModels->lModel(0), 1, 200.0, 0, {{0,0,168}} });
+    trackedModels.emplace_back(new Physics::eResource{"untitled",pGfx->lModels->lModel(1), 1, 200.0, 0, {{5,0,168}} });
     //wrld is 1:50000
-    trackedModels.emplace_back(new Physics::eResource{ 2, "wrld" , true});
+    trackedModels.emplace_back(new Physics::eResource{"wrld", pGfx->lModels->lModel(2), 1, 8570000000.0});
+    trackedModels[0]->mworld = trackedModels[2];
+    trackedModels[1]->mworld = trackedModels[2];
     plModel = trackedModels[1];
     //end model tracking.
-    for (auto& m : trackedModels) {
-        m->loadedModel.model = new RStorage::bmResource{m->name};
-        m->loadedModel.model->umID = m->umID;
-        pGfx->loadModels(m->umID, m->loadedModel.model);
-        //testing
-        if (m->umID == 1) {
-            m->loadedModel.position = { 0,0,168 };
-            m->mworld = trackedModels[2];
-            m->mass = 200;
-        }
-        else if (m->umID == 2) {
-            m->mass = 8570000000;
-            m->mass *= 2;
-            m->loadedModel.position = { 0,0,0 };
-        }
-        else if (m->umID == 0) {
-            m->loadedModel.position = { 0,20,168 };
-            m->mworld = trackedModels[2];
-            m->mass = 200;
-        }
-        m->loadedModel.lastposition = m->loadedModel.position;
-        pGfx->SetModelPosition(&m->loadedModel);
-    }
-    for (auto& m : trackedModels) {
-        for (auto& b : trackedModels) {
-            if (b != m && ((m->mworld == b->mworld || b == m->mworld)|| b->isWorld)) {
-                auto reet = new Physics::eResource::tmCollide{b};
-                m->tmDist.emplace_back(reet);
-            }
-        }
-    }
-    pGfx->LoadResources();
+    pGfx->LoadResources(std::size(trackedModels));
+    pGfx->umodel.unlock();
+    
     if (engInit) {
         engInit = false;
     }
+    eRun.store(true);
+    EngThread = std::thread(&Engine::DoStuff, this);
 }
 
-std::thread Engine::Update(float frametime)
+void Engine::Update()
 {
-    std::thread th(&Engine::DoStuff, this, frametime);
-    return th;
+
+
+
 }
 
-void Engine::DoStuff(float frametime) {
-    UControls();
-    timer.mtx.lock();
-    timer.time += frametime / 1000;
-    timer.mtx.unlock();
-    if (timer.time >= 1.0f / updaterate) {
-        cPlayermodel();
-        cMPosUpdate();
-        UCampos();
-        timer.mtx.lock();
-        timer.time = 0;
-        timer.mtx.unlock();
+ void Engine::DoStuff() {
+     while (eRun) {
+         UControls();
+         timer.mtx.lock();
+         if (timer.time >= 1.0f / updaterate) {
+             cPlayermodel();
+             cMPosUpdate();
+             UCampos();
+             timer.time = 0;
+             timer.mtx.unlock();
+         }
+         else {
+             timer.mtx.unlock();
+         }
     }
 }
 
@@ -99,14 +77,15 @@ void Engine::cPlayermodel()
 
 void Engine::cMPosUpdate(){
     phyx->Update();
+    pGfx->umodel.lock();
     for (auto& m : trackedModels) {
         //if (m->updated.load()) {
-            pGfx->SetModelPosition(&m->loadedModel);
+            SetModelPosition(m);
             //m->updated.store(false);
         //}
         
     }
-   
+    pGfx->umodel.unlock();
 }
 
 
@@ -114,9 +93,10 @@ void Engine::cMPosUpdate(){
 
 void Engine::UCampos() {
     //Link the camera position here to whatever you want.
-    pGfx->curCamera.position.x = plModel->loadedModel.position.x;
-    pGfx->curCamera.position.y = plModel->loadedModel.position.y;
-    pGfx->curCamera.position.z = plModel->loadedModel.position.z;
+    //pGfx->umodel.lock();
+    pGfx->curCamera.position.x = plModel->mPos.position.x;
+    pGfx->curCamera.position.y = plModel->mPos.position.y;
+    pGfx->curCamera.position.z = plModel->mPos.position.z;
 
     float pitch = 0;
     float yaw = 0;
@@ -182,6 +162,7 @@ void Engine::RotateCam(float Pitch, float Yaw, float Roll) {
     
     XMStoreFloat4(&pGfx->curCamera.rotation, lookdirect);
     XMStoreFloat4(&pGfx->curCamera.upDirection, updirect);
+    //pGfx->umodel.unlock();
 }
 
 
@@ -278,7 +259,36 @@ void Engine::OnKeyUp(unsigned char key)
 }
 
 
-
+void Engine::SetModelPosition(Physics::eResource* model) {
+    auto& bmodel = model->model;
+    model->mPos.posMtx.lock();
+    switch (model->which) {
+    case RStorage::INIT:
+        bmodel->cmatrix = XMMatrixTranslation(0, 0, 0) * XMMatrixRotationQuaternion(XMLoadFloat4(&model->mPos.rotation));
+        bmodel->cmatrix *= XMMatrixTranslation(model->mPos.position.x, model->mPos.position.y, model->mPos.position.z);
+        bmodel->cmatrix *= XMMatrixRotationQuaternion(XMLoadFloat4(&model->mPos.orbit));
+        model->which = RStorage::NONE;
+        break;
+    case RStorage::BOTH:
+        bmodel->cmatrix = XMMatrixTranslation(0, 0, 0) * XMMatrixRotationQuaternion(XMLoadFloat4(&model->mPos.rotation));
+        bmodel->cmatrix *= XMMatrixTranslation(model->mPos.position.x, model->mPos.position.y, model->mPos.position.z);
+        bmodel->cmatrix *= XMMatrixRotationQuaternion(XMLoadFloat4(&model->mPos.orbit));
+        model->which = RStorage::NONE;
+        break;
+    case RStorage::ORBIT:
+        bmodel->cmatrix *= XMMatrixRotationQuaternion(XMLoadFloat4(&model->mPos.orbit));
+        model->which = RStorage::NONE;
+        break;
+    case RStorage::POSITION:
+        bmodel->cmatrix = XMMatrixTranslation(0, 0, 0) * XMMatrixRotationQuaternion(XMLoadFloat4(&model->mPos.rotation));
+        bmodel->cmatrix *= XMMatrixTranslation(model->mPos.position.x, model->mPos.position.y, model->mPos.position.z);
+        model->which = RStorage::NONE;
+        break;
+    case RStorage::NONE:
+        break;
+    }
+    model->mPos.posMtx.unlock();
+}
 
 void Engine::UControls() {
     while (auto ss = kbd->ReadKey()) {
@@ -296,14 +306,12 @@ void Engine::UControls() {
 
 
 Engine::~Engine() {
-    for (auto& m : trackedModels) {
-        
-        for (auto& b : m->tmDist) {
-            delete b;
-        }
-        delete m->loadedModel.model->uData;
-        delete m->loadedModel.model;
+    eRun.store(false);
+    EngThread.join();
+    phyx->upDist.store(false);
+    phyx->~Physics();
+    for (auto& m : trackedModels)
         delete m;
-    }
+    trackedModels = {};
 
 }

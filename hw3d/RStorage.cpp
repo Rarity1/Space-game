@@ -5,8 +5,9 @@
 
 
 RStorage::RStorage():
-cModel(nullptr)
+	Models({})
 {
+	OnInit();
 }
 
 
@@ -36,131 +37,135 @@ void RStorage::OnInit() {
 	}
 }
 
-void RStorage::CreateBuffers(std::vector<bmResource*> bm, Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList, Microsoft::WRL::ComPtr<ID3D12Device> pDevice, Microsoft::WRL::ComPtr<ID3D12CommandAllocator> commandAllocator, Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue, UINT buffercount) {
+void RStorage::CreateBuffers(std::vector<bmResource*> m, Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList, Microsoft::WRL::ComPtr<ID3D12Device> pDevice, Microsoft::WRL::ComPtr<ID3D12CommandAllocator> commandAllocator, Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue, UINT buffercount) {
 
 	commandAllocator->Reset() >> chk;
 	commandList->Reset(commandAllocator.Get(), nullptr) >> chk;
 	DirectX::ResourceUploadBatch upload(pDevice.Get());
 	upload.Begin();
-	for (auto& m : bm) {
-		if (!Models[m->umID].mappedBuffer) {
+	for(auto& bm : m)
+	if (!Models[bm->umID].mappedBuffer) {
 		{
 			const CD3DX12_HEAP_PROPERTIES heapProps{ D3D12_HEAP_TYPE_DEFAULT };
-			const auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(m->uData->fsize.fSize);
+			const auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(bm->uData->fsize.fSize);
 			pDevice->CreateCommittedResource(
 				&heapProps,
 				D3D12_HEAP_FLAG_NONE,
 				&resourceDesc,
 				D3D12_RESOURCE_STATE_COPY_DEST,
 				nullptr,
-				IID_PPV_ARGS(&m->vbuffer));
+				IID_PPV_ARGS(&bm->vbuffer));
 		}
 
 		{
 			const CD3DX12_HEAP_PROPERTIES heapProps{ D3D12_HEAP_TYPE_UPLOAD };
-			const auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(m->uData->fsize.fSize);
+			const auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(bm->uData->fsize.fSize);
 			pDevice->CreateCommittedResource(
 				&heapProps,
 				D3D12_HEAP_FLAG_NONE,
 				&resourceDesc,
 				D3D12_RESOURCE_STATE_GENERIC_READ,
-				nullptr, IID_PPV_ARGS(&m->uvbuffer)
+				nullptr, IID_PPV_ARGS(&bm->uvbuffer)
 			) >> chk;
 		}
 
 		{
 			const CD3DX12_HEAP_PROPERTIES heapProps{ D3D12_HEAP_TYPE_DEFAULT };
-			const auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(std::size(m->uData->idata) * sizeof(WORD));
+			const auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(std::size(bm->uData->idata) * sizeof(WORD));
 			pDevice->CreateCommittedResource(
 				&heapProps,
 				D3D12_HEAP_FLAG_NONE,
 				&resourceDesc,
 				D3D12_RESOURCE_STATE_COPY_DEST,
 				nullptr,
-				IID_PPV_ARGS(&m->ibuffer));
+				IID_PPV_ARGS(&bm->ibuffer));
 		}
 
 		{
 			const CD3DX12_HEAP_PROPERTIES heapProps{ D3D12_HEAP_TYPE_UPLOAD };
-			const auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(std::size(m->uData->idata) * sizeof(WORD));
+			const auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(std::size(bm->uData->idata) * sizeof(WORD));
 			pDevice->CreateCommittedResource(
 				&heapProps,
 				D3D12_HEAP_FLAG_NONE,
 				&resourceDesc,
 				D3D12_RESOURCE_STATE_GENERIC_READ,
-				nullptr, IID_PPV_ARGS(&m->uibuffer)
+				nullptr, IID_PPV_ARGS(&bm->uibuffer)
 			) >> chk;
 		}
 		{
-			CreateDDSTextureFromFile(pDevice.Get(), upload, Models[m->umID].texture.c_str(), &m->tbuffer);
+			CreateDDSTextureFromFile(pDevice.Get(), upload, Models[bm->umID].texture.c_str(), &bm->tbuffer);
 		}
 		{
 			ReadX3D::Vertex* mappedVertexData = nullptr;
-			m->uvbuffer->Map(0, nullptr, reinterpret_cast<void**>(&mappedVertexData)) >> chk;
+			bm->uvbuffer->Map(0, nullptr, reinterpret_cast<void**>(&mappedVertexData)) >> chk;
 			WORD* mappedIndexData = nullptr;
-			m->uibuffer->Map(0, nullptr, reinterpret_cast<void**>(&mappedIndexData)) >> chk;
+			bm->uibuffer->Map(0, nullptr, reinterpret_cast<void**>(&mappedIndexData)) >> chk;
 
 
-			auto& temporaryVertex = m->uData->vdata;
+			auto& temporaryVertex = bm->uData->vdata;
 			for (auto i = 0; i < std::size(temporaryVertex); i++) {
 				memcpy(&mappedVertexData[i], &temporaryVertex[i], sizeof(ReadX3D::Vertex));
 
 			}
 
-			auto& temporaryIndex = m->uData->idata;
+			auto& temporaryIndex = bm->uData->idata;
 			for (auto i = 0; i < std::size(temporaryIndex); i++) {
 				memcpy(&mappedIndexData[i], &temporaryIndex[i].index, sizeof(WORD));
 			}
 		}
 		{
-			m->uvbuffer->Unmap(0, nullptr);
-			m->uibuffer->Unmap(0, nullptr);
-			commandList->CopyResource(m->vbuffer, m->uvbuffer);
-			commandList->CopyResource(m->ibuffer, m->uibuffer);
+			bm->uvbuffer->Unmap(0, nullptr);
+			bm->uibuffer->Unmap(0, nullptr);
+			commandList->CopyResource(bm->vbuffer, bm->uvbuffer);
+			commandList->CopyResource(bm->ibuffer, bm->uibuffer);
 		}
 
 
 
 		{
 			const auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-				m->vbuffer,
+				bm->vbuffer,
 				D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
 			commandList->ResourceBarrier(1, &barrier);
 		}
 		{
 			const auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-				m->ibuffer,
+				bm->ibuffer,
 				D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_INDEX_BUFFER);
 			commandList->ResourceBarrier(1, &barrier);
 		}
-		Models[m->umID].mappedBuffer = true;
-		Models[m->umID].vbuffer = m->vbuffer;
-		Models[m->umID].ibuffer = m->ibuffer;
-		Models[m->umID].tbuffer = m->tbuffer;
+		Models[bm->umID].mappedBuffer = true;
+		Models[bm->umID].vbuffer = bm->vbuffer;
+		Models[bm->umID].ibuffer = bm->ibuffer;
+		Models[bm->umID].tbuffer = bm->tbuffer;
 		}
 		else {
-			m->vbuffer = Models[m->umID].vbuffer;
-			m->ibuffer = Models[m->umID].ibuffer;
-			m->tbuffer = Models[m->umID].tbuffer;
+			bm->vbuffer = Models[bm->umID].vbuffer;
+			bm->ibuffer = Models[bm->umID].ibuffer;
+			bm->tbuffer = Models[bm->umID].tbuffer;
 		}
-		}
+		
 		upload.End(commandQueue.Get());
-		// close command list  
+ 
 		commandList->Close() >> chk;
-
 		
 }
 
-//Returns a model by its name
 void RStorage::Delete(RStorage::bmResource* bm) {
+	delete bm->uData;
 	modelVect.erase(std::remove(modelVect.begin(), modelVect.end(), bm), modelVect.end());
 }
 
 
-void RStorage::lModel(UINT umID, RStorage::bmResource* model) noexcept
+RStorage::bmResource* RStorage::lModel(UINT umID) noexcept
 {
-	model->uData = new ReadX3D(Models[umID].model.string());
-	modelVect.emplace_back(model);
+	
+	if (umID < (std::size(Models))) {
+		auto model = new RStorage::bmResource{umID, new ReadX3D(Models[umID].model.string()), Models[umID].model.string()};
+		modelVect.emplace_back(model);
+		return model;
+	}
+	return nullptr;
 }
 
 

@@ -25,6 +25,9 @@ void ReadX3D::cvertexData()
 	rapidxml::xml_node<char>* bindpose = nullptr;
 	rapidxml::xml_node<char>* skinweights = nullptr;
 	rapidxml::xml_node<char>* vertexweights = nullptr;
+	rapidxml::xml_node<char>* vcount = nullptr;
+	std::vector<int> countofv;
+	std::vector<boneweight> weights;
 	for (rapidxml::xml_node<>* node = tnode->first_node(); node; node = node->next_sibling()) {
 		if (std::strcmp(node->name(), "library_geometries") == 0) {
 			auto source = node->first_node("geometry")->first_node("mesh")->first_node();
@@ -68,6 +71,7 @@ void ReadX3D::cvertexData()
 						skinweights = source->first_node("float_array");
 						auto pee = 0;
 					}else if (std::strcmp(source->name(), "vertex_weights") == 0) {
+						vcount = source->first_node("vcount");
 						vertexweights = source->first_node("v");
 					}
 					source = source->next_sibling();
@@ -231,12 +235,28 @@ void ReadX3D::cvertexData()
 			while (sw >> m) {
 				skinweights.emplace_back(m);
 			}
+			std::vector<int> join;
+			std::vector<int> weig;
 			int joint, weight;
 			std::istringstream vw(vertexweights->value());
 			while (vw >> joint >> weight) {
-				bdata[joint].Indices.emplace_back(weight, skinweights[weight]);
+				join.emplace_back(joint);
+				weig.emplace_back(weight);
 			}
-
+			int tempor;
+			std::istringstream reet(vcount->value());
+			while (reet >> tempor) {
+				countofv.emplace_back(tempor);
+			}
+			weights.resize(std::size(countofv));
+			tempor = 0;
+			for (auto i = 0; i < std::size(countofv); i++) {
+				for (auto j = 0; j < countofv[i]; j++) {
+					weights[i].bIndex.emplace_back(join[tempor]);
+					weights[i].weight.emplace_back(skinweights[weig[tempor]]);
+					tempor++;
+				}
+			}
 		}
 		
 	}
@@ -266,6 +286,7 @@ void ReadX3D::cvertexData()
 	}
 	std::vector<Vertex> tempdata;
 	std::vector<vFaceData> tempindex;
+	std::vector<boneweight> tempvcount;
 	for (auto c = 0; c < size; c++) {
 		for (auto& i : idata) {
 			if (i.index == c) {
@@ -284,6 +305,8 @@ void ReadX3D::cvertexData()
 
 	for (auto& i : idata) {
 		tempdata.push_back(vdata[i.index]);
+		if(std::size(weights) > 0)
+		tempvcount.push_back(weights[i.index]);
 	}
 	for (auto& i : tempindex) {
 		tempdata[i.index].tc = temp[i.index];
@@ -292,7 +315,11 @@ void ReadX3D::cvertexData()
 	vdata = tempdata;
 	idata = tempindex;
 	
-
+	for (auto i = 0; i < std::size(tempvcount); i++) {
+		for (auto& j : tempvcount[i].bIndex) {
+			bdata[j].Indices.emplace_back(i);
+		}
+	}
 
 	cdata.resize(std::size(idata)/3);
 

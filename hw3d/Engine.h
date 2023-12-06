@@ -6,20 +6,25 @@ public:
 	~Engine();
 	int updaterate = 60;
 	void iLoad();
-	std::thread Update(float frametime);
+	void Update();
+	Physics::mThreadTime timer;
 	bool engInit = true;
 	std::vector<Physics::eResource*> trackedModels;
 private:
+	void DoStuff();
+	std::thread EngThread;
+	std::atomic<bool> eRun;
 	struct Movement {
 		float forward = 0.0;
 		float backward = 0.0;
 		float left = 0.0;
 		float right = 0.0;
 	};
+	
 	std::unique_ptr<Physics> phyx;
 	double cspin = 0;
 	void UCampos();
-	void DoStuff(float frametime);
+	void SetModelPosition(Physics::eResource* model);
 	XMFLOAT3 rWorld(XMFLOAT3 pos1);
 	XMFLOAT3 dWorld(XMFLOAT3 pos1);
 	XMFLOAT3 cnWorld(XMFLOAT3 pos1);
@@ -30,7 +35,7 @@ private:
 	void cPlayermodel();
 	void RotateCam(float Pitch = 0, float Yaw = 0, float Roll = 0);
 	Graphics* pGfx;
-	Physics::mThreadTime timer;
+
 	Physics::eResource* plModel;
 	XMFLOAT4 cWorld;
 	XMFLOAT4 nWorld;

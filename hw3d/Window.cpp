@@ -74,7 +74,7 @@ Window::Window(int width, int height, const char* name)
 	);
 	// newly created windows start off as hidden
 
-	pGfx = std::make_unique<Graphics>(&hWnd, height, width);
+	pGfx = std::make_shared<Graphics>(&hWnd, height, width);
 	sEng = std::make_unique<Engine>(pGfx.get(), &kbd);
 	ShowWindow(hWnd, SW_SHOWDEFAULT);
 	//Create graphics object

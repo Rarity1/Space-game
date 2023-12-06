@@ -212,7 +212,6 @@ XCOPY "$(SolutionDir)textures\" "$(TargetDir)textures\" /E /Y</Command>
     <ClCompile Include="Keyboard.cpp" />
     <ClCompile Include="Mouse.cpp" />
     <ClCompile Include="RStorage.cpp" />
-    <ClCompile Include="SimpleCamera.cpp" />
     <ClCompile Include="Window.cpp" />
     <ClCompile Include="WinMain.cpp" />
     <ClCompile Include="X3DInt.cpp" />
@@ -231,7 +230,6 @@ XCOPY "$(SolutionDir)textures\" "$(TargetDir)textures\" /E /Y</Command>
     <ClInclude Include="Mouse.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="RStorage.h" />
-    <ClInclude Include="SimpleCamera.h" />
     <ClInclude Include="Window.h" />
     <ClInclude Include="X3DInt.h" />
   </ItemGroup>

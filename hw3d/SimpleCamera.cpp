@@ -13,12 +13,8 @@
 
 SimpleCamera::SimpleCamera() :
     m_position(XMVectorSet(0, 0, 0, 0)),
-    m_yaw(0.0f),
-    m_pitch(0.0f),
     m_lookDirection(XMVectorSet(1, 0, 0, 0)),
-    m_upDirection(XMVectorSet(0, 0, 1, 0)),
-    m_moveSpeed(20.0f),
-    m_turnSpeed(XM_PIDIV2)
+    m_upDirection(XMVectorSet(0, 0, 1, 0))
 {
 }
 
@@ -34,13 +30,11 @@ void  SimpleCamera::Update(XMFLOAT4* pos, XMFLOAT4* rotation, XMFLOAT4* rupdirec
 
     m_lookDirection = (XMLoadFloat4(rotation));
 }
-
-XMMATRIX SimpleCamera::GetViewMatrix()
-{
+FXMMATRIX SimpleCamera::GetViewMatrix() {
     return XMMatrixLookToRH(m_position, m_lookDirection, m_upDirection);
 }
 
-XMMATRIX SimpleCamera::GetProjectionMatrix(float fov, float aspectRatio, float nearPlane, float farPlane)
+CXMMATRIX SimpleCamera::GetProjectionMatrix(float fov, float aspectRatio, float nearPlane, float farPlane)
 {
     return XMMatrixPerspectiveFovRH(fov, aspectRatio, nearPlane, farPlane);
 }

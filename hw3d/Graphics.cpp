@@ -12,7 +12,8 @@ Graphics::Graphics(HWND* hWnd, int height, int width)
 	rtvDescriptorSize(0),
 	CurBackBuffer(0),
 	cframeIndex(0),
-	cbackBuffer(nullptr)
+	cbackBuffer(nullptr),
+	lModels(std::make_unique<RStorage>())
 {
 }
 
@@ -243,27 +244,20 @@ void Graphics::LoadPipeline() {
 	}
 
 }
-void Graphics::loadModels(UINT umID, RStorage::bmResource* model) {
-	if (std::size(lModels.modelVect) < 1) {
-		lModels.OnInit();
-	}
-	lModels.lModel(umID, model);
-	modelVect.emplace_back(model);
+void Graphics::loadModels(UINT umID, RStorage::bmResource* model, bool init) {
 }
 
-void Graphics::LoadResources()
+void Graphics::LoadResources(int numLoadedSrv)
 {
 	using namespace DirectX;
-
-	lModels.CreateBuffers(modelVect, commandList, pDevice, commandAllocator, commandQueue, bufferCount);
 	{
 		D3D12_DESCRIPTOR_HEAP_DESC dsc = {};
 		dsc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-		dsc.NumDescriptors = (std::size(modelVect) * bufferCount * 2);
+		dsc.NumDescriptors = (numLoadedSrv * bufferCount * 2);
 		dsc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 		pDevice->CreateDescriptorHeap(&dsc, IID_PPV_ARGS(&srvDescriptorHeap)) >> chk;
 	}
-
+	lModels->CreateBuffers(lModels->modelVect, commandList, pDevice, commandAllocator, commandQueue, bufferCount);
 	// submit command list to queue as array with single element 
 	ID3D12CommandList* const commandLists[] = { commandList.Get() };
 	commandQueue->ExecuteCommandLists((UINT)std::size(commandLists), commandLists);
@@ -273,19 +267,22 @@ void Graphics::LoadResources()
 	if (WaitForSingleObject(fenceEvent, INFINITE) == WAIT_FAILED) {
 		GetLastError() >> chk;
 	}
-	
 	CreateFrameResources();
 }
 
 void Graphics::CreateFrameResources() {
+	for (auto& f : backBuffers)
+	{
+		delete f;
+	}
 	backBuffers = {};
 	// Initialize each frame resource.
 	CD3DX12_CPU_DESCRIPTOR_HANDLE cbvSrvHandle(srvDescriptorHeap->GetCPUDescriptorHandleForHeapStart());
 	for (UINT i = 0; i < bufferCount; i++)
 	{
-		FrameResource* pFrameResource = new FrameResource(pDevice.Get(), modelVect);
+		FrameResource* pFrameResource = new FrameResource(pDevice.Get(), lModels->modelVect);
 		auto temp = 0;
-		for (auto& m : modelVect) {
+		for (auto& m : lModels->modelVect) {
 			// Describe and create a constant buffer view (CBV).
 			D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
 			cbvDesc.BufferLocation = pFrameResource->openbuffers[temp]->GetGPUVirtualAddress();
@@ -305,7 +302,7 @@ void Graphics::CreateFrameResources() {
 
 		}
 
-		pFrameResource->InitBundle(pDevice.Get(), pipelineState.Get(), i, srvDescriptorHeap.Get(), srvDescriptorSize, samplerDescriptorHeap.Get(), samplerDescriptorSize, rootSignature.Get(), modelVect);
+		pFrameResource->InitBundle(pDevice.Get(), pipelineState.Get(), i, srvDescriptorHeap.Get(), srvDescriptorSize, samplerDescriptorHeap.Get(), samplerDescriptorSize, rootSignature.Get(), lModels->modelVect);
 
 		backBuffers.emplace_back(pFrameResource);
 
@@ -343,16 +340,10 @@ void Graphics::PopCommandList(FrameResource* backBuffer) {
 	commandList->ClearRenderTargetView(rtv, clearColor, 0, nullptr);
 	commandList->ClearDepthStencilView(dsvDescriptorHeap->GetCPUDescriptorHandleForHeapStart(), D3D12_CLEAR_FLAG_DEPTH, 1.f, 0, 0, nullptr);
 
+	//Bundle execution?
 
-
-	if (true) {
-		commandList->ExecuteBundle(backBuffer->bundle.Get());
-	}
-	else
-	{
-		// Populate a new command list.
-		backBuffer->PopulateCommandList(commandList.Get(), pipelineState.Get(), CurBackBuffer, srvDescriptorHeap.Get(), srvDescriptorSize, samplerDescriptorHeap.Get(), rootSignature.Get(), modelVect);
-	}
+	commandList->ExecuteBundle(backBuffer->bundle.Get());
+	//backBuffer->PopulateCommandList(commandList.Get(), pipelineState.Get(), CurBackBuffer, srvDescriptorHeap.Get(), srvDescriptorSize, samplerDescriptorHeap.Get(), rootSignature.Get(), lModels->modelVect);
 
 
 	{
@@ -391,47 +382,8 @@ Graphics::~Graphics() {
 
 
 
-void Graphics::SetModelPosition(rpVect* model) {
-	auto bmodel = model->model;
-	
-	switch (model->which) {
-	case RStorage::INIT:
-		bmodel->cmatrix = XMMatrixTranslation(0, 0, 0) * XMMatrixRotationQuaternion(XMLoadFloat4(&model->rotation));
-		bmodel->cmatrix *= XMMatrixTranslation(model->position.x, model->position.y, model->position.z);
-		bmodel->cmatrix *= XMMatrixRotationQuaternion(XMLoadFloat4(&model->orbit));
-		model->which = RStorage::NONE;
-		break;
-	case RStorage::BOTH:
-		bmodel->cmatrix = XMMatrixTranslation(0, 0, 0) * XMMatrixRotationQuaternion(XMLoadFloat4(&model->rotation));
-		bmodel->cmatrix *= XMMatrixTranslation(model->position.x, model->position.y, model->position.z);
-		bmodel->cmatrix *= XMMatrixRotationQuaternion(XMLoadFloat4(&model->orbit));
-		model->which = RStorage::NONE;
-		break;
-	case RStorage::ORBIT:
-		bmodel->cmatrix *= XMMatrixRotationQuaternion(XMLoadFloat4(&model->orbit));
-		model->which = RStorage::NONE;
-		break;
-	case RStorage::POSITION:
-		bmodel->cmatrix = XMMatrixTranslation(0, 0, 0) * XMMatrixRotationQuaternion(XMLoadFloat4(&model->rotation));
-		bmodel->cmatrix *= XMMatrixTranslation(model->position.x, model->position.y, model->position.z);
-		model->which = RStorage::NONE;
-		break;
-	case RStorage::NONE:
-		return;
-		break;
-	}
-		
-}
-
-//This will help you to update multiple models
-void Graphics::SetModelVectPositions(std::vector<rpVect> rpVects) {
-	for (auto& m : rpVects) {
-		SetModelPosition(&m);
-	}
-}
-
-
-void Graphics::OnUpdate() {
+void Graphics::RenderFrame() {
+	umodel.lock();
 	const UINT64 lastCompletedFence = fence->GetCompletedValue();
 	
 	CurBackBuffer = (CurBackBuffer + 1) % bufferCount;
@@ -441,12 +393,10 @@ void Graphics::OnUpdate() {
 		fence->SetEventOnCompletion(cbackBuffer->fenceValue, fenceEvent);
 		WaitForSingleObject(fenceEvent, INFINITE);
 	}
-	camera.Update(&curCamera.position, &curCamera.rotation, &curCamera.upDirection);
-	cbackBuffer->UpdateConstantBuffers(camera.GetViewMatrix(), camera.GetProjectionMatrix(1.333f, float(width) / float(height)), modelVect);
-}
-
-
-void Graphics::RenderFrame() {
+	curCamera.cmatrix = XMMatrixLookToRH(XMLoadFloat4(&curCamera.position), XMLoadFloat4(&curCamera.rotation), XMLoadFloat4(&curCamera.upDirection));
+	cbackBuffer->UpdateConstantBuffers(curCamera.cmatrix,
+		XMMatrixPerspectiveFovRH(1.333f, float(width) / float(height), 0.1f, 100000.0f), lModels->modelVect);
+	umodel.unlock();
 	PopCommandList(cbackBuffer);
 	
 	ID3D12CommandList* commandLists[] = { commandList.Get() };
