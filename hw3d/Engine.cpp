@@ -14,7 +14,7 @@ void Engine::iLoad() {
     pGfx->LoadPipeline();
     pGfx->umodel.lock();
     //begin model tracking. load a gd default world mf
-    trackedModels.emplace_back(new Physics::eResource{ "cube", pGfx->lModels->lModel(0), 1, 200.0, 0, {{0,0,168}} });
+    trackedModels.emplace_back(new Physics::eResource{ "cube", pGfx->lModels->lModel(0), 1, 200.0, 0, {{10,0,168}} });
     trackedModels.emplace_back(new Physics::eResource{"untitled",pGfx->lModels->lModel(1), 1, 200.0, 0, {{5,0,168}} });
     //wrld is 1:50000
     trackedModels.emplace_back(new Physics::eResource{"wrld", pGfx->lModels->lModel(2), 1, 8570000000.0});
@@ -71,6 +71,10 @@ void Engine::cPlayermodel()
        move.left -= movespeed * timer.time;
    }
 
+   XMStoreFloat4x4(&plModel->model->uData->ndata.aChildren[5]->matrix, XMMatrixRotationX(timetorot));
+   timetorot++;
+   if (timetorot > 11)
+       timetorot = 0;
    XMStoreFloat4(&plModel->velDir, XMQuaternionNormalize(XMLoadFloat4(&plModel->velDir) + XMLoadFloat4(&pGfx->curCamera.rotation)));
    plModel->speed += move.forward;
 }
@@ -79,11 +83,8 @@ void Engine::cMPosUpdate(){
     phyx->Update();
     pGfx->umodel.lock();
     for (auto& m : trackedModels) {
-        //if (m->updated.load()) {
             SetModelPosition(m);
-            //m->updated.store(false);
-        //}
-        
+            pGfx->UpdateModel(m->model);
     }
     pGfx->umodel.unlock();
 }
@@ -93,10 +94,11 @@ void Engine::cMPosUpdate(){
 
 void Engine::UCampos() {
     //Link the camera position here to whatever you want.
-    //pGfx->umodel.lock();
-    pGfx->curCamera.position.x = plModel->mPos.position.x;
-    pGfx->curCamera.position.y = plModel->mPos.position.y;
-    pGfx->curCamera.position.z = plModel->mPos.position.z;
+    plModel->mPos.posMtx.lock();
+    pGfx->curCamera.position = { plModel->mPos.position.x, plModel->mPos.position.y, plModel->mPos.position.z, 0 };
+
+    //pGfx->curCamera.position = { 0,0,168, 0 };
+    plModel->mPos.posMtx.unlock();
 
     float pitch = 0;
     float yaw = 0;
@@ -162,7 +164,6 @@ void Engine::RotateCam(float Pitch, float Yaw, float Roll) {
     
     XMStoreFloat4(&pGfx->curCamera.rotation, lookdirect);
     XMStoreFloat4(&pGfx->curCamera.upDirection, updirect);
-    //pGfx->umodel.unlock();
 }
 
 
@@ -262,31 +263,9 @@ void Engine::OnKeyUp(unsigned char key)
 void Engine::SetModelPosition(Physics::eResource* model) {
     auto& bmodel = model->model;
     model->mPos.posMtx.lock();
-    switch (model->which) {
-    case RStorage::INIT:
-        bmodel->cmatrix = XMMatrixTranslation(0, 0, 0) * XMMatrixRotationQuaternion(XMLoadFloat4(&model->mPos.rotation));
-        bmodel->cmatrix *= XMMatrixTranslation(model->mPos.position.x, model->mPos.position.y, model->mPos.position.z);
-        bmodel->cmatrix *= XMMatrixRotationQuaternion(XMLoadFloat4(&model->mPos.orbit));
-        model->which = RStorage::NONE;
-        break;
-    case RStorage::BOTH:
-        bmodel->cmatrix = XMMatrixTranslation(0, 0, 0) * XMMatrixRotationQuaternion(XMLoadFloat4(&model->mPos.rotation));
-        bmodel->cmatrix *= XMMatrixTranslation(model->mPos.position.x, model->mPos.position.y, model->mPos.position.z);
-        bmodel->cmatrix *= XMMatrixRotationQuaternion(XMLoadFloat4(&model->mPos.orbit));
-        model->which = RStorage::NONE;
-        break;
-    case RStorage::ORBIT:
-        bmodel->cmatrix *= XMMatrixRotationQuaternion(XMLoadFloat4(&model->mPos.orbit));
-        model->which = RStorage::NONE;
-        break;
-    case RStorage::POSITION:
-        bmodel->cmatrix = XMMatrixTranslation(0, 0, 0) * XMMatrixRotationQuaternion(XMLoadFloat4(&model->mPos.rotation));
-        bmodel->cmatrix *= XMMatrixTranslation(model->mPos.position.x, model->mPos.position.y, model->mPos.position.z);
-        model->which = RStorage::NONE;
-        break;
-    case RStorage::NONE:
-        break;
-    }
+    bmodel->cmatrix = XMMatrixTranslation(0, 0, 0) * XMMatrixRotationQuaternion(XMLoadFloat4(&model->mPos.rotation));
+    bmodel->cmatrix *= XMMatrixTranslation(model->mPos.position.x, model->mPos.position.y, model->mPos.position.z);
+    bmodel->cmatrix *= XMMatrixRotationQuaternion(XMLoadFloat4(&model->mPos.orbit));
     model->mPos.posMtx.unlock();
 }
 

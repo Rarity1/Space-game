@@ -30,25 +30,35 @@ public:
 		int index = -1;
 		std::vector<DirectX::XMFLOAT3> verts ={{}, {}, {}};
 	};
-	struct Bone {
-		std::string name;
-		int bIndex;
-		DirectX::XMFLOAT4X4 matrix;
-		std::vector<int> Indices;
-	};
+	
 
 	struct Node {
+		float mass = 0;
 		std::string name;
+		int bIndex = -1;
 		DirectX::XMFLOAT4X4 matrix;
+		DirectX::XMFLOAT4 pos{0,0,0,0};
+		DirectX::XMFLOAT4X4 LocalTransform;
 		std::vector<Node*> children = {};
 		int numchild = 0;
 		std::vector<Node*> aChildren = {};
+	};
+
+	struct Bone {
+		std::string name;
+		int bIndex;
+		//Inverse bind pose matrix
+		DirectX::XMFLOAT4X4 matrix;
+		DirectX::XMFLOAT4X4 finalTransform;
+		std::vector<int> Indices;
+		Node* node;
 	};
 	std::vector<Vertex> vdata;
 	std::vector<vFaceData> idata;
 	std::vector<pCollision> cdata;
 	std::vector<Bone> bdata;
 	Node ndata;
+	std::vector<boneweight> weights;
 	float collradius;
 	Size fsize;
 private:

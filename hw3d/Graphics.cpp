@@ -258,16 +258,84 @@ void Graphics::LoadResources(int numLoadedSrv)
 		pDevice->CreateDescriptorHeap(&dsc, IID_PPV_ARGS(&srvDescriptorHeap)) >> chk;
 	}
 	lModels->CreateBuffers(lModels->modelVect, commandList, pDevice, commandAllocator, commandQueue, bufferCount);
+	
 	// submit command list to queue as array with single element 
-	ID3D12CommandList* const commandLists[] = { commandList.Get() };
-	commandQueue->ExecuteCommandLists((UINT)std::size(commandLists), commandLists);
-	// insert fence to detect when upload is complete 
-	commandQueue->Signal(fence.Get(), ++fenceValue) >> chk;
-	fence->SetEventOnCompletion(fenceValue, fenceEvent) >> chk;
-	if (WaitForSingleObject(fenceEvent, INFINITE) == WAIT_FAILED) {
-		GetLastError() >> chk;
+	{
+		ID3D12CommandList* const commandLists[] = { commandList.Get() };
+		commandQueue->ExecuteCommandLists((UINT)std::size(commandLists), commandLists);
+		// insert fence to detect when upload is complete 
+		commandQueue->Signal(fence.Get(), ++fenceValue) >> chk;
+		fence->SetEventOnCompletion(fenceValue, fenceEvent) >> chk;
+		if (WaitForSingleObject(fenceEvent, INFINITE) == WAIT_FAILED) {
+			GetLastError() >> chk;
+		}
 	}
 	CreateFrameResources();
+}
+
+void Graphics::UpdateLocalTransform(RStorage::bmResource* bm)
+{
+	XMFLOAT4X4 temp{ 1.f,0.f,0.f,0.f,0.f,1.f,0.f,0.f,0.f,0.f,1.f,0.f,0.f,0.f,0.f,1.f };
+	XMStoreFloat4x4(&bm->uData->ndata.LocalTransform, XMLoadFloat4x4(&temp) * XMLoadFloat4x4(&bm->uData->ndata.matrix));
+
+	for (auto& c : bm->uData->ndata.children) {
+		RecurLTrans(c, &bm->uData->ndata);
+	}
+	
+	for (auto& P : bm->uData->ndata.aChildren) {
+		for (auto& n : P->aChildren) {
+			RecurLTrans(n, P);
+		}
+	}
+}
+
+void Graphics::RecurLTrans(ReadX3D::Node* n, ReadX3D::Node* P) {
+	XMStoreFloat4x4(&n->LocalTransform, XMMatrixMultiply(XMLoadFloat4x4(&P->LocalTransform), XMLoadFloat4x4(&n->matrix)));
+}
+
+
+void Graphics::UpdateModel(RStorage::bmResource* bm) {
+	UpdateLocalTransform(bm);
+	auto GlobITrans = XMMatrixInverse(nullptr, XMLoadFloat4x4(&bm->uData->ndata.matrix));
+	for (auto& b : bm->uData->bdata) {
+		XMStoreFloat4x4(&b.finalTransform, XMLoadFloat4x4(&b.matrix) * XMLoadFloat4x4(&b.node->LocalTransform) * GlobITrans);
+	}
+	std::vector<ReadX3D::Vertex> vdata;
+	vdata.resize(std::size(bm->uData->vdata));
+	ReadX3D::Vertex* mappedVertexData = nullptr;
+	bm->uvbuffer->Map(0, nullptr, reinterpret_cast<void**>(&mappedVertexData)) >> chk;
+	for (auto& b : bm->uData->bdata) {
+		for (auto& v : b.Indices) {
+			auto weight = bm->uData->weights[v].weight[bIndex(bm->uData->weights[v].bIndex, b.bIndex)];
+			auto matrix = XMLoadFloat4x4(&b.finalTransform) * weight;
+			auto vd = bm->uData->vdata[v].position;
+			XMFLOAT4 vf = XMFLOAT4{ vd.x,vd.y,vd.z, 1};
+			auto temp = XMVector3TransformNormal(XMLoadFloat4(&vf), (matrix));
+			XMStoreFloat4(&vf, temp);
+			vdata[v].position.x += vf.x;
+			vdata[v].position.y += vf.y;
+			vdata[v].position.z += vf.z;
+			
+		}
+	}
+
+	for (auto v = 0; v < std::size(vdata); v++) {
+		vdata[v].normal = bm->uData->vdata[v].normal;
+		vdata[v].tc = bm->uData->vdata[v].tc;
+		memcpy(&mappedVertexData[v], &vdata[v], sizeof(ReadX3D::Vertex));
+	}
+	bm->uvbuffer->Unmap(0, nullptr);
+	bm->animate.store(true);
+}
+
+int Graphics::bIndex(std::vector<int> w, int bInd) {
+	int Index = 0;
+	for (auto i = 0; i < std::size(w); i++) {
+		if (w[i] == bInd) {
+			Index = i;
+		}
+	}
+	return Index;
 }
 
 void Graphics::CreateFrameResources() {
@@ -310,11 +378,14 @@ void Graphics::CreateFrameResources() {
 }
 
 void Graphics::PopCommandList(FrameResource* backBuffer) {
+	
 	using namespace DirectX;
 	cbackBuffer->commandAllocator->Reset() >> chk;
 	commandList->Reset(cbackBuffer->commandAllocator.Get(), pipelineState.Get()) >> chk;
-
-
+	for (auto& m : lModels->modelVect) {
+		if(m->animate.load())
+		lModels->UpdBuffer(m, commandList, pDevice, commandAllocator, commandQueue);
+	}
 	commandList->SetGraphicsRootSignature(rootSignature.Get());
 
 	ID3D12DescriptorHeap* ppHeaps[] = { srvDescriptorHeap.Get(), samplerDescriptorHeap.Get() };
@@ -385,7 +456,6 @@ Graphics::~Graphics() {
 void Graphics::RenderFrame() {
 	umodel.lock();
 	const UINT64 lastCompletedFence = fence->GetCompletedValue();
-	
 	CurBackBuffer = (CurBackBuffer + 1) % bufferCount;
 	cbackBuffer = backBuffers[CurBackBuffer];
 	if (cbackBuffer->fenceValue != 0 && cbackBuffer->fenceValue > lastCompletedFence) {

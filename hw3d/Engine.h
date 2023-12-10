@@ -39,7 +39,7 @@ private:
 	Physics::eResource* plModel;
 	XMFLOAT4 cWorld;
 	XMFLOAT4 nWorld;
-	
+	int timetorot;
 	struct KeysPressed
 	{
 		bool w = false;

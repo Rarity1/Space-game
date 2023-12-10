@@ -16,6 +16,7 @@ void Physics::Update() {
     std::vector<std::thread> collthread;
     for (auto& mUpdate : trackedModels) {
         if (mUpdate->speed != 0 || mUpdate->gravpull != 0 || mUpdate->updated.load()) {
+            
             mUpdate->mPos.lastposition = mUpdate->mPos.position;
             mMove(mUpdate);
         }
@@ -56,9 +57,7 @@ void Physics::cGravity(eResource* obj) {
         obj->grav = change;
 
 
-        timer->mtx.lock();
         obj->gravpull = sqrt(((GConst * (obj->mworld->mass)) / pow(distance, 2))) * timer->time;
-        timer->mtx.unlock();
     }
 }
 
@@ -158,7 +157,9 @@ void Physics::mMove(Physics::eResource* mUpdate) {
     mUpdate->speed += mUpdate->gravpull;
     XMFLOAT4 both = { 0,0,0,0 };
     XMStoreFloat4(&both, (XMLoadFloat4(&mUpdate->velDir) * mUpdate->speed) + (XMLoadFloat4(&mUpdate->grav) * mUpdate->gravpull));
+    mUpdate->mPos.posMtx.lock();
     mUpdate->mPos.position = { mUpdate->mPos.position.x + both.x, mUpdate->mPos.position.y + both.y, mUpdate->mPos.position.z + both.z };
+    mUpdate->mPos.posMtx.unlock();
     mUpdate->which = RStorage::BOTH;
 }
 Physics::~Physics() {

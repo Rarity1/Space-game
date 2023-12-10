@@ -42,12 +42,14 @@ public:
 		ID3D12Resource* uvbuffer;
 		ID3D12Resource* uibuffer;
 		DirectX::XMMATRIX cmatrix;
+		std::atomic<bool> animate = false;
 	};
 	std::vector<RStorage::bmResource*> modelVect;
 	void Delete(RStorage::bmResource* bm);
 	RStorage::bmResource* lModel(UINT umID) noexcept;
 	//Always call after read
 	void CreateBuffers(std::vector<bmResource*> bm, Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList, Microsoft::WRL::ComPtr<ID3D12Device> pDevice, Microsoft::WRL::ComPtr<ID3D12CommandAllocator> commandAllocator, Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue,  UINT buffercount);
+	void UpdBuffer(bmResource* bm, Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList, Microsoft::WRL::ComPtr<ID3D12Device> pDevice, Microsoft::WRL::ComPtr<ID3D12CommandAllocator> commandAllocator, Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue);
 private:
 	std::vector<ID3D12Resource*> vbufferPtrs;
 	std::vector<unmappedData> Models;

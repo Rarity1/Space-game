@@ -52,7 +52,7 @@ void RStorage::CreateBuffers(std::vector<bmResource*> m, Microsoft::WRL::ComPtr<
 				&heapProps,
 				D3D12_HEAP_FLAG_NONE,
 				&resourceDesc,
-				D3D12_RESOURCE_STATE_COPY_DEST,
+				D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,
 				nullptr,
 				IID_PPV_ARGS(&bm->vbuffer));
 		}
@@ -76,7 +76,7 @@ void RStorage::CreateBuffers(std::vector<bmResource*> m, Microsoft::WRL::ComPtr<
 				&heapProps,
 				D3D12_HEAP_FLAG_NONE,
 				&resourceDesc,
-				D3D12_RESOURCE_STATE_COPY_DEST,
+				D3D12_RESOURCE_STATE_INDEX_BUFFER,
 				nullptr,
 				IID_PPV_ARGS(&bm->ibuffer));
 		}
@@ -93,46 +93,28 @@ void RStorage::CreateBuffers(std::vector<bmResource*> m, Microsoft::WRL::ComPtr<
 			) >> chk;
 		}
 		{
-			CreateDDSTextureFromFile(pDevice.Get(), upload, Models[bm->umID].texture.c_str(), &bm->tbuffer);
-		}
-		{
-			ReadX3D::Vertex* mappedVertexData = nullptr;
-			bm->uvbuffer->Map(0, nullptr, reinterpret_cast<void**>(&mappedVertexData)) >> chk;
-			WORD* mappedIndexData = nullptr;
-			bm->uibuffer->Map(0, nullptr, reinterpret_cast<void**>(&mappedIndexData)) >> chk;
+			{
+				ReadX3D::Vertex* mappedVertexData = nullptr;
+				bm->uvbuffer->Map(0, nullptr, reinterpret_cast<void**>(&mappedVertexData)) >> chk;
+				WORD* mappedIndexData = nullptr;
+				bm->uibuffer->Map(0, nullptr, reinterpret_cast<void**>(&mappedIndexData)) >> chk;
 
 
-			auto& temporaryVertex = bm->uData->vdata;
-			for (auto i = 0; i < std::size(temporaryVertex); i++) {
-				memcpy(&mappedVertexData[i], &temporaryVertex[i], sizeof(ReadX3D::Vertex));
+				auto& temporaryVertex = bm->uData->vdata;
+				for (auto i = 0; i < std::size(temporaryVertex); i++) {
+					memcpy(&mappedVertexData[i], &temporaryVertex[i], sizeof(ReadX3D::Vertex));
 
+				}
+
+				auto& temporaryIndex = bm->uData->idata;
+				for (auto i = 0; i < std::size(temporaryIndex); i++) {
+					memcpy(&mappedIndexData[i], &temporaryIndex[i].index, sizeof(WORD));
+				}
 			}
-
-			auto& temporaryIndex = bm->uData->idata;
-			for (auto i = 0; i < std::size(temporaryIndex); i++) {
-				memcpy(&mappedIndexData[i], &temporaryIndex[i].index, sizeof(WORD));
-			}
-		}
-		{
 			bm->uvbuffer->Unmap(0, nullptr);
 			bm->uibuffer->Unmap(0, nullptr);
-			commandList->CopyResource(bm->vbuffer, bm->uvbuffer);
-			commandList->CopyResource(bm->ibuffer, bm->uibuffer);
-		}
-
-
-
-		{
-			const auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-				bm->vbuffer,
-				D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
-			commandList->ResourceBarrier(1, &barrier);
-		}
-		{
-			const auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-				bm->ibuffer,
-				D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_INDEX_BUFFER);
-			commandList->ResourceBarrier(1, &barrier);
+			CreateDDSTextureFromFile(pDevice.Get(), upload, Models[bm->umID].texture.c_str(), &bm->tbuffer);
+			UpdBuffer(bm, commandList, pDevice, commandAllocator, commandQueue);
 		}
 		Models[bm->umID].mappedBuffer = true;
 		Models[bm->umID].vbuffer = bm->vbuffer;
@@ -149,6 +131,35 @@ void RStorage::CreateBuffers(std::vector<bmResource*> m, Microsoft::WRL::ComPtr<
  
 		commandList->Close() >> chk;
 		
+}
+
+void RStorage::UpdBuffer(bmResource* bm, Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList, Microsoft::WRL::ComPtr<ID3D12Device> pDevice, Microsoft::WRL::ComPtr<ID3D12CommandAllocator> commandAllocator, Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue) {
+	{
+		const auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+			bm->vbuffer,
+			D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, D3D12_RESOURCE_STATE_COPY_DEST);
+		commandList->ResourceBarrier(1, &barrier);
+	}
+	{
+		const auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+			bm->ibuffer,
+			D3D12_RESOURCE_STATE_INDEX_BUFFER, D3D12_RESOURCE_STATE_COPY_DEST);
+		commandList->ResourceBarrier(1, &barrier);
+	}
+	commandList->CopyResource(bm->vbuffer, bm->uvbuffer);
+	commandList->CopyResource(bm->ibuffer, bm->uibuffer);
+	{
+		const auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+			bm->vbuffer,
+			D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
+		commandList->ResourceBarrier(1, &barrier);
+	}
+	{
+		const auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+			bm->ibuffer,
+			D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_INDEX_BUFFER);
+		commandList->ResourceBarrier(1, &barrier);
+	}
 }
 
 void RStorage::Delete(RStorage::bmResource* bm) {

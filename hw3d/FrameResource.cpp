@@ -117,8 +117,8 @@ void FrameResource::UpdateConstantBuffers(FXMMATRIX view, CXMMATRIX projection, 
         for (auto& m : Modls)
         {
             // Compute the model-view-projection matrix.
-            XMStoreFloat4x4(&mvp,  XMMatrixTranspose(m->cmatrix * view * projection));
-            
+            //XMStoreFloat4x4(&mvp,  XMMatrixTranspose(m->cmatrix * view * projection));
+            XMStoreFloat4x4(&mvp, XMMatrixTranspose(m->cmatrix * view * projection));
             // Copy this matrix into the appropriate location in the upload heap subresource.
             memcpy(cbvbuff[temp], &mvp, sizeof(mvp));
             temp++;
