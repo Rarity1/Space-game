@@ -20,7 +20,7 @@ void Physics::Update() {
             mUpdate->mPos.lastposition = mUpdate->mPos.position;
             mMove(mUpdate);
         }
-        collthread.emplace_back(std::thread(&Physics::pSpecCollison, this, mUpdate));
+        mMove(mUpdate);
     }
     for (auto& t : collthread) {
         t.join();
