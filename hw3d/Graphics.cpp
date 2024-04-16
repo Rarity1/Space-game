@@ -295,7 +295,6 @@ void Graphics::RecurLTrans(ReadX3D::Node* n, ReadX3D::Node* P) {
 
 
 void Graphics::UpdateModel(RStorage::bmResource* bm) {
-	UpdateLocalTransform(bm);
 	auto GlobITrans = XMMatrixInverse(nullptr, XMLoadFloat4x4(&bm->uData->ndata.matrix));
 	for (auto& b : bm->uData->bdata) {
 		XMStoreFloat4x4(&b.finalTransform, XMLoadFloat4x4(&b.matrix) * XMLoadFloat4x4(&b.node->LocalTransform) * GlobITrans);
@@ -318,11 +317,18 @@ void Graphics::UpdateModel(RStorage::bmResource* bm) {
 			
 		}
 	}
-
+	
+	if (std::size(bm->uData->bdata) != 0)
 	for (auto v = 0; v < std::size(vdata); v++) {
 		vdata[v].normal = bm->uData->vdata[v].normal;
 		vdata[v].tc = bm->uData->vdata[v].tc;
 		memcpy(&mappedVertexData[v], &vdata[v], sizeof(ReadX3D::Vertex));
+	}
+	else {
+		vdata = bm->uData->vdata;
+		for (auto v = 0; v < std::size(vdata); v++) {
+			memcpy(&mappedVertexData[v], &vdata[v], sizeof(ReadX3D::Vertex));
+		}
 	}
 	bm->uvbuffer->Unmap(0, nullptr);
 	bm->animate.store(true);
@@ -383,8 +389,10 @@ void Graphics::PopCommandList(FrameResource* backBuffer) {
 	cbackBuffer->commandAllocator->Reset() >> chk;
 	commandList->Reset(cbackBuffer->commandAllocator.Get(), pipelineState.Get()) >> chk;
 	for (auto& m : lModels->modelVect) {
-		if(m->animate.load())
-		lModels->UpdBuffer(m, commandList, pDevice, commandAllocator, commandQueue);
+		UpdateLocalTransform(m);
+		if (m->animate.load()) {
+			lModels->UpdBuffer(m, commandList, pDevice, commandAllocator, commandQueue);
+		}
 	}
 	commandList->SetGraphicsRootSignature(rootSignature.Get());
 

@@ -25,6 +25,7 @@ public:
 	void LoadResources(int numLoadedSrv);
 	void LoadPipeline();
 	void loadModels(UINT umID, RStorage::bmResource* model, bool init = false);
+	void UpdateLocalTransform(RStorage::bmResource* bm);
 	pCamera curCamera;
 	std::vector<std::string> loadbuff;
 	//std::vector<RStorage::bmResource*> modelVect;
@@ -38,7 +39,6 @@ private:
 	float RotateHelper(float& rNumber);
 	float timesincestart;
 	void CreateFrameResources();
-	void UpdateLocalTransform(RStorage::bmResource* bm);
 	void RecurLTrans(ReadX3D::Node* n, ReadX3D::Node* P);
 	void PopCommandList(FrameResource* backBuffer);
 	int bIndex(std::vector<int> w, int bInd);

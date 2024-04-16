@@ -9,6 +9,7 @@ App::App()
 int App::Go() {
 	wnd.Eng().iLoad();
 	while (wnd.ProcessMessages() != WM_QUIT) {
+		wnd.Eng().DoStuff();
 		App::DoFrame();
 	}
 	return 0;
@@ -17,8 +18,8 @@ int App::Go() {
 void App::DoFrame() {
 	wnd.Eng().timer.mtx.lock();
 	wnd.Eng().timer.time += timer.Peek()/1000;
-	timer.Mark();
 	wnd.Eng().timer.mtx.unlock();
+	timer.Mark();
 	wnd.Gfx().RenderFrame();
 
 }

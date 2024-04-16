@@ -35,6 +35,7 @@ void RStorage::OnInit() {
 			}
 		}
 	}
+	loadedModels.resize(std::size(Models));
 }
 
 void RStorage::CreateBuffers(std::vector<bmResource*> m, Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList, Microsoft::WRL::ComPtr<ID3D12Device> pDevice, Microsoft::WRL::ComPtr<ID3D12CommandAllocator> commandAllocator, Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue, UINT buffercount) {
@@ -120,11 +121,14 @@ void RStorage::CreateBuffers(std::vector<bmResource*> m, Microsoft::WRL::ComPtr<
 		Models[bm->umID].vbuffer = bm->vbuffer;
 		Models[bm->umID].ibuffer = bm->ibuffer;
 		Models[bm->umID].tbuffer = bm->tbuffer;
+		Models[bm->umID].uvbuffer = bm->uvbuffer;
+
 		}
 		else {
 			bm->vbuffer = Models[bm->umID].vbuffer;
 			bm->ibuffer = Models[bm->umID].ibuffer;
 			bm->tbuffer = Models[bm->umID].tbuffer;
+			bm->uvbuffer = Models[bm->umID].uvbuffer;
 		}
 		
 		upload.End(commandQueue.Get());
@@ -147,6 +151,7 @@ void RStorage::UpdBuffer(bmResource* bm, Microsoft::WRL::ComPtr<ID3D12GraphicsCo
 		commandList->ResourceBarrier(1, &barrier);
 	}
 	commandList->CopyResource(bm->vbuffer, bm->uvbuffer);
+	if(bm->uibuffer != nullptr)
 	commandList->CopyResource(bm->ibuffer, bm->uibuffer);
 	{
 		const auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
@@ -160,6 +165,7 @@ void RStorage::UpdBuffer(bmResource* bm, Microsoft::WRL::ComPtr<ID3D12GraphicsCo
 			D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_INDEX_BUFFER);
 		commandList->ResourceBarrier(1, &barrier);
 	}
+	bm->animate.store(false);
 }
 
 void RStorage::Delete(RStorage::bmResource* bm) {
@@ -172,11 +178,17 @@ RStorage::bmResource* RStorage::lModel(UINT umID) noexcept
 {
 	
 	if (umID < (std::size(Models))) {
-		auto model = new RStorage::bmResource{umID, new ReadX3D(Models[umID].model.string()), Models[umID].model.string()};
+		auto model = new RStorage::bmResource{ umID, CheckLoaded(umID) };
 		modelVect.emplace_back(model);
 		return model;
 	}
 	return nullptr;
+}
+
+ReadX3D* RStorage::CheckLoaded(int umID) {
+	if(loadedModels[umID] == nullptr)
+		loadedModels[umID] = new ReadX3D(Models[umID].model.string());
+	return loadedModels[umID];
 }
 
 

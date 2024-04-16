@@ -1,5 +1,6 @@
 #pragma once
 #include "CWin.h"
+#include <DirectXCollision.h>
 
 class ReadX3D{
 public:
@@ -27,8 +28,8 @@ public:
 	struct pCollision {
 		DirectX::XMFLOAT3 pos{0,0,0};
 		float radius = 0;
-		int index = -1;
-		std::vector<DirectX::XMFLOAT3> verts ={{}, {}, {}};
+		std::vector<int> index{-1,-1,-1};
+		std::vector<Vertex*> verts = {nullptr,nullptr,nullptr};
 	};
 	
 
@@ -52,6 +53,8 @@ public:
 		DirectX::XMFLOAT4X4 finalTransform;
 		std::vector<int> Indices;
 		Node* node;
+		DirectX::BoundingSphere sphere;
+		DirectX::BoundingSphere smallsphere;
 	};
 	std::vector<Vertex> vdata;
 	std::vector<vFaceData> idata;
@@ -59,9 +62,10 @@ public:
 	std::vector<Bone> bdata;
 	Node ndata;
 	std::vector<boneweight> weights;
-	float collradius;
+	DirectX::BoundingSphere Sphere;
 	Size fsize;
 private:
+    float fDistance(DirectX::XMFLOAT3* pos1, DirectX::XMFLOAT3* pos2);
 	DirectX::XMFLOAT4X4 strToMatrix(std::istringstream& rawmatri);
 	Node ChildNodeRead(rapidxml::xml_node<char>* node);
 	void cvertexData();

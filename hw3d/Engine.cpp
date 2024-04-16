@@ -13,15 +13,20 @@ void Engine::iLoad() {
     phyx->upDist.store(true);
     pGfx->LoadPipeline();
     pGfx->umodel.lock();
+    
     //begin model tracking. load a gd default world mf
-    trackedModels.emplace_back(new Physics::eResource{ "cube", pGfx->lModels->lModel(0), 1, 200.0, 0, {{10,0,168}} });
-    trackedModels.emplace_back(new Physics::eResource{"untitled",pGfx->lModels->lModel(1), 1, 200.0, 0, {{5,0,168}} });
+    trackedModels.emplace_back(new Physics::eResource{ "cube", pGfx->lModels->lModel(1), 1, 200.0, 0, {{0,0,138}} });
+    trackedModels.emplace_back(new Physics::eResource{ "untitled1", pGfx->lModels->lModel(1), 1, 200.0, 0, {{0,-10,138}} });
+    //trackedModels.emplace_back(new Physics::eResource{ "untitled2", pGfx->lModels->lModel(1), 1, 200.0, 0, {{10,0,168}} });
+    //trackedModels.emplace_back(new Physics::eResource{"untitled3",pGfx->lModels->lModel(1), 1, 200.0, 0, {{5,0,168}} });
+    
     //wrld is 1:50000
-    trackedModels.emplace_back(new Physics::eResource{"wrld", pGfx->lModels->lModel(2), 1, 8570000000.0});
-    trackedModels[0]->mworld = trackedModels[2];
-    trackedModels[1]->mworld = trackedModels[2];
+    trackedModels.emplace_back(new Physics::eResource{"wrld", pGfx->lModels->lModel(2), 1, 8570000000.0, 0, { {0,0,0} }});
+    //trackedModels[0]->mworld = trackedModels[4];
+    //trackedModels[1]->mworld = trackedModels[4];
     plModel = trackedModels[1];
     //end model tracking.
+
     pGfx->LoadResources(std::size(trackedModels));
     pGfx->umodel.unlock();
     
@@ -29,7 +34,6 @@ void Engine::iLoad() {
         engInit = false;
     }
     eRun.store(true);
-    EngThread = std::thread(&Engine::DoStuff, this);
 }
 
 void Engine::Update()
@@ -40,7 +44,6 @@ void Engine::Update()
 }
 
  void Engine::DoStuff() {
-     while (eRun) {
          UControls();
          timer.mtx.lock();
          if (timer.time >= 1.0f / updaterate) {
@@ -48,12 +51,9 @@ void Engine::Update()
              cMPosUpdate();
              UCampos();
              timer.time = 0;
-             timer.mtx.unlock();
          }
-         else {
-             timer.mtx.unlock();
-         }
-    }
+         timer.mtx.unlock();
+    
 }
 
 
@@ -71,12 +71,11 @@ void Engine::cPlayermodel()
        move.left -= movespeed * timer.time;
    }
 
-   XMStoreFloat4x4(&plModel->model->uData->ndata.aChildren[5]->matrix, XMMatrixRotationX(timetorot));
-   timetorot++;
-   if (timetorot > 11)
-       timetorot = 0;
+   
+   plModel->mPos.posMtx.lock();
    XMStoreFloat4(&plModel->velDir, XMQuaternionNormalize(XMLoadFloat4(&plModel->velDir) + XMLoadFloat4(&pGfx->curCamera.rotation)));
-   plModel->speed += move.forward;
+   plModel->speed = move.forward*10;
+   plModel->mPos.posMtx.unlock();
 }
 
 void Engine::cMPosUpdate(){
@@ -286,7 +285,6 @@ void Engine::UControls() {
 
 Engine::~Engine() {
     eRun.store(false);
-    EngThread.join();
     phyx->upDist.store(false);
     phyx->~Physics();
     for (auto& m : trackedModels)

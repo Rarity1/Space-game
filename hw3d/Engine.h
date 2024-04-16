@@ -10,8 +10,9 @@ public:
 	Physics::mThreadTime timer;
 	bool engInit = true;
 	std::vector<Physics::eResource*> trackedModels;
-private:
 	void DoStuff();
+private:
+	
 	std::thread EngThread;
 	std::atomic<bool> eRun;
 	struct Movement {

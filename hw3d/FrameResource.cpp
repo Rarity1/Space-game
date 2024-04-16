@@ -90,7 +90,11 @@ void FrameResource::PopulateCommandList(ID3D12GraphicsCommandList* pCommandList,
     pCommandList->SetGraphicsRootDescriptorTable(1, pSamplerDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
     pCommandList->SetPipelineState(pPso1);
 
-    //PIXBeginEvent(pCommandList, 0, "Draw everything");
+    PIXBeginEvent(pCommandList, 0, "Draw everything");
+
+
+    std::vector<int> tempvect{};
+
     auto temp = 0;
     for (auto& m : models) {
         
@@ -102,12 +106,9 @@ void FrameResource::PopulateCommandList(ID3D12GraphicsCommandList* pCommandList,
             pCommandList->SetGraphicsRootDescriptorTable(0, cbvSrvHandle);
             cbvSrvHandle.Offset(cbvSrvDescriptorSize);
             pCommandList->DrawIndexedInstanced(std::size(m->uData->idata), 1, 0, 0, 0);
-            
-        
-        
         temp++;
     }
-    //PIXEndEvent(pCommandList);
+    PIXEndEvent(pCommandList);
 }
 
 void FrameResource::UpdateConstantBuffers(FXMMATRIX view, CXMMATRIX projection, std::vector<RStorage::bmResource*> Modls)

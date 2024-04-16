@@ -250,25 +250,44 @@ void ReadX3D::cvertexData()
 			bdata[j].Indices.emplace_back(i);
 		}
 	}
+	for (auto& b : bdata) {
+		DirectX::XMFLOAT3 pos{ 0,0,0 };
+		for (auto& i : b.Indices) {
+			pos = { pos.x + vdata[i].position.x, pos.y + vdata[i].position.y, pos.z + vdata[i].position.z };
+		}
+		auto isize = std::size(b.Indices);
+		b.sphere.Center = isize > 0 ? DirectX::XMFLOAT3{pos.x / isize, pos.y / isize, pos.z / isize} : pos;
+		b.smallsphere = b.sphere;
+	}
+
+	for (auto& b : bdata) {
+		float dist = 0;
+		float fdist = 0;
+		float ldist = 0;
+		for (auto& i : b.Indices) {
+			fdist = fDistance(&b.sphere.Center, &vdata[i].position);
+			dist = fdist > dist ? fdist : dist;
+			ldist = (fdist < ldist) || (ldist == 0) ? fdist : ldist;
+		}
+		b.sphere.Radius =  dist;
+		b.smallsphere.Radius = ldist;
+	}
 
 	cdata.resize(std::size(idata)/3);
 
+	float collradius = 0;
 	auto tempcount = 0;
 	for (auto& i : idata) {
-		
-		cdata[tempcount].verts[i.index%3] = vdata[i.index].position;
-		cdata[tempcount].index = tempcount;
+		cdata[tempcount].verts[i.index % 3] = &vdata[i.index];
+		cdata[tempcount].index[i.index % 3] = i.index;
 		tempcount += i.index % 3 == 0 ? 1 : 0;
-	}
-	collradius = 0;
-	for (auto& c : cdata) {
-		c.pos = { (c.verts[0].x + c.verts[1].x + c.verts[2].x) / 3, (c.verts[0].y + c.verts[1].y + c.verts[2].y) / 3, (c.verts[0].z + c.verts[1].z + c.verts[2].z) / 3};
-		auto x = c.pos.x - c.verts[0].x;
-		auto y = c.pos.y - c.verts[0].y;
-		auto z = c.pos.z - c.verts[0].z;
-		c.radius = sqrt(pow(x, 2) + pow(y, 2) + pow(z, 2));
-		auto temp = sqrt(pow(c.pos.x, 2) + pow(c.pos.y, 2) + pow(c.pos.z, 2));
+		auto temp = abs(vdata[i.index].position.x) + abs(vdata[i.index].position.y) + abs(vdata[i.index].position.z);
 		collradius = temp > collradius ? temp : collradius;
+	}
+	Sphere.Radius = collradius;
+	Sphere.Center = { 0,0,0 };
+	for (auto& c : cdata) {
+		c.pos = { (c.verts[0]->position.x + c.verts[1]->position.x + c.verts[2]->position.x) / 3,(c.verts[0]->position.y + c.verts[1]->position.y + c.verts[2]->position.y) / 3,(c.verts[0]->position.z + c.verts[1]->position.z + c.verts[2]->position.z) / 3, };
 	}
 
 	fsize.fSize = sizeof(ReadX3D::Vertex) * std::size(vdata);
@@ -315,6 +334,13 @@ ReadX3D::Node ReadX3D::ChildNodeRead(rapidxml::xml_node<char>* node) {
 		mParent.numchild += n->numchild;
 	}
 	return mParent;
+}
+
+float ReadX3D::fDistance(DirectX::XMFLOAT3* pos1, DirectX::XMFLOAT3* pos2) {
+		auto x = pow((pos2->x - pos1->x), 2);
+		auto y = pow((pos2->y - pos1->y), 2);
+		auto z = pow((pos2->z - pos1->z), 2);
+	return sqrt(x + y + z);
 }
 
 DirectX::XMFLOAT4X4 ReadX3D::strToMatrix(std::istringstream& rawmatri) {

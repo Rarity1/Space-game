@@ -28,9 +28,11 @@ public:
 		};
 		relposVect mPos;
 		float speed = 0;
+		float pspeed = 0;
 		XMFLOAT4 grav{ 0,0,0,0 };
 		float gravpull = 0;
 		XMFLOAT4 velDir{0,0,0,0};
+		XMFLOAT4 pDir{ 0,0,0,0 };
 		eResource* mworld = nullptr;
 		bool isWorld = false;
 		RStorage::pChange which = RStorage::INIT;
@@ -40,12 +42,12 @@ public:
 			std::mutex mtx;
 			std::atomic<bool> Collision = false;
 			XMFLOAT4 direction{ 0,0,0,0 };
+			XMFLOAT4 veldir{ 0,0,0,0 };
 		};
 		std::vector<tmCollide*> tmDist;
 		std::mutex currentMtx;
 		std::vector<ReadX3D::pCollision*> currentCollision;
 		std::atomic<bool> updated = false;
-		std::mutex distlock;
 	};
 	Physics(mThreadTime* timer, std::vector<Physics::eResource*>& trackedModels, int* UpdateRate);
 	~Physics();
@@ -56,16 +58,27 @@ public:
 	std::atomic<bool> Retracker = true;
 private:
 	void Retrack();
+	template <typename T> int sgn(T val);
 	std::vector<Physics::eResource*>& trackedModels;
 	mThreadTime* timer;
 	int* urate;
 	float GConst = 0;
 	void cGravity(eResource* obj);
+	XMFLOAT4 fDirection(XMFLOAT3* pos1, XMFLOAT3* pos2);
 	void trackDist(Physics::eResource* tModel);
+	void uCone(Physics::eResource* obj, eResource::tmCollide* tmdist);
+	bool coneCheck(XMFLOAT3 postc, float height, float radius, XMFLOAT4 dir);
+	void ProcCollide(Physics::eResource* obj, eResource::tmCollide* tmdist);
 	void pSpecCollison(eResource* obj);
-	void RayCastColl(ReadX3D::pCollision* pos, XMFLOAT3* apos, Physics::eResource* obj, XMFLOAT4* dir);
+	std::vector<float> RayCastColl(std::vector<int>& index, std::vector<ReadX3D::pCollision>& cdata, XMFLOAT4& dir, std::vector<XMFLOAT3>& raypos);
 	bool triCollide(ReadX3D::pCollision* tri, ReadX3D::pCollision* tri2, XMFLOAT3* tripos, XMFLOAT3* tri2pos);
 	void mMove(Physics::eResource* mUpdate);
 	std::vector<std::thread> collisionThreads;
 	std::vector<std::thread> distanceThreads = {};
+	struct CollideS {
+		float speed;
+		XMFLOAT4 dir;
+		int Index1;
+		int Index2;
+	};
 };

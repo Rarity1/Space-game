@@ -25,6 +25,9 @@
     <Filter Include="Source Files\Util">
       <UniqueIdentifier>{fd92ff06-bf5f-47ca-969a-1b0a2dc7438d}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Resource Files\OCL">
+      <UniqueIdentifier>{47440870-f9f2-4437-9432-a92e1894ce91}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="WinMain.cpp">
@@ -116,6 +119,9 @@
     <ClInclude Include="ePhysics.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="util\CL\opencl.h">
+      <Filter>Header Files\Util</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="hw3d.rc">
@@ -129,6 +135,9 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
+    <None Include="ePhysics.cl">
+      <Filter>Resource Files\OCL</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="PixelShader.hlsl">

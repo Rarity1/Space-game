@@ -98,13 +98,15 @@
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
       <FloatingPointModel>Fast</FloatingPointModel>
-      <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Users\rarit\Documents\GitHub\vcpkg\installed\x64-windows\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <OptimizeReferences>true</OptimizeReferences>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <AdditionalDependencies>OpenCL.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>C:\Users\rarit\Documents\GitHub\vcpkg\installed\x64-windows\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <PostBuildEvent>
       <Command>XCOPY "$(SolutionDir)models\" "$(TargetDir)models\" /E /Y
@@ -127,13 +129,15 @@ XCOPY "$(SolutionDir)textures\" "$(TargetDir)textures\" /E /Y</Command>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
       <FloatingPointModel>Fast</FloatingPointModel>
-      <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Users\rarit\Documents\GitHub\vcpkg\installed\x64-windows\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>OpenCL.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>C:\Users\rarit\Documents\GitHub\vcpkg\installed\x64-windows\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <PostBuildEvent>
       <Command>XCOPY "$(SolutionDir)models\" "$(TargetDir)models\" /E /Y
@@ -154,7 +158,7 @@ XCOPY "$(SolutionDir)textures\" "$(TargetDir)textures\" /E /Y</Command>
       <FloatingPointModel>Fast</FloatingPointModel>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
       <LanguageStandard>stdcpplatest</LanguageStandard>
-      <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Users\rarit\Documents\GitHub\vcpkg\installed\x64-windows\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <CompileAsWinRT>false</CompileAsWinRT>
     </ClCompile>
     <Link>
@@ -162,6 +166,8 @@ XCOPY "$(SolutionDir)textures\" "$(TargetDir)textures\" /E /Y</Command>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <OptimizeReferences>true</OptimizeReferences>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <AdditionalDependencies>OpenCL.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>C:\Users\rarit\Documents\GitHub\vcpkg\installed\x64-windows\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <PostBuildEvent>
       <Command>XCOPY "$(SolutionDir)models\" "$(TargetDir)models\" /E /Y
@@ -184,13 +190,15 @@ XCOPY "$(SolutionDir)textures\" "$(TargetDir)textures\" /E /Y</Command>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
       <FloatingPointModel>Fast</FloatingPointModel>
       <LanguageStandard>stdcpplatest</LanguageStandard>
-      <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Users\rarit\Documents\GitHub\vcpkg\installed\x64-windows\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>OpenCL.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>C:\Users\rarit\Documents\GitHub\vcpkg\installed\x64-windows\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <PostBuildEvent>
       <Command>XCOPY "$(SolutionDir)models\" "$(TargetDir)models\" /E /Y
@@ -230,6 +238,7 @@ XCOPY "$(SolutionDir)textures\" "$(TargetDir)textures\" /E /Y</Command>
     <ClInclude Include="Mouse.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="RStorage.h" />
+    <ClInclude Include="util\CL\opencl.h" />
     <ClInclude Include="Window.h" />
     <ClInclude Include="X3DInt.h" />
   </ItemGroup>
@@ -240,6 +249,7 @@ XCOPY "$(SolutionDir)textures\" "$(TargetDir)textures\" /E /Y</Command>
     <Image Include="icon1.ico" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="ePhysics.cl" />
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>

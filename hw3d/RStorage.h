@@ -31,6 +31,7 @@ public:
 		ID3D12Resource* vbuffer;
 		ID3D12Resource* ibuffer;
 		ID3D12Resource* tbuffer;
+		ID3D12Resource* uvbuffer;
 	};
 	struct bmResource {
 		UINT umID;
@@ -51,8 +52,10 @@ public:
 	void CreateBuffers(std::vector<bmResource*> bm, Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList, Microsoft::WRL::ComPtr<ID3D12Device> pDevice, Microsoft::WRL::ComPtr<ID3D12CommandAllocator> commandAllocator, Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue,  UINT buffercount);
 	void UpdBuffer(bmResource* bm, Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList, Microsoft::WRL::ComPtr<ID3D12Device> pDevice, Microsoft::WRL::ComPtr<ID3D12CommandAllocator> commandAllocator, Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue);
 private:
+	ReadX3D* CheckLoaded(int umID);
 	std::vector<ID3D12Resource*> vbufferPtrs;
 	std::vector<unmappedData> Models;
+	std::vector<ReadX3D*> loadedModels;
 	struct DDS_HEADER {
 		uint32_t dwSize;
 		uint32_t dwFlags;
