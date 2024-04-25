@@ -119,9 +119,6 @@
     <ClInclude Include="ePhysics.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="util\CL\opencl.h">
-      <Filter>Header Files\Util</Filter>
-    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="hw3d.rc">
@@ -135,7 +132,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
-    <None Include="ePhysics.cl">
+    <None Include="..\OpenCL\ePhysics.cl">
       <Filter>Resource Files\OCL</Filter>
     </None>
   </ItemGroup>

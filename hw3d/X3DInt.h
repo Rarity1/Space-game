@@ -19,17 +19,17 @@ public:
 	struct vFaceData {
 		WORD index;
 		WORD normal;
-		WORD texcoord;
+		//WORD texcoord;
 	};
 	struct Size {
 		UINT fSize = 0;
 		UINT vCount = 0;
 	};
 	struct pCollision {
-		DirectX::XMFLOAT3 pos{0,0,0};
-		float radius = 0;
+		//DirectX::XMFLOAT3 pos{0,0,0};
+		//float radius = 0;
 		std::vector<int> index{-1,-1,-1};
-		std::vector<Vertex*> verts = {nullptr,nullptr,nullptr};
+		Vertex verts[3];
 	};
 	
 
@@ -56,7 +56,6 @@ public:
 		DirectX::BoundingSphere sphere;
 		DirectX::BoundingSphere smallsphere;
 	};
-	std::vector<Vertex> vdata;
 	std::vector<vFaceData> idata;
 	std::vector<pCollision> cdata;
 	std::vector<Bone> bdata;
@@ -65,6 +64,7 @@ public:
 	DirectX::BoundingSphere Sphere;
 	Size fsize;
 private:
+	std::vector<Vertex> vdata;
     float fDistance(DirectX::XMFLOAT3* pos1, DirectX::XMFLOAT3* pos2);
 	DirectX::XMFLOAT4X4 strToMatrix(std::istringstream& rawmatri);
 	Node ChildNodeRead(rapidxml::xml_node<char>* node);

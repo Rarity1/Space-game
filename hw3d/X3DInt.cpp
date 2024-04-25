@@ -276,22 +276,20 @@ void ReadX3D::cvertexData()
 	cdata.resize(std::size(idata)/3);
 
 	float collradius = 0;
-	auto tempcount = 0;
+	int tempcount = 0;
 	for (auto& i : idata) {
-		cdata[tempcount].verts[i.index % 3] = &vdata[i.index];
-		cdata[tempcount].index[i.index % 3] = i.index;
+		cdata[tempcount].verts[abs((i.index % 3) - 2)] = vdata[i.index];
+		cdata[tempcount].index[abs((i.index % 3) - 2)] = i.index;
 		tempcount += i.index % 3 == 0 ? 1 : 0;
 		auto temp = abs(vdata[i.index].position.x) + abs(vdata[i.index].position.y) + abs(vdata[i.index].position.z);
 		collradius = temp > collradius ? temp : collradius;
 	}
 	Sphere.Radius = collradius;
 	Sphere.Center = { 0,0,0 };
-	for (auto& c : cdata) {
-		c.pos = { (c.verts[0]->position.x + c.verts[1]->position.x + c.verts[2]->position.x) / 3,(c.verts[0]->position.y + c.verts[1]->position.y + c.verts[2]->position.y) / 3,(c.verts[0]->position.z + c.verts[1]->position.z + c.verts[2]->position.z) / 3, };
-	}
 
 	fsize.fSize = sizeof(ReadX3D::Vertex) * std::size(vdata);
 	fsize.vCount = std::size(vdata);
+	vdata = {};
 }
 
 void ReadX3D::GetAllChildBones(Node* node, std::vector<Node*>* Parent)

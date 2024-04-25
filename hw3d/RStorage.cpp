@@ -101,10 +101,12 @@ void RStorage::CreateBuffers(std::vector<bmResource*> m, Microsoft::WRL::ComPtr<
 				bm->uibuffer->Map(0, nullptr, reinterpret_cast<void**>(&mappedIndexData)) >> chk;
 
 
-				auto& temporaryVertex = bm->uData->vdata;
+				auto& temporaryVertex = bm->uData->cdata;
+				auto& idata = bm->uData->idata;
+				auto tempcount = 0;
 				for (auto i = 0; i < std::size(temporaryVertex); i++) {
-					memcpy(&mappedVertexData[i], &temporaryVertex[i], sizeof(ReadX3D::Vertex));
-
+					memcpy(&mappedVertexData[i], &temporaryVertex[tempcount].verts[idata[i].index % 3], sizeof(ReadX3D::Vertex));
+					tempcount += idata[i].index % 3 == 0 ? 1 : 0;
 				}
 
 				auto& temporaryIndex = bm->uData->idata;

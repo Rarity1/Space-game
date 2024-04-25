@@ -46,8 +46,10 @@ public:
 		};
 		std::vector<tmCollide*> tmDist;
 		std::mutex currentMtx;
+		cl::Buffer clBuff;
 		std::vector<ReadX3D::pCollision*> currentCollision;
 		std::atomic<bool> updated = false;
+		std::atomic<bool> Collision = false;
 	};
 	Physics(mThreadTime* timer, std::vector<Physics::eResource*>& trackedModels, int* UpdateRate);
 	~Physics();
@@ -70,8 +72,9 @@ private:
 	bool coneCheck(XMFLOAT3 postc, float height, float radius, XMFLOAT4 dir);
 	void ProcCollide(Physics::eResource* obj, eResource::tmCollide* tmdist);
 	void pSpecCollison(eResource* obj);
+	void pSpecReset(eResource* obj);
 	std::vector<float> RayCastColl(std::vector<int>& index, std::vector<ReadX3D::pCollision>& cdata, XMFLOAT4& dir, std::vector<XMFLOAT3>& raypos);
-	bool triCollide(ReadX3D::pCollision* tri, ReadX3D::pCollision* tri2, XMFLOAT3* tripos, XMFLOAT3* tri2pos);
+	bool triCollide(ReadX3D::pCollision* tri, ReadX3D::pCollision* tri2, XMFLOAT4 dir, float dist);
 	void mMove(Physics::eResource* mUpdate);
 	std::vector<std::thread> collisionThreads;
 	std::vector<std::thread> distanceThreads = {};
@@ -81,4 +84,12 @@ private:
 		int Index1;
 		int Index2;
 	};
+
+	
+	std::vector<cl::Device> devices;
+	cl::Context context;
+	cl::Program::Sources sources;
+	cl::Program program;
+	cl::CommandQueue queue;
+	cl::Kernel collide;
 };

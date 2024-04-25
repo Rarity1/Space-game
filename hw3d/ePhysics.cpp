@@ -8,12 +8,12 @@ Physics::Physics(mThreadTime* timer, std::vector<Physics::eResource*>& trackedMo
     trackedModels(trackedModels),
     urate(UpdateRate)
 {
+
     std::vector<cl::Platform> platforms;
     cl::Platform::get(&platforms);
 
     _ASSERT(platforms.size() > 0);
     auto& platform = platforms.front();
-    std::vector<cl::Device> devices;
     platform.getDevices(CL_DEVICE_TYPE_GPU, &devices);
 
     _ASSERT(devices.size() > 0);
@@ -21,9 +21,25 @@ Physics::Physics(mThreadTime* timer, std::vector<Physics::eResource*>& trackedMo
     auto& device = devices.front();
     auto vendor = device.getInfo<CL_DEVICE_VENDOR>();
     auto version = device.getInfo<CL_DEVICE_VERSION>();
-    std::ifstream ephy("ePhysics.cl");
-    std::string src(std::istreambuf_iterator<char>(ephy), (std::istreambuf_iterator<char>()));
-    //cl::Program::Sources sources(src.length(), std::make_pair(src.c_str(), src.length()));
+
+
+    context = cl::Context{ device };
+    std::ifstream phys("OpenCL\\ePhysics.cl");
+    _ASSERT(phys ? true : false);
+    std::string str(std::istreambuf_iterator<char>{phys}, {});
+    sources.push_back({str.c_str(), str.length()});
+    
+    program = cl::Program{ context, sources };
+
+    auto test = program.build({ device });
+    _ASSERT(test == CL_SUCCESS);
+
+    
+    queue = cl::CommandQueue{ context, device };
+
+    collide = cl::Kernel(program, "coll");
+    cl_ulong size;
+    clGetDeviceInfo(device.get(), CL_DEVICE_LOCAL_MEM_SIZE, sizeof(cl_ulong), &size, 0);
 
 }
 
@@ -34,6 +50,10 @@ void Physics::Update() {
         if (mUpdate->speed != 0 || mUpdate->gravpull != 0 || mUpdate->pspeed != 0 || mUpdate->updated.load()) {
             mMove(mUpdate);
         }
+
+    }
+    for (auto& mUpdate : trackedModels) {
+        pSpecReset(mUpdate);
     }
 }
 
@@ -74,8 +94,8 @@ XMFLOAT4 Physics::fDirection(XMFLOAT3* pos1, XMFLOAT3* pos2) {
     auto x = (pos2->x - pos1->x);
     auto y = (pos2->y - pos1->y);
     auto z = (pos2->z - pos1->z);
-    auto mag = abs(x) + abs(y) + abs(z);
-    return {(float)(x/mag), (float)(y/mag) ,(float)(z/mag), 0};
+    auto mag = fDistance(pos1, pos2);
+    return {(x/mag), (y/mag), (z/mag), 0};
 }
 
 
@@ -116,96 +136,127 @@ void Physics::trackDist(Physics::eResource* tModel) {
       auto posobj = tModel->mPos.position;
       tModel->model->uData->Sphere.Center = tModel->mPos.position;
       tModel->mPos.posMtx.unlock();
-      for (auto& m : tModel->tmDist) {
-          bool checkdis = false;
 
-
-          m->ptModel->mPos.posMtx.lock();
-          auto postm = m->ptModel->mPos.position;
-          m->ptModel->mPos.posMtx.unlock();
-
-          auto dist = fDistance(&posobj, &postm);
-          if (dist < 150) {
+      timer->mtx.lock();
+      temptime += timer->time;
+      timer->mtx.unlock();
+          for (auto& m : tModel->tmDist) {
+              m->ptModel->mPos.posMtx.lock();
+              auto postm = m->ptModel->model->uData->Sphere;
+              m->ptModel->mPos.posMtx.unlock();
               m->mtx.lock();
-              m->direction = fDirection(&posobj, &postm);
-              m->distance = dist;
+              m->direction = fDirection(&posobj, &postm.Center);
+              m->distance = fDistance(&posobj, &postm.Center);
               m->mtx.unlock();
-          }
-          else {
-              timer->mtx.lock();
-              temptime += timer->time;
-              timer->mtx.unlock();
-              if (temptime > 2.0 / urat) {
-                  m->mtx.lock();
-                  m->distance = dist;
-                  m->mtx.unlock();
-              }
 
           }
-      }
-  }
+      std::this_thread::sleep_for(std::chrono::nanoseconds(340));
       
+  }
+  for (auto& r : tModel->tmDist) {
+      delete r;
+  }
 }
 
 
 
 void Physics::ProcCollide(Physics::eResource* obj, eResource::tmCollide* tmdist) {
     eResource::tmCollide* tmdist1 = nullptr;
-    auto obj2 = tmdist->ptModel;
+    auto& obj2 = tmdist->ptModel;
     for (auto& tmd1 : tmdist->ptModel->tmDist) {
         if (tmd1->ptModel == obj) {
             tmdist1 = tmd1;
         }
     }
     
+    
+
     if (tmdist1 != nullptr)
     {
-        obj2->mPos.posMtx.lock();
-        auto obj2pos = obj2->mPos.position;
-        obj2->mPos.posMtx.unlock();
-
-        std::vector<int> cindex{};
-        std::vector<int> cindex2{};
-
-        std::vector<XMFLOAT3> tscdat{};
-        std::vector<XMFLOAT3> tscdat1{};
-
-        std::vector<std::vector<int>> Coll{};
-
+        
         auto& tmdat1 = obj2->model->uData->bdata;
         auto& tmdat = obj->model->uData->bdata;
 
+        
+        auto dir = fDirection(&obj2->mPos.position, &obj->mPos.position);
+        auto dist = fDistance(&obj2->mPos.position, &obj->mPos.position);
         std::vector<CollideS> sd;
         for (auto& b2 : tmdat1) {
             for (auto& b : tmdat) {
-                    if (b.sphere.Intersects(b2.sphere)) {
-                        sd.emplace_back(CollideS{ .Index1 = b.bIndex, .Index2 = b2.bIndex });
+                auto sph1 = b.sphere;
+                sph1.Center = AddXMFLOAT3(b.sphere.Center, { dir.x * dist, dir.y * dist, dir.z * dist });
+                    if (sph1.Intersects(b2.sphere)) {
+                        auto ssph1 = b.smallsphere;
+                        ssph1.Center = sph1.Center;
+                       if(ssph1.Intersects(b2.sphere))
+                            sd.emplace_back(CollideS{ .Index1 = b.bIndex, .Index2 = b2.bIndex });
                     }
                 
             }
         }
 
-        std::vector<CollideS*> coll;
-        for (auto& c : sd) {
-            auto& bn = tmdat[c.Index1];
-            auto& bn2 = tmdat1[c.Index2];
-            auto b1sph = bn.smallsphere;
-            b1sph.Center = AddXMFLOAT3(b1sph.Center, obj->mPos.position);
-            auto b2sph = bn2.sphere;
-            b2sph.Center = AddXMFLOAT3(b2sph.Center, obj2pos);
+        auto& objcdata = obj->model->uData->cdata;
+        auto& objidata = obj->model->uData->idata;
+        auto& obj2cdata = obj2->model->uData->cdata;
+        auto& obj2idata = obj2->model->uData->idata;
+        if (std::size(sd) > 0) {
+            tmdist->Collision.store(true);
+            tmdist1->Collision.store(true);
+        }
 
-            if (b1sph.Intersects(b2sph)) {
-                auto dir = fDirection(&b2sph.Center, &b1sph.Center);
-                auto dis = fDistance(&b1sph.Center, &b2sph.Center);
-                c.speed = (b1sph.Radius + b2sph.Radius) - dis;
-                c.dir = dir;
-                coll.emplace_back(&c);
+
+
+
+        std::vector<ReadX3D::pCollision> A;
+
+        std::vector<bool> tmt;
+        tmt.resize(std::size(tmdat));
+        std::vector<bool> tcdat;
+        tcdat.resize(std::size(objcdata));
+
+        for (auto b : tmt) {
+            b = false;
+        }
+        for (auto b : tcdat) {
+            b = false;
+        }
+        for (auto& c : sd) {
+            if (!tmt[c.Index1]) {
+                tmt[c.Index1] = true;
+                auto& bn = tmdat[c.Index1];
+                for (auto& v : bn.Indices) {
+                    auto& bdat = objidata[v];
+                    if (!tcdat[bdat.normal]) {
+                        tcdat[bdat.normal] = true;
+                        auto& tri = objcdata[bdat.normal];
+                        A.emplace_back(tri);
+                    }
+                    
+                }
             }
         }
-        if (std::size(coll) > 0) {
-            obj->pDir = coll[0]->dir;
-            obj->pspeed = coll[0]->speed;
+        if (std::size(A) > 0) {
+            XMFLOAT3 B;
+
+            B = obj->mPos.position;
+            auto pee = sizeof(ReadX3D::pCollision);
+            obj->clBuff = cl::Buffer(context, CL_MEM_READ_ONLY, sizeof(ReadX3D::pCollision) * std::size(A));
+            cl::Buffer buffer_C(context, CL_MEM_WRITE_ONLY, sizeof(ReadX3D::pCollision) * std::size(A));
+
+
+            queue.enqueueWriteBuffer(obj->clBuff, CL_TRUE, 0, sizeof(ReadX3D::pCollision) * std::size(A), A.data());
+
+            
+            collide.setArg(0, obj->clBuff);
+            collide.setArg(3, buffer_C);
+
+            queue.enqueueNDRangeKernel(collide, cl::NullRange, cl::NDRange(std::size(A)), cl::NullRange);
+            queue.finish();
+
+            std::vector<ReadX3D::pCollision> C;
+            queue.enqueueReadBuffer(buffer_C, CL_TRUE, 0, sizeof(ReadX3D::pCollision) * std::size(A), C.data());
         }
+        
     }
 }
 
@@ -214,13 +265,22 @@ void Physics::pSpecCollison(eResource* obj) {
     obj->mPos.posMtx.lock();
     for (auto& m : obj->tmDist) {
         m->ptModel->mPos.posMtx.lock();
-        auto msphere = m->ptModel->model->uData->Sphere;
-        m->ptModel->mPos.posMtx.unlock();
+        auto& msphere = m->ptModel->model->uData->Sphere;
         if (msphere.Intersects(obj->model->uData->Sphere)) {
-            ProcCollide(obj, m);
+            if (!m->Collision.load()) {
+                ProcCollide(obj, m);
+            }
         }
+        m->ptModel->mPos.posMtx.unlock();
     }
     obj->mPos.posMtx.unlock();
+}
+
+void Physics::pSpecReset(eResource* obj) {
+    obj->Collision.store(false);
+    for (auto& m : obj->tmDist) {
+        m->Collision.store(false);
+    }
 }
 
 /*std::vector<float> Physics::RayCastColl(std::vector<int>& index, std::vector<ReadX3D::pCollision>& cdata, XMFLOAT4& dir, std::vector<XMFLOAT3>& raypos) {
@@ -246,10 +306,39 @@ void Physics::pSpecCollison(eResource* obj) {
 
 
 //figure it out smh
-bool Physics::triCollide(ReadX3D::pCollision* tri, ReadX3D::pCollision* tri2, XMFLOAT3* tripos, XMFLOAT3* tri2pos) {
-    //return DirectX::TriangleTests::Intersects(tri10, tri11, tri12, tri20, tri21, tri22);
-    return false;
-}
+/*bool Physics::triCollide(ReadX3D::pCollision* tri, ReadX3D::pCollision* tri2, XMFLOAT4 dir, float dist) {
+    auto Origin = AddXMFLOAT3(tri->verts[0].position, {dir.x * dist, dir.y * dist, dir.z * dist});
+    auto Origin1 = AddXMFLOAT3(tri->verts[1].position, { dir.x * dist, dir.y * dist, dir.z * dist });
+    XMVECTOR Direction1;
+    XMVECTOR Direction2;
+    XMVECTOR Direction3;
+    {
+        auto D1 = fDirection(&tri->verts[0].position, &tri->verts[1].position);
+        auto D2 = fDirection(&tri->verts[0]->position, &tri->verts[2]->position);
+        auto D3 = fDirection(&tri->verts[1]->position, &tri->verts[2]->position);
+        Direction1 = DirectX::XMVector3Normalize(XMLoadFloat4(&D1));
+        Direction2 = DirectX::XMVector3Normalize(XMLoadFloat4(&D2));
+        Direction3 = DirectX::XMVector3Normalize(XMLoadFloat4(&D3));
+
+    }
+    auto Distance1 = fDistance(&tri->verts[0]->position, &tri->verts[1]->position);
+    auto Distance2 = fDistance(&tri->verts[0]->position, &tri->verts[2]->position);
+    auto Distance3 = fDistance(&tri->verts[1]->position, &tri->verts[2]->position);
+
+    auto vect1 = XMLoadFloat3(&tri2->verts[0]->position);
+    auto vect2 = XMLoadFloat3(&tri2->verts[1]->position);
+    auto vect3 = XMLoadFloat3(&tri2->verts[2]->position);
+
+    float ret = 0;
+
+    bool result = false; 
+    //if (DirectX::TriangleTests::Intersects(XMLoadFloat3(&Origin), Direction1, vect1, vect2, vect3, ret))
+        //result = ret < Distance1 ? true : false;
+
+    if(result)
+    return result;
+    return result;
+}*/
 
 
 
@@ -270,5 +359,7 @@ Physics::~Physics() {
         t.join();
     for (auto& t : collisionThreads)
         t.join();
-
+    for (auto& m : trackedModels)
+        delete m;
+    trackedModels = {};
 }

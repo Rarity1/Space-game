@@ -299,37 +299,36 @@ void Graphics::UpdateModel(RStorage::bmResource* bm) {
 	for (auto& b : bm->uData->bdata) {
 		XMStoreFloat4x4(&b.finalTransform, XMLoadFloat4x4(&b.matrix) * XMLoadFloat4x4(&b.node->LocalTransform) * GlobITrans);
 	}
-	std::vector<ReadX3D::Vertex> vdata;
-	vdata.resize(std::size(bm->uData->vdata));
+	auto vdata = bm->uData->cdata;
+	auto& idata = bm->uData->idata;
 	ReadX3D::Vertex* mappedVertexData = nullptr;
 	bm->uvbuffer->Map(0, nullptr, reinterpret_cast<void**>(&mappedVertexData)) >> chk;
-	for (auto& b : bm->uData->bdata) {
-		for (auto& v : b.Indices) {
-			auto weight = bm->uData->weights[v].weight[bIndex(bm->uData->weights[v].bIndex, b.bIndex)];
-			auto matrix = XMLoadFloat4x4(&b.finalTransform) * weight;
-			auto vd = bm->uData->vdata[v].position;
-			XMFLOAT4 vf = XMFLOAT4{ vd.x,vd.y,vd.z, 1};
-			auto temp = XMVector3TransformNormal(XMLoadFloat4(&vf), (matrix));
-			XMStoreFloat4(&vf, temp);
-			vdata[v].position.x += vf.x;
-			vdata[v].position.y += vf.y;
-			vdata[v].position.z += vf.z;
-			
+	//Fix animations
+	/*if (std::size(bm->uData->bdata) > 0) {
+		auto tcount = 0;
+		for (auto v = 0; v < std::size(idata); v++) {
+			auto& weights = bm->uData->weights[v];
+			auto vd = vdata[tcount].verts[idata[v].index % 3].position;
+
+			XMFLOAT4 vf = XMFLOAT4{ vd.x,vd.y,vd.z, 1 };
+			for (auto w = 0; w < std::size(weights.weight); w++) {
+				auto matrix = XMLoadFloat4x4(&bm->uData->bdata[weights.bIndex[w]].finalTransform) * weights.weight[w];
+				auto temp = XMVector3TransformNormal(XMLoadFloat4(&vf), (matrix));
+				XMStoreFloat4(&vf, temp);
+			}
+			vdata[tcount].verts[idata[v].index % 3].position.x += vf.x;
+			vdata[tcount].verts[idata[v].index % 3].position.y += vf.y;
+			vdata[tcount].verts[idata[v].index % 3].position.z += vf.z;
+			tcount += idata[v].index % 3 == 0 ? 1 : 0;
 		}
-	}
+	}*/
 	
-	if (std::size(bm->uData->bdata) != 0)
-	for (auto v = 0; v < std::size(vdata); v++) {
-		vdata[v].normal = bm->uData->vdata[v].normal;
-		vdata[v].tc = bm->uData->vdata[v].tc;
-		memcpy(&mappedVertexData[v], &vdata[v], sizeof(ReadX3D::Vertex));
+	auto tempcount = 0;
+	for (auto v = 0; v < std::size(idata); v++) {
+		memcpy(&mappedVertexData[v], &vdata[tempcount].verts[idata[v].index % 3], sizeof(ReadX3D::Vertex));
+		tempcount += idata[v].index % 3 == 0 ? 1 : 0;
 	}
-	else {
-		vdata = bm->uData->vdata;
-		for (auto v = 0; v < std::size(vdata); v++) {
-			memcpy(&mappedVertexData[v], &vdata[v], sizeof(ReadX3D::Vertex));
-		}
-	}
+
 	bm->uvbuffer->Unmap(0, nullptr);
 	bm->animate.store(true);
 }
