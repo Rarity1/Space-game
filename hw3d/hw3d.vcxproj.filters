@@ -132,9 +132,6 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
-    <None Include="..\OpenCL\ePhysics.cl">
-      <Filter>Resource Files\OCL</Filter>
-    </None>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="PixelShader.hlsl">
@@ -143,5 +140,10 @@
     <FxCompile Include="VertexShader.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <CopyFileToFolders Include="..\OpenCL\ePhysics.cl">
+      <Filter>Resource Files\OCL</Filter>
+    </CopyFileToFolders>
   </ItemGroup>
 </Project>

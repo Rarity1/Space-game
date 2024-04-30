@@ -15,17 +15,16 @@ void Engine::iLoad() {
     pGfx->umodel.lock();
     
     //begin model tracking. load a gd default world mf
-    trackedModels.emplace_back(new Physics::eResource{ "untitled1", pGfx->lModels->lModel(1), 1, 200.0, 0, {{0,-10,138}} });
 
-    trackedModels.emplace_back(new Physics::eResource{ "cube", pGfx->lModels->lModel(0), 1, 200.0, 0, {{0,0,138}} });
-    trackedModels.emplace_back(new Physics::eResource{ "untitled2", pGfx->lModels->lModel(1), 1, 200.0, 0, {{10,0,168}} });
-    trackedModels.emplace_back(new Physics::eResource{"untitled3",pGfx->lModels->lModel(1), 1, 200.0, 0, {{5,0,168}} });
+    trackedModels.emplace_back(new Physics::eResource{ "cube", pGfx->lModels->lModel(0), 1, 200.0, 0, {{5,0,138}} });
+    trackedModels.emplace_back(new Physics::eResource{ "untitled1", pGfx->lModels->lModel(1), 1, 200.0, 0, {{0,0,138}} });
+
     
     //wrld is 1:50000
     trackedModels.emplace_back(new Physics::eResource{"wrld", pGfx->lModels->lModel(2), 1, 8570000000.0, 0, { {0,0,0} }});
     //trackedModels[0]->mworld = trackedModels[4];
     //trackedModels[1]->mworld = trackedModels[4];
-    plModel = trackedModels[0];
+    plModel = trackedModels[1];
     //end model tracking.
 
     pGfx->LoadResources(std::size(trackedModels));
@@ -83,7 +82,6 @@ void Engine::cMPosUpdate(){
     phyx->Update();
     pGfx->umodel.lock();
     for (auto& m : trackedModels) {
-            SetModelPosition(m);
             pGfx->UpdateModel(m->model);
     }
     pGfx->umodel.unlock();
@@ -261,12 +259,7 @@ void Engine::OnKeyUp(unsigned char key)
 
 
 void Engine::SetModelPosition(Physics::eResource* model) {
-    auto& bmodel = model->model;
-    model->mPos.posMtx.lock();
-    bmodel->cmatrix = XMMatrixTranslation(0, 0, 0) * XMMatrixRotationQuaternion(XMLoadFloat4(&model->mPos.rotation));
-    bmodel->cmatrix *= XMMatrixTranslation(model->mPos.position.x, model->mPos.position.y, model->mPos.position.z);
-    bmodel->cmatrix *= XMMatrixRotationQuaternion(XMLoadFloat4(&model->mPos.orbit));
-    model->mPos.posMtx.unlock();
+    
 }
 
 void Engine::UControls() {

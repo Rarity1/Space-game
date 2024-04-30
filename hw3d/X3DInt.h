@@ -28,7 +28,7 @@ public:
 	struct pCollision {
 		//DirectX::XMFLOAT3 pos{0,0,0};
 		//float radius = 0;
-		std::vector<int> index{-1,-1,-1};
+		int index[3]{-1,-1,-1};
 		Vertex verts[3];
 	};
 	

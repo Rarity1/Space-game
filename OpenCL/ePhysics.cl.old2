@@ -1,0 +1,255 @@
+typedef struct XMFLOAT4{
+    float x;
+    float y;
+    float z;
+    float w;
+}XMFLOAT4;
+
+typedef struct XMFLOAT2{
+    float x;
+    float y;
+}XMFLOAT2;
+
+typedef struct XMFLOAT3{
+    float x;
+    float y;
+    float z;
+}XMFLOAT3;
+
+typedef struct WORKDATA{
+	XMFLOAT4 dir;
+    float dist;
+    int Index;
+    int Index2;
+}WORKDATA;
+
+typedef struct Vertex
+{
+	XMFLOAT3 position;
+	XMFLOAT2 tc;
+	XMFLOAT3 normal;
+}Vertex;
+
+typedef struct MODEL{
+    int index[3];
+	Vertex vects[3];
+}MODEL;
+
+typedef struct RETURNDATA{
+    bool coll;
+    XMFLOAT3 pos;
+    XMFLOAT3 pos2;
+    XMFLOAT3 pos3;
+    XMFLOAT3 bpos;
+    XMFLOAT3 bpos2;
+    XMFLOAT3 bpos3;
+
+}
+RETURNDATA;
+
+
+float fDistance(XMFLOAT3 pos1, XMFLOAT3 pos2) {
+    float x = pow((pos2.x - pos1.x), 2);
+    float y = pow((pos2.y - pos1.y), 2);
+    float z = pow((pos2.z - pos1.z), 2);
+    return sqrt(x + y + z);
+}
+
+XMFLOAT3 AddXMFLOAT3(XMFLOAT3 a, XMFLOAT3 b) {
+    XMFLOAT3 result = {0,0,0};
+
+    result.x = a.x + b.x;
+    result.y = a.y + b.y;
+    result.z = a.z + b.z;
+
+    return result;
+}
+
+XMFLOAT3 SubXMFLOAT3(XMFLOAT3 a, XMFLOAT3 b) {
+    XMFLOAT3 result = {0,0,0};
+
+    result.x = a.x - b.x;
+    result.y = a.y - b.y;
+    result.z = a.z - b.z;
+
+    return result;
+}
+
+XMFLOAT3 MulXMFLOAT3(XMFLOAT3 a, float b) {
+    XMFLOAT3 result = {0,0,0};
+
+    result.x = a.x * b;
+    result.y = a.y * b;
+    result.z = a.z * b;
+
+    return result;
+}
+
+XMFLOAT3 XMVector3Cross(XMFLOAT3 a, XMFLOAT3 b) {
+    XMFLOAT3 result = {0,0,0};
+
+    result.x = a.y * b.z - a.z * b.y;
+    result.y = a.z * b.x - a.x * b.z;
+    result.z = a.x * b.y - a.y * b.x;
+
+    return result;
+}
+float XMVector3Dot(XMFLOAT3 a, XMFLOAT3 b) {
+    float result = 0;
+    result += a.x*b.x;
+    result += a.y*b.y;
+    result += a.z*b.z;
+    return result;
+}
+
+XMFLOAT3 LinePlaneIntersection(XMFLOAT3 Line, XMFLOAT3 Plane)
+{
+    XMFLOAT3 result = { 0,0,0};
+
+    result.x = Plane.x * Line.x;
+    result.y = Plane.y * Line.y;
+    result.z = Plane.z * Line.z;
+
+    return result;
+}
+
+
+RETURNDATA Intersects(MODEL Tri1, MODEL Tri2)
+{
+    float BasicallyZero = 0.108;
+    RETURNDATA Zer =
+    {
+    false
+    };
+    XMFLOAT3 ZeroP = { 0, 0, 0 };
+    XMFLOAT3 PointP = Tri1.vects[0].position;
+    XMFLOAT3 PointQ = Tri1.vects[1].position;
+    XMFLOAT3 PointR = Tri1.vects[2].position;
+
+
+    XMFLOAT3 VectA = SubXMFLOAT3(PointQ, PointP);
+    XMFLOAT3 VectB = SubXMFLOAT3(PointR, PointP);
+
+    XMFLOAT3 N = XMVector3Cross(VectA, VectB);
+
+    float NMag = fDistance(N, ZeroP);
+    XMFLOAT3 UnitN = { N.x / NMag, N.y / NMag, N.z / NMag };
+    XMFLOAT3 temp = SubXMFLOAT3(UnitN, PointP);
+    XMFLOAT3 Plane = MulXMFLOAT3(temp, NMag);
+
+
+    XMFLOAT3 PointA = Tri2.vects[0].position;
+    XMFLOAT3 PointB = Tri2.vects[1].position;
+    XMFLOAT3 PointC = Tri2.vects[2].position;
+    float ABDist = fDistance(PointA, PointB);
+    XMFLOAT3 ABUnitLine = MulXMFLOAT3(SubXMFLOAT3(PointB, PointA), 1/ABDist);
+
+
+    bool ABPara = false;
+    if(fabs(ABUnitLine.x) - fabs(UnitN.x) < BasicallyZero && fabs(ABUnitLine.y) - fabs(UnitN.y) < BasicallyZero && fabs(ABUnitLine.z) - fabs(UnitN.z) < BasicallyZero)
+    {
+        ABPara = true;
+    }
+
+
+    XMFLOAT3 ABIntersect = ZeroP;
+    float AInterDist = 0;
+    float ABInterDist = 0;
+
+    if (!ABPara)
+    {
+        ABIntersect = LinePlaneIntersection(ABUnitLine, Plane);
+        AInterDist = fDistance(PointA, ABIntersect);
+        ABInterDist = fDistance(PointB, ABIntersect);
+        if (AInterDist + ABInterDist - ABDist < BasicallyZero)
+        {
+            Zer.pos = ABIntersect;
+            Zer.coll = true;
+        }
+    }
+    
+    float BCDist = fDistance(PointC, PointB);
+    XMFLOAT3 BCUnitLine = MulXMFLOAT3(SubXMFLOAT3(PointC, PointB), 1 / BCDist);
+
+
+    bool BCPara = false;
+    if (fabs(BCUnitLine.x) - fabs(UnitN.x) < BasicallyZero && fabs(BCUnitLine.y) - fabs(UnitN.y) < BasicallyZero && fabs(BCUnitLine.z) - fabs(UnitN.z) < BasicallyZero)
+    {
+        BCPara = true;
+
+    }
+
+
+    XMFLOAT3 BCIntersect = ZeroP;
+    float BInterDist = 0;
+    float CInterDist = 0;
+
+    if (!BCPara)
+    {
+        BCIntersect = LinePlaneIntersection(BCUnitLine, Plane);
+        BInterDist = fDistance(PointB, BCIntersect);
+        CInterDist = fDistance(PointC, BCIntersect);
+        if (BInterDist + CInterDist - BCDist < BasicallyZero)
+        {
+            Zer.pos2 = BCIntersect;
+            Zer.coll = true;
+        }
+    }
+
+
+
+    float CADist = fDistance(PointC, PointA);
+    XMFLOAT3 CAUnitLine = MulXMFLOAT3(SubXMFLOAT3(PointA, PointC), 1 / CADist);
+
+
+    bool CAPara = false;
+    if (fabs(CAUnitLine.x) - fabs(UnitN.x) < BasicallyZero && fabs(CAUnitLine.y) - fabs(UnitN.y) < BasicallyZero && fabs(CAUnitLine.z) - fabs(UnitN.z) < BasicallyZero)
+    {
+        CAPara = true;
+    }
+
+
+    XMFLOAT3 CAIntersect = ZeroP;
+    float CBInterDist = 0;
+    float CCInterDist = 0;
+
+    if (!CAPara)
+    {
+        CAIntersect = LinePlaneIntersection(CAUnitLine, Plane);
+        CBInterDist = fDistance(PointC, CAIntersect);
+        CCInterDist = fDistance(PointB, CAIntersect);
+        if (CBInterDist + CCInterDist - CADist < BasicallyZero)
+        {
+            Zer.pos3 = CAIntersect;
+            Zer.coll = true;
+        }
+    }
+
+
+
+    return Zer;
+}
+
+
+void kernel coll(global const MODEL* WModel, global const MODEL* TModel, global XMFLOAT3* Wposition, global int* sizeT, global RETURNDATA* retdat){
+    int id = get_global_id(0);
+    RETURNDATA temp = { false };
+    RETURNDATA temp2 = { false };
+    XMFLOAT3 zero = {0,0,0 };
+    MODEL Work1 = WModel[id];
+    Work1.vects[0].position = AddXMFLOAT3(Work1.vects[0].position, Wposition[1]);
+    Work1.vects[1].position = AddXMFLOAT3(Work1.vects[1].position, Wposition[1]);
+    Work1.vects[2].position = AddXMFLOAT3(Work1.vects[2].position, Wposition[1]);
+    
+    for(int x = 0; x < sizeT[1]; x++){
+    if (!temp.coll)
+    {
+        MODEL Work = TModel[x];
+        Work.vects[0].position = AddXMFLOAT3(Work.vects[0].position, Wposition[0]);
+        Work.vects[1].position = AddXMFLOAT3(Work.vects[1].position, Wposition[0]);
+        Work.vects[2].position = AddXMFLOAT3(Work.vects[2].position, Wposition[0]);
+        temp = Intersects(Work, Work1);
+    }
+}
+    retdat[id] = temp;
+}

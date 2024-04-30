@@ -46,11 +46,8 @@ Physics::Physics(mThreadTime* timer, std::vector<Physics::eResource*>& trackedMo
 void Physics::Update() {
     Retrack();
     for (auto& mUpdate : trackedModels) {
+        mMove(mUpdate);
         pSpecCollison(mUpdate);
-        if (mUpdate->speed != 0 || mUpdate->gravpull != 0 || mUpdate->pspeed != 0 || mUpdate->updated.load()) {
-            mMove(mUpdate);
-        }
-
     }
     for (auto& mUpdate : trackedModels) {
         pSpecReset(mUpdate);
@@ -67,7 +64,13 @@ void Physics::Retrack() {
         for (int i = 0; i < std::size(trackedModels); i++) {
             std::thread th(&Physics::trackDist, this, std::ref(trackedModels[i]));
             distanceThreads[i] = move(th);
+
+            trackedModels[i]->clBuff = cl::Buffer(context, CL_MEM_READ_ONLY, sizeof(ReadX3D::pCollision) * std::size(trackedModels[i]->model->uData->cdata));
+            queue.enqueueWriteBuffer(trackedModels[i]->clBuff, CL_TRUE, 0, sizeof(ReadX3D::pCollision) * std::size(trackedModels[i]->model->uData->cdata), trackedModels[i]->model->uData->cdata.data());
+            
         }
+        queue.finish();
+        
         Retracker.store(false);
     }
 }
@@ -173,22 +176,30 @@ void Physics::ProcCollide(Physics::eResource* obj, eResource::tmCollide* tmdist)
 
     if (tmdist1 != nullptr)
     {
-        
+        if (tmdist->Collision.load() && tmdist1->Collision.load())
+            return;
         auto& tmdat1 = obj2->model->uData->bdata;
         auto& tmdat = obj->model->uData->bdata;
-
         
-        auto dir = fDirection(&obj2->mPos.position, &obj->mPos.position);
-        auto dist = fDistance(&obj2->mPos.position, &obj->mPos.position);
+        obj2->mPos.posMtx.lock();
+        auto ob2pos = obj2->mPos.position;
+        obj2->mPos.posMtx.unlock();
+
+        obj->mPos.posMtx.lock();
+        auto objpos = obj->mPos.position;
+        obj->mPos.posMtx.unlock();
+        auto dir = fDirection(&objpos, &ob2pos);
+        auto dist = fDistance(&ob2pos, &objpos);
+
         std::vector<CollideS> sd;
         for (auto& b2 : tmdat1) {
             for (auto& b : tmdat) {
-                auto sph1 = b.sphere;
-                sph1.Center = AddXMFLOAT3(b.sphere.Center, { dir.x * dist, dir.y * dist, dir.z * dist });
-                    if (sph1.Intersects(b2.sphere)) {
-                        auto ssph1 = b.smallsphere;
-                        ssph1.Center = sph1.Center;
-                       if(ssph1.Intersects(b2.sphere))
+                auto sph2 = b2.sphere;
+                sph2.Center = AddXMFLOAT3(b2.sphere.Center, { dir.x * dist, dir.y * dist, dir.z * dist });
+                    if (b.sphere.Intersects(sph2)) {
+                        auto ssph2 = b2.smallsphere;
+                        ssph2.Center = sph2.Center;
+                       if(ssph2.Intersects(b.sphere))
                             sd.emplace_back(CollideS{ .Index1 = b.bIndex, .Index2 = b2.bIndex });
                     }
                 
@@ -207,12 +218,19 @@ void Physics::ProcCollide(Physics::eResource* obj, eResource::tmCollide* tmdist)
 
 
 
-        std::vector<ReadX3D::pCollision> A;
+        
 
         std::vector<bool> tmt;
         tmt.resize(std::size(tmdat));
         std::vector<bool> tcdat;
         tcdat.resize(std::size(objcdata));
+
+        
+
+        std::vector<bool> tmt2;
+        tmt2.resize(std::size(tmdat1));
+        std::vector<bool> tcdat2;
+        tcdat2.resize(std::size(obj2cdata));
 
         for (auto b : tmt) {
             b = false;
@@ -220,60 +238,83 @@ void Physics::ProcCollide(Physics::eResource* obj, eResource::tmCollide* tmdist)
         for (auto b : tcdat) {
             b = false;
         }
+        for (auto b : tmt2) {
+            b = false;
+        }
+        for (auto b : tcdat2) {
+            b = false;
+        }
         for (auto& c : sd) {
-            if (!tmt[c.Index1]) {
-                tmt[c.Index1] = true;
-                auto& bn = tmdat[c.Index1];
-                for (auto& v : bn.Indices) {
-                    auto& bdat = objidata[v];
-                    if (!tcdat[bdat.normal]) {
-                        tcdat[bdat.normal] = true;
-                        auto& tri = objcdata[bdat.normal];
-                        A.emplace_back(tri);
-                    }
-                    
-                }
+            
+        }
+        std::vector<ReadX3D::pCollision> WModel;
+        std::vector<ReadX3D::pCollision> TModel;
+
+        WModel = objcdata;
+
+        TModel = obj2cdata;
+        struct RETURNDATA {
+            bool coll;
+            int Windex;
+            int Tindex;
+        };
+
+        
+        cl::Buffer buffer_C(context, CL_MEM_READ_WRITE, sizeof(RETURNDATA) * (std::size(WModel)));
+        cl::Buffer buffer_D(context, CL_MEM_READ_WRITE, sizeof(XMFLOAT3) * 2);
+        cl::Buffer buffer_E(context, CL_MEM_READ_ONLY, sizeof(int) * 2);
+
+
+        XMFLOAT3 Wpos[2];
+        Wpos[0] = objpos;
+        Wpos[1] = ob2pos;
+
+        int size[2];
+        size[0] = std::size(WModel);
+        size[1] = std::size(TModel);
+
+        queue.enqueueWriteBuffer(buffer_D, CL_TRUE, 0, sizeof(XMFLOAT3) * 2, Wpos);
+        queue.enqueueWriteBuffer(buffer_E, CL_TRUE, 0, sizeof(int) * 2, size);
+
+
+        collide.setArg(0, obj->clBuff);
+        collide.setArg(1, obj2->clBuff);
+        collide.setArg(2, buffer_D);
+        collide.setArg(3, buffer_E);
+
+
+        collide.setArg(4, buffer_C);
+
+
+        queue.enqueueNDRangeKernel(collide, cl::NullRange, cl::NDRange(std::size(WModel)), cl::NullRange);
+        queue.finish();
+
+        std::vector<RETURNDATA> retdat;
+        retdat.resize(std::size(WModel));
+        queue.enqueueReadBuffer(buffer_C, CL_TRUE, 0, sizeof(RETURNDATA) * (std::size(WModel)), retdat.data());
+        for (auto& r : retdat) {
+            if (r.coll) {
+                obj->pDir = fDirection(&ob2pos, &objpos);
+                obj->pspeed = 0.5;
             }
         }
-        if (std::size(A) > 0) {
-            XMFLOAT3 B;
-
-            B = obj->mPos.position;
-            auto pee = sizeof(ReadX3D::pCollision);
-            obj->clBuff = cl::Buffer(context, CL_MEM_READ_ONLY, sizeof(ReadX3D::pCollision) * std::size(A));
-            cl::Buffer buffer_C(context, CL_MEM_WRITE_ONLY, sizeof(ReadX3D::pCollision) * std::size(A));
-
-
-            queue.enqueueWriteBuffer(obj->clBuff, CL_TRUE, 0, sizeof(ReadX3D::pCollision) * std::size(A), A.data());
-
-            
-            collide.setArg(0, obj->clBuff);
-            collide.setArg(3, buffer_C);
-
-            queue.enqueueNDRangeKernel(collide, cl::NullRange, cl::NDRange(std::size(A)), cl::NullRange);
-            queue.finish();
-
-            std::vector<ReadX3D::pCollision> C;
-            queue.enqueueReadBuffer(buffer_C, CL_TRUE, 0, sizeof(ReadX3D::pCollision) * std::size(A), C.data());
-        }
-        
+        queue.finish();
     }
 }
 
 
 void Physics::pSpecCollison(eResource* obj) {
-    obj->mPos.posMtx.lock();
+    
     for (auto& m : obj->tmDist) {
-        m->ptModel->mPos.posMtx.lock();
         auto& msphere = m->ptModel->model->uData->Sphere;
         if (msphere.Intersects(obj->model->uData->Sphere)) {
             if (!m->Collision.load()) {
                 ProcCollide(obj, m);
+
             }
         }
-        m->ptModel->mPos.posMtx.unlock();
+
     }
-    obj->mPos.posMtx.unlock();
 }
 
 void Physics::pSpecReset(eResource* obj) {
@@ -282,63 +323,6 @@ void Physics::pSpecReset(eResource* obj) {
         m->Collision.store(false);
     }
 }
-
-/*std::vector<float> Physics::RayCastColl(std::vector<int>& index, std::vector<ReadX3D::pCollision>& cdata, XMFLOAT4& dir, std::vector<XMFLOAT3>& raypos) {
-    std::vector<float> olddist{};
-    auto normdir = XMVector3Normalize(XMLoadFloat4(&dir));
-    for (auto& c : cdata) {
-        XMVECTOR tri10 = XMVectorSet(c.verts[0]->position.x, c.verts[0]->position.y, c.verts[0]->position.z, 0);
-        XMVECTOR tri11 = XMVectorSet(c.verts[1]->position.x, c.verts[1]->position.y, c.verts[1]->position.z, 0);
-        XMVECTOR tri12 = XMVectorSet(c.verts[2]->position.x, c.verts[2]->position.y, c.verts[2]->position.z, 0);
-        float dist = 0.0;
-        for (auto& r : raypos) {
-            auto rp = XMVectorSet(r.x, r.y, r.z, 0);
-            if (DirectX::TriangleTests::Intersects(rp, normdir, tri10, tri11, tri12, dist)) {
-                olddist.emplace_back(dist);
-                index.emplace_back(c.index);
-            }
-        }
-
-    }
-    return olddist;
-}*/
-
-
-
-//figure it out smh
-/*bool Physics::triCollide(ReadX3D::pCollision* tri, ReadX3D::pCollision* tri2, XMFLOAT4 dir, float dist) {
-    auto Origin = AddXMFLOAT3(tri->verts[0].position, {dir.x * dist, dir.y * dist, dir.z * dist});
-    auto Origin1 = AddXMFLOAT3(tri->verts[1].position, { dir.x * dist, dir.y * dist, dir.z * dist });
-    XMVECTOR Direction1;
-    XMVECTOR Direction2;
-    XMVECTOR Direction3;
-    {
-        auto D1 = fDirection(&tri->verts[0].position, &tri->verts[1].position);
-        auto D2 = fDirection(&tri->verts[0]->position, &tri->verts[2]->position);
-        auto D3 = fDirection(&tri->verts[1]->position, &tri->verts[2]->position);
-        Direction1 = DirectX::XMVector3Normalize(XMLoadFloat4(&D1));
-        Direction2 = DirectX::XMVector3Normalize(XMLoadFloat4(&D2));
-        Direction3 = DirectX::XMVector3Normalize(XMLoadFloat4(&D3));
-
-    }
-    auto Distance1 = fDistance(&tri->verts[0]->position, &tri->verts[1]->position);
-    auto Distance2 = fDistance(&tri->verts[0]->position, &tri->verts[2]->position);
-    auto Distance3 = fDistance(&tri->verts[1]->position, &tri->verts[2]->position);
-
-    auto vect1 = XMLoadFloat3(&tri2->verts[0]->position);
-    auto vect2 = XMLoadFloat3(&tri2->verts[1]->position);
-    auto vect3 = XMLoadFloat3(&tri2->verts[2]->position);
-
-    float ret = 0;
-
-    bool result = false; 
-    //if (DirectX::TriangleTests::Intersects(XMLoadFloat3(&Origin), Direction1, vect1, vect2, vect3, ret))
-        //result = ret < Distance1 ? true : false;
-
-    if(result)
-    return result;
-    return result;
-}*/
 
 
 
@@ -350,8 +334,13 @@ void Physics::mMove(Physics::eResource* mUpdate) {
     mUpdate->pspeed = 0;
     mUpdate->mPos.lastposition = mUpdate->mPos.position;
     mUpdate->mPos.position = { mUpdate->mPos.position.x + both.x, mUpdate->mPos.position.y + both.y, mUpdate->mPos.position.z + both.z };
-    mUpdate->which = RStorage::BOTH;
+
+    auto& bmodel = mUpdate->model;
+    bmodel->cmatrix = XMMatrixTranslation(0, 0, 0) * XMMatrixRotationQuaternion(XMLoadFloat4(&mUpdate->mPos.rotation));
+    bmodel->cmatrix *= XMMatrixTranslation(mUpdate->mPos.position.x, mUpdate->mPos.position.y, mUpdate->mPos.position.z);
+    bmodel->cmatrix *= XMMatrixRotationQuaternion(XMLoadFloat4(&mUpdate->mPos.orbit));
     mUpdate->mPos.posMtx.unlock();
+
 }
 Physics::~Physics() {
     upDist.store(false);
