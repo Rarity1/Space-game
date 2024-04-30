@@ -47,6 +47,7 @@ public:
 		std::vector<tmCollide*> tmDist;
 		std::mutex currentMtx;
 		cl::Buffer clBuff;
+		cl::Buffer clPositionBuff;
 		std::vector<ReadX3D::pCollision*> currentCollision;
 		std::atomic<bool> updated = false;
 		std::atomic<bool> Collision = false;
@@ -59,6 +60,7 @@ public:
 	std::atomic<bool> upDist = false;
 	std::atomic<bool> Retracker = true;
 private:
+	
 	void Retrack();
 	template <typename T> int sgn(T val);
 	std::vector<Physics::eResource*>& trackedModels;
@@ -84,7 +86,11 @@ private:
 		int Index1;
 		int Index2;
 	};
-
+	struct RETURNDATA {
+		bool coll;
+		int index1[3];
+		int index2[3];
+	};
 	
 	std::vector<cl::Device> devices;
 	cl::Context context;

@@ -49,7 +49,8 @@ MODEL;
 typedef struct RETURNDATA
 {
     bool coll;
-    XMFLOAT3 pos;
+    int index1[3];
+    int index2[3];
 }
 RETURNDATA;
 
@@ -398,24 +399,29 @@ bool Intersects(MODEL Tri1, MODEL Tri2)
 }
 
 
-void kernel coll(global const MODEL* WModel, global const MODEL* TModel, global XMFLOAT3* Wposition, global int* sizeT, global RETURNDATA* retdat){
+void kernel coll(global const MODEL* WModel, global const MODEL* TModel, global XMFLOAT3* Wposition, global XMFLOAT3* Tposition, global const int* sizeT, global RETURNDATA* retdat){
     int id = get_global_id(0);
-bool temp = false;
-MODEL Work1 = WModel[id];
-Work1.vects[0].position = AddXMFLOAT3(Work1.vects[0].position, Wposition[0]);
-Work1.vects[1].position = AddXMFLOAT3(Work1.vects[1].position, Wposition[0]);
-Work1.vects[2].position = AddXMFLOAT3(Work1.vects[2].position, Wposition[0]);
+    int Tid = get_global_id(1);
+bool temp = retdat[id].coll;
+MODEL Work = WModel[id];
+Work.vects[0].position = AddXMFLOAT3(Work.vects[0].position, Wposition[0]);
+Work.vects[1].position = AddXMFLOAT3(Work.vects[1].position, Wposition[0]);
+Work.vects[2].position = AddXMFLOAT3(Work.vects[2].position, Wposition[0]);
+MODEL WorkT = TModel[Tid];
+WorkT.vects[0].position = AddXMFLOAT3(WorkT.vects[0].position, Tposition[0]);
+WorkT.vects[1].position = AddXMFLOAT3(WorkT.vects[1].position, Tposition[0]);
+WorkT.vects[2].position = AddXMFLOAT3(WorkT.vects[2].position, Tposition[0]);
+temp = Intersects(Work, WorkT);
 
-for (int x = 0; x < sizeT[1]; x++)
+if (temp)
 {
-    if (!temp)
-    {
-        MODEL Work = TModel[x];
-        Work.vects[0].position = AddXMFLOAT3(Work.vects[0].position, Wposition[1]);
-        Work.vects[1].position = AddXMFLOAT3(Work.vects[1].position, Wposition[1]);
-        Work.vects[2].position = AddXMFLOAT3(Work.vects[2].position, Wposition[1]);
-        temp = Intersects(Work1, Work);
-    }
+    retdat[id].coll = true;
+    retdat[id].index1[0] = Work.index[0];
+    retdat[id].index1[1] = Work.index[1];
+    retdat[id].index1[2] = Work.index[2];
+    retdat[id].index2[0] = WorkT.index[0];
+    retdat[id].index2[1] = WorkT.index[1];
+    retdat[id].index2[2] = WorkT.index[2];
 }
-retdat[id].coll = temp;
+
 }

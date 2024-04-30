@@ -66,7 +66,9 @@ void Physics::Retrack() {
             distanceThreads[i] = move(th);
 
             trackedModels[i]->clBuff = cl::Buffer(context, CL_MEM_READ_ONLY, sizeof(ReadX3D::pCollision) * std::size(trackedModels[i]->model->uData->cdata));
+            trackedModels[i]->clPositionBuff = cl::Buffer(context, CL_MEM_READ_WRITE, sizeof(XMFLOAT3));
             queue.enqueueWriteBuffer(trackedModels[i]->clBuff, CL_TRUE, 0, sizeof(ReadX3D::pCollision) * std::size(trackedModels[i]->model->uData->cdata), trackedModels[i]->model->uData->cdata.data());
+            queue.enqueueWriteBuffer(trackedModels[i]->clPositionBuff, CL_TRUE, 0, sizeof(XMFLOAT3), &trackedModels[i]->mPos);
             
         }
         queue.finish();
@@ -138,6 +140,8 @@ void Physics::trackDist(Physics::eResource* tModel) {
       tModel->mPos.posMtx.lock();
       auto posobj = tModel->mPos.position;
       tModel->model->uData->Sphere.Center = tModel->mPos.position;
+      queue.enqueueWriteBuffer(tModel->clPositionBuff, CL_TRUE, 0, sizeof(XMFLOAT3), &tModel->mPos.position);
+      queue.finish();
       tModel->mPos.posMtx.unlock();
 
       timer->mtx.lock();
@@ -215,90 +219,85 @@ void Physics::ProcCollide(Physics::eResource* obj, eResource::tmCollide* tmdist)
             tmdist1->Collision.store(true);
         }
 
-
-
-
-        
-
         std::vector<bool> tmt;
         tmt.resize(std::size(tmdat));
         std::vector<bool> tcdat;
         tcdat.resize(std::size(objcdata));
 
-        
+
 
         std::vector<bool> tmt2;
         tmt2.resize(std::size(tmdat1));
         std::vector<bool> tcdat2;
         tcdat2.resize(std::size(obj2cdata));
 
-        for (auto b : tmt) {
-            b = false;
-        }
-        for (auto b : tcdat) {
-            b = false;
-        }
-        for (auto b : tmt2) {
-            b = false;
-        }
-        for (auto b : tcdat2) {
-            b = false;
-        }
-        for (auto& c : sd) {
-            
-        }
+
         std::vector<ReadX3D::pCollision> WModel;
         std::vector<ReadX3D::pCollision> TModel;
-
-        WModel = objcdata;
-
-        TModel = obj2cdata;
-        struct RETURNDATA {
-            bool coll;
-            int Windex;
-            int Tindex;
-        };
-
+        for (auto& c : sd) {
+            if (!tmt[c.Index1]) {
+                for (auto& b : tmdat[c.Index1].Indices) {
+                    if (!tcdat[objidata[b].normal]) {
+                        WModel.emplace_back(objcdata[objidata[b].normal]);
+                        tcdat[objidata[b].normal] = true;
+                    }
+                }
+                tmt[c.Index1] = true;
+            }
+            if (!tmt2[c.Index2]) {
+                for (auto& b : tmdat1[c.Index2].Indices) {
+                    if (!tcdat2[obj2idata[b].normal]) {
+                        TModel.emplace_back(obj2cdata[obj2idata[b].normal]);
+                        tcdat2[obj2idata[b].normal] = true;
+                    }
+                }
+                tmt2[c.Index2] = true;
+            } 
+        }
         
-        cl::Buffer buffer_C(context, CL_MEM_READ_WRITE, sizeof(RETURNDATA) * (std::size(WModel)));
-        cl::Buffer buffer_D(context, CL_MEM_READ_WRITE, sizeof(XMFLOAT3) * 2);
-        cl::Buffer buffer_E(context, CL_MEM_READ_ONLY, sizeof(int) * 2);
-
-
-        XMFLOAT3 Wpos[2];
-        Wpos[0] = objpos;
-        Wpos[1] = ob2pos;
 
         int size[2];
         size[0] = std::size(WModel);
         size[1] = std::size(TModel);
 
-        queue.enqueueWriteBuffer(buffer_D, CL_TRUE, 0, sizeof(XMFLOAT3) * 2, Wpos);
-        queue.enqueueWriteBuffer(buffer_E, CL_TRUE, 0, sizeof(int) * 2, size);
+        if (size[0] > 0 && size[1] > 0) {
+            cl::Buffer buffer_E(context, CL_MEM_READ_ONLY, sizeof(int) * 2);
+
+            queue.enqueueWriteBuffer(buffer_E, CL_TRUE, 0, sizeof(int) * 2, size);
 
 
-        collide.setArg(0, obj->clBuff);
-        collide.setArg(1, obj2->clBuff);
-        collide.setArg(2, buffer_D);
-        collide.setArg(3, buffer_E);
+            collide.setArg(0, obj->clBuff);
+            collide.setArg(1, obj2->clBuff);
+            collide.setArg(2, obj->clPositionBuff);
+            collide.setArg(3, obj2->clPositionBuff);
+            collide.setArg(4, buffer_E);
 
 
-        collide.setArg(4, buffer_C);
 
 
-        queue.enqueueNDRangeKernel(collide, cl::NullRange, cl::NDRange(std::size(WModel)), cl::NullRange);
-        queue.finish();
+            std::vector<RETURNDATA> retdat;
+            retdat.resize(size[0]);
+            cl::Buffer buffer_C(context, CL_MEM_READ_WRITE, sizeof(RETURNDATA) * size[0]);
+            collide.setArg(5, buffer_C);
+            queue.enqueueWriteBuffer(buffer_C, CL_TRUE, 0, sizeof(RETURNDATA) * size[0], retdat.data());
 
-        std::vector<RETURNDATA> retdat;
-        retdat.resize(std::size(WModel));
-        queue.enqueueReadBuffer(buffer_C, CL_TRUE, 0, sizeof(RETURNDATA) * (std::size(WModel)), retdat.data());
-        for (auto& r : retdat) {
-            if (r.coll) {
-                obj->pDir = fDirection(&ob2pos, &objpos);
-                obj->pspeed = 0.5;
+            queue.enqueueNDRangeKernel(collide, cl::NullRange, cl::NDRange(std::size(WModel), std::size(TModel)), cl::NullRange);
+            queue.finish();
+
+            queue.enqueueReadBuffer(buffer_C, CL_TRUE, 0, sizeof(RETURNDATA) * (std::size(WModel)), retdat.data());
+
+            for (auto& r : retdat) {
+                if (r.coll) {
+
+                    //auto& tri1 = WModel[r.index1];
+                    //auto& tri2 = TModel[r.index2];
+
+                    obj->pDir = fDirection(&ob2pos, &objpos);
+                    obj->pspeed = 0.5;
+                }
             }
         }
-        queue.finish();
+        
     }
 }
 
