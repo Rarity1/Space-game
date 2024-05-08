@@ -28,11 +28,10 @@ public:
 		};
 		relposVect mPos;
 		float speed = 0;
-		float pspeed = 0;
 		XMFLOAT4 grav{ 0,0,0,0 };
 		float gravpull = 0;
 		XMFLOAT4 velDir{0,0,0,0};
-		XMFLOAT4 pDir{ 0,0,0,0 };
+		XMFLOAT4 pDir{0,0,0,0};
 		eResource* mworld = nullptr;
 		bool isWorld = false;
 		RStorage::pChange which = RStorage::INIT;
@@ -48,6 +47,8 @@ public:
 		std::mutex currentMtx;
 		cl::Buffer clBuff;
 		cl::Buffer clPositionBuff;
+		cl::Buffer clBoneBuff;
+		cl::Buffer clCollIndBuff;
 		std::vector<ReadX3D::pCollision*> currentCollision;
 		std::atomic<bool> updated = false;
 		std::atomic<bool> Collision = false;
@@ -69,6 +70,7 @@ private:
 	float GConst = 0;
 	void cGravity(eResource* obj);
 	XMFLOAT4 fDirection(XMFLOAT3* pos1, XMFLOAT3* pos2);
+	int bIndex(std::vector<int> w, int bInd);
 	void trackDist(Physics::eResource* tModel);
 	void uCone(Physics::eResource* obj, eResource::tmCollide* tmdist);
 	bool coneCheck(XMFLOAT3 postc, float height, float radius, XMFLOAT4 dir);
@@ -80,16 +82,17 @@ private:
 	void mMove(Physics::eResource* mUpdate);
 	std::vector<std::thread> collisionThreads;
 	std::vector<std::thread> distanceThreads = {};
-	struct CollideS {
-		float speed;
-		XMFLOAT4 dir;
-		int Index1;
-		int Index2;
-	};
+
 	struct RETURNDATA {
 		bool coll;
 		int index1[3];
 		int index2[3];
+		XMFLOAT4 dir;
+		float dist[2];
+	};
+	struct WORKDATA {
+		int bIndex[2];
+		XMFLOAT3 Position[2];
 	};
 	
 	std::vector<cl::Device> devices;

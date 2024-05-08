@@ -46,8 +46,9 @@ Physics::Physics(mThreadTime* timer, std::vector<Physics::eResource*>& trackedMo
 void Physics::Update() {
     Retrack();
     for (auto& mUpdate : trackedModels) {
-        mMove(mUpdate);
+        cGravity(mUpdate);
         pSpecCollison(mUpdate);
+        mMove(mUpdate);
     }
     for (auto& mUpdate : trackedModels) {
         pSpecReset(mUpdate);
@@ -67,8 +68,20 @@ void Physics::Retrack() {
 
             trackedModels[i]->clBuff = cl::Buffer(context, CL_MEM_READ_ONLY, sizeof(ReadX3D::pCollision) * std::size(trackedModels[i]->model->uData->cdata));
             trackedModels[i]->clPositionBuff = cl::Buffer(context, CL_MEM_READ_WRITE, sizeof(XMFLOAT3));
+            std::vector<XMFLOAT3> WBone;
+            WBone.resize(std::size(trackedModels[i]->model->uData->bdata));
+            for (auto b = 0; b < std::size(WBone); b++) {
+                WBone[b] = trackedModels[i]->model->uData->bdata[b].sphere.Center;
+            }
+
+            trackedModels[i]->clBoneBuff = cl::Buffer(context, CL_MEM_READ_ONLY, sizeof(XMFLOAT3) * std::size(WBone));
+            trackedModels[i]->clCollIndBuff = cl::Buffer(context, CL_MEM_READ_ONLY, sizeof(int) * std::size(trackedModels[i]->model->uData->WeightCIndex));
+
+            queue.enqueueWriteBuffer(trackedModels[i]->clBoneBuff, CL_TRUE, 0, sizeof(XMFLOAT3) * std::size(WBone), WBone.data());
             queue.enqueueWriteBuffer(trackedModels[i]->clBuff, CL_TRUE, 0, sizeof(ReadX3D::pCollision) * std::size(trackedModels[i]->model->uData->cdata), trackedModels[i]->model->uData->cdata.data());
             queue.enqueueWriteBuffer(trackedModels[i]->clPositionBuff, CL_TRUE, 0, sizeof(XMFLOAT3), &trackedModels[i]->mPos);
+            queue.enqueueWriteBuffer(trackedModels[i]->clCollIndBuff, CL_TRUE, 0, sizeof(int) * std::size(trackedModels[i]->model->uData->WeightCIndex), trackedModels[i]->model->uData->WeightCIndex.data());
+
             
         }
         queue.finish();
@@ -109,6 +122,15 @@ float Physics::fDistance(XMFLOAT3* pos1, XMFLOAT3* pos2) {
     auto y = pow((pos2->y - pos1->y), 2);
     auto z = pow((pos2->z - pos1->z), 2);
     return sqrt(x + y + z);
+}
+int Physics::bIndex(std::vector<int> w, int bInd) {
+    int Index = -1;
+    for (auto i = 0; i < std::size(w); i++) {
+        if (w[i] == bInd) {
+            Index = i;
+        }
+    }
+    return Index;
 }
 
 DirectX::XMFLOAT3 Physics::AddXMFLOAT3(DirectX::XMFLOAT3 a, DirectX::XMFLOAT3 b) {
@@ -195,7 +217,7 @@ void Physics::ProcCollide(Physics::eResource* obj, eResource::tmCollide* tmdist)
         auto dir = fDirection(&objpos, &ob2pos);
         auto dist = fDistance(&ob2pos, &objpos);
 
-        std::vector<CollideS> sd;
+        std::vector<WORKDATA> WData;
         for (auto& b2 : tmdat1) {
             for (auto& b : tmdat) {
                 auto sph2 = b2.sphere;
@@ -203,100 +225,107 @@ void Physics::ProcCollide(Physics::eResource* obj, eResource::tmCollide* tmdist)
                     if (b.sphere.Intersects(sph2)) {
                         auto ssph2 = b2.smallsphere;
                         ssph2.Center = sph2.Center;
-                       if(ssph2.Intersects(b.sphere))
-                            sd.emplace_back(CollideS{ .Index1 = b.bIndex, .Index2 = b2.bIndex });
+                        WData.emplace_back(WORKDATA{ .bIndex = {b.bIndex, b2.bIndex}, .Position = {{0,0,0}, { dir.x * dist, dir.y * dist, dir.z * dist }} });
                     }
                 
             }
         }
 
         auto& objcdata = obj->model->uData->cdata;
+        auto& objbdata = obj->model->uData->bdata;
         auto& objidata = obj->model->uData->idata;
+        auto& objweight = obj->model->uData->weights;
+        std::vector<int>& WCollIndex = obj->model->uData->WeightCIndex;
         auto& obj2cdata = obj2->model->uData->cdata;
+        auto& obj2bdata = obj2->model->uData->bdata;
         auto& obj2idata = obj2->model->uData->idata;
-        if (std::size(sd) > 0) {
+        auto& obj2weight = obj2->model->uData->weights;
+        std::vector<int>& TCollIndex = obj2->model->uData->WeightCIndex;
+
+        if (std::size(WData) > 0) {
             tmdist->Collision.store(true);
             tmdist1->Collision.store(true);
         }
 
-        std::vector<bool> tmt;
-        tmt.resize(std::size(tmdat));
-        std::vector<bool> tcdat;
-        tcdat.resize(std::size(objcdata));
+        std::vector<bool> tmt(std::size(tmdat), false);
+        std::vector<bool> tmt2(std::size(tmdat1), false);
 
-
-
-        std::vector<bool> tmt2;
-        tmt2.resize(std::size(tmdat1));
-        std::vector<bool> tcdat2;
-        tcdat2.resize(std::size(obj2cdata));
-
-
-        std::vector<ReadX3D::pCollision> WModel;
-        std::vector<ReadX3D::pCollision> TModel;
-        for (auto& c : sd) {
-            if (!tmt[c.Index1]) {
-                for (auto& b : tmdat[c.Index1].Indices) {
-                    if (!tcdat[objidata[b].normal]) {
-                        WModel.emplace_back(objcdata[objidata[b].normal]);
-                        tcdat[objidata[b].normal] = true;
-                    }
-                }
-                tmt[c.Index1] = true;
-            }
-            if (!tmt2[c.Index2]) {
-                for (auto& b : tmdat1[c.Index2].Indices) {
-                    if (!tcdat2[obj2idata[b].normal]) {
-                        TModel.emplace_back(obj2cdata[obj2idata[b].normal]);
-                        tcdat2[obj2idata[b].normal] = true;
-                    }
-                }
-                tmt2[c.Index2] = true;
-            } 
-        }
-        
 
         int size[2];
-        size[0] = std::size(WModel);
-        size[1] = std::size(TModel);
-
-        if (size[0] > 0 && size[1] > 0) {
-            cl::Buffer buffer_E(context, CL_MEM_READ_ONLY, sizeof(int) * 2);
-
-            queue.enqueueWriteBuffer(buffer_E, CL_TRUE, 0, sizeof(int) * 2, size);
-
-
-            collide.setArg(0, obj->clBuff);
-            collide.setArg(1, obj2->clBuff);
-            collide.setArg(2, obj->clPositionBuff);
-            collide.setArg(3, obj2->clPositionBuff);
-            collide.setArg(4, buffer_E);
+        size[0] = std::size(objbdata);
+        size[1] = std::size(obj2bdata);
 
 
 
+        
 
-            std::vector<RETURNDATA> retdat;
-            retdat.resize(size[0]);
-            cl::Buffer buffer_C(context, CL_MEM_READ_WRITE, sizeof(RETURNDATA) * size[0]);
-            collide.setArg(5, buffer_C);
-            queue.enqueueWriteBuffer(buffer_C, CL_TRUE, 0, sizeof(RETURNDATA) * size[0], retdat.data());
 
-            queue.enqueueNDRangeKernel(collide, cl::NullRange, cl::NDRange(std::size(WModel), std::size(TModel)), cl::NullRange);
-            queue.finish();
+        
+        cl::Buffer WorkBuff(context, CL_MEM_READ_ONLY, (sizeof(WORKDATA) * std::size(WData)));
+        
+        
+        std::vector<RETURNDATA> retdat(std::size(WData));
+        cl::Buffer ReturnBuff(context, CL_MEM_READ_WRITE, sizeof(RETURNDATA) * std::size(retdat));
 
-            queue.enqueueReadBuffer(buffer_C, CL_TRUE, 0, sizeof(RETURNDATA) * (std::size(WModel)), retdat.data());
 
-            for (auto& r : retdat) {
-                if (r.coll) {
+        queue.enqueueWriteBuffer(WorkBuff, CL_TRUE, 0, sizeof(WORKDATA)*std::size(WData), WData.data());
+        queue.enqueueWriteBuffer(ReturnBuff, CL_TRUE, 0, sizeof(RETURNDATA) * std::size(retdat), retdat.data());
 
-                    //auto& tri1 = WModel[r.index1];
-                    //auto& tri2 = TModel[r.index2];
+        collide.setArg(0, obj->clBuff);
+        collide.setArg(1, obj2->clBuff);
+        collide.setArg(2, obj->clBoneBuff);
+        collide.setArg(3, obj2->clBoneBuff);
+        collide.setArg(4, WorkBuff);
+        collide.setArg(7, obj->clCollIndBuff);
+        collide.setArg(8, obj2->clCollIndBuff);
+        collide.setArg(9, ReturnBuff);
+        
+        std::vector<cl::Buffer> Windicies(std::size(objbdata));
+        std::vector<bool> WBool(std::size(Windicies), false);
+        std::vector<cl::Buffer> Tindicies(std::size(obj2bdata));
+        std::vector<bool> TBool(std::size(Tindicies), false);
 
-                    obj->pDir = fDirection(&ob2pos, &objpos);
-                    obj->pspeed = 0.5;
-                }
+        for (auto i = 0; i < std::size(WData); i++) {
+            auto& c = WData[i];
+            if (!WBool[c.bIndex[0]]) {
+                Windicies[c.bIndex[0]] = cl::Buffer(context, CL_MEM_READ_ONLY, (sizeof(int) * std::size(objbdata[c.bIndex[0]].Indices)));
+                queue.enqueueWriteBuffer(Windicies[c.bIndex[0]], CL_TRUE, 0, (sizeof(int) * std::size(objbdata[c.bIndex[0]].Indices)), objbdata[c.bIndex[0]].Indices.data());
+                WBool[c.bIndex[0]] = true;
+            }
+            if (!TBool[c.bIndex[1]]) {
+                Tindicies[c.bIndex[1]] = cl::Buffer(context, CL_MEM_READ_ONLY, (sizeof(int) * std::size(obj2bdata[c.bIndex[1]].Indices)));
+                queue.enqueueWriteBuffer(Tindicies[c.bIndex[1]], CL_TRUE, 0, (sizeof(int) * std::size(obj2bdata[c.bIndex[1]].Indices)), obj2bdata[c.bIndex[1]].Indices.data());
+                TBool[c.bIndex[1]] = true;
             }
         }
+
+        
+        for (auto i = 0; i < std::size(WData); i++) {
+            auto& c = WData[i];
+            collide.setArg(5, Windicies[c.bIndex[0]]);
+            collide.setArg(6, Tindicies[c.bIndex[1]]);
+            queue.enqueueNDRangeKernel(collide, cl::NDRange(i, 0, 0), cl::NDRange(1, std::size(objbdata[c.bIndex[0]].Indices), std::size(obj2bdata[c.bIndex[1]].Indices)), cl::NullRange);
+        }
+
+
+        queue.finish();
+        queue.enqueueReadBuffer(ReturnBuff, CL_TRUE, 0, sizeof(RETURNDATA) * std::size(WData), retdat.data());
+
+        for (auto& r : retdat) {
+                if (r.coll) {
+
+                    XMStoreFloat4(&obj->pDir, XMLoadFloat4(&obj->pDir) + XMLoadFloat4(&r.dir) * r.dist[0]);
+
+
+                    XMFLOAT4 temp = { 0,0,0,0 };
+                    XMStoreFloat4(&temp, XMQuaternionInverse(XMLoadFloat4(&r.dir)) + XMLoadFloat4(&r.dir)*r.dist[0]);
+
+                    float totalmass = obj->mass + obj2->mass;
+
+                }
+            }
+
+        
         
     }
 }
@@ -328,9 +357,8 @@ void Physics::pSpecReset(eResource* obj) {
 void Physics::mMove(Physics::eResource* mUpdate) {
     mUpdate->mPos.posMtx.lock();
     XMFLOAT4 both = { 0,0,0,0 };
-    XMStoreFloat4(&both, (XMLoadFloat4(&mUpdate->velDir) * mUpdate->speed) + (XMLoadFloat4(&mUpdate->grav) * mUpdate->gravpull) + (XMLoadFloat4(&mUpdate->pDir) * mUpdate->pspeed));
-    mUpdate->pDir = { 0,0,0,0 };
-    mUpdate->pspeed = 0;
+    XMStoreFloat4(&both, (XMLoadFloat4(&mUpdate->velDir) * mUpdate->speed) + (XMLoadFloat4(&mUpdate->grav) * mUpdate->gravpull));
+    mUpdate->pDir = {0,0,0,0};
     mUpdate->mPos.lastposition = mUpdate->mPos.position;
     mUpdate->mPos.position = { mUpdate->mPos.position.x + both.x, mUpdate->mPos.position.y + both.y, mUpdate->mPos.position.z + both.z };
 

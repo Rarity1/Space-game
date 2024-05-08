@@ -22,14 +22,7 @@ typedef struct XMFLOAT3
 }
 XMFLOAT3;
 
-typedef struct WORKDATA
-{
-    XMFLOAT4 dir;
-    float dist;
-    int Index;
-    int Index2;
-}
-WORKDATA;
+
 
 typedef struct Vertex
 {
@@ -46,23 +39,23 @@ typedef struct MODEL
 }
 MODEL;
 
+typedef struct WORKDATA
+{
+    int bIndex[2];
+    XMFLOAT3 Position[2];
+}
+WORKDATA;
+
 typedef struct RETURNDATA
 {
     bool coll;
     int index1[3];
     int index2[3];
+    XMFLOAT4 dir;
+    float dist[2];
 }
 RETURNDATA;
 
-typedef struct Intersect
-{
-    bool coplanar;
-    float isect0;
-    float isect1;
-    XMFLOAT3 isectpoint0;
-    XMFLOAT3 isectpoint1;
-}
-Intersect;
 
 #define SORT(a,b)       \
 if (a > b)    \
@@ -139,6 +132,18 @@ float fDistance(XMFLOAT3 pos1, XMFLOAT3 pos2)
     float y = pow((pos2.y - pos1.y), 2);
     float z = pow((pos2.z - pos1.z), 2);
     return sqrt(x + y + z);
+}
+
+XMFLOAT3 fDirection(XMFLOAT3 pos1, XMFLOAT3 pos2) {
+    XMFLOAT3 result = { 0, 0, 0};
+    result.x = (pos2.x - pos1.x);
+    result.y = (pos2.y - pos1.y);
+    result.z = (pos2.z - pos1.z);
+    float mag = fDistance(pos1, pos2);
+    result.x = result.x / mag;
+    result.y = result.y / mag;
+    result.z = result.z / mag;
+    return result;
 }
 
 XMFLOAT3 AddXMFLOAT3(XMFLOAT3 a, XMFLOAT3 b)
@@ -399,29 +404,36 @@ bool Intersects(MODEL Tri1, MODEL Tri2)
 }
 
 
-void kernel coll(global const MODEL* WModel, global const MODEL* TModel, global XMFLOAT3* Wposition, global XMFLOAT3* Tposition, global const int* sizeT, global RETURNDATA* retdat){
-    int id = get_global_id(0);
-    int Tid = get_global_id(1);
-bool temp = retdat[id].coll;
-MODEL Work = WModel[id];
-Work.vects[0].position = AddXMFLOAT3(Work.vects[0].position, Wposition[0]);
-Work.vects[1].position = AddXMFLOAT3(Work.vects[1].position, Wposition[0]);
-Work.vects[2].position = AddXMFLOAT3(Work.vects[2].position, Wposition[0]);
-MODEL WorkT = TModel[Tid];
-WorkT.vects[0].position = AddXMFLOAT3(WorkT.vects[0].position, Tposition[0]);
-WorkT.vects[1].position = AddXMFLOAT3(WorkT.vects[1].position, Tposition[0]);
-WorkT.vects[2].position = AddXMFLOAT3(WorkT.vects[2].position, Tposition[0]);
+void kernel coll(global const MODEL* WModel, global const MODEL* TModel, global const XMFLOAT3* WBposition, global const XMFLOAT3* TBposition, global const WORKDATA* WData, global const int* WIndices, global const int* TIndices, global const int* WCollIndex, global const int* TCollIndex, global RETURNDATA* retdat){
+int sd = get_global_id(0);
+int Wind = get_global_id(1);
+int Tind = get_global_id(2);
+
+
+
+
+XMFLOAT3 WPos = WData[sd].Position[0];
+XMFLOAT3 TPos = WData[sd].Position[1];
+
+
+bool temp = retdat[sd].coll;
+MODEL Work = WModel[WCollIndex[WIndices[Wind]]];
+Work.vects[0].position = AddXMFLOAT3(Work.vects[0].position, WPos);
+Work.vects[1].position = AddXMFLOAT3(Work.vects[1].position, WPos);
+Work.vects[2].position = AddXMFLOAT3(Work.vects[2].position, WPos);
+MODEL WorkT = TModel[TCollIndex[TIndices[Tind]]];
+WorkT.vects[0].position = AddXMFLOAT3(WorkT.vects[0].position, TPos);
+WorkT.vects[1].position = AddXMFLOAT3(WorkT.vects[1].position, TPos);
+WorkT.vects[2].position = AddXMFLOAT3(WorkT.vects[2].position, TPos);
+
 temp = Intersects(Work, WorkT);
 
 if (temp)
 {
-    retdat[id].coll = true;
-    retdat[id].index1[0] = Work.index[0];
-    retdat[id].index1[1] = Work.index[1];
-    retdat[id].index1[2] = Work.index[2];
-    retdat[id].index2[0] = WorkT.index[0];
-    retdat[id].index2[1] = WorkT.index[1];
-    retdat[id].index2[2] = WorkT.index[2];
+    retdat[sd].coll = true;
+    retdat[sd].dir.x = WorkT.vects[0].position.x;
+    retdat[sd].dir.y = WorkT.vects[0].position.y;
+    retdat[sd].dir.z = WorkT.vects[0].position.z;
 }
 
 }

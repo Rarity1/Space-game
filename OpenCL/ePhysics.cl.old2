@@ -37,15 +37,19 @@ typedef struct MODEL{
 
 typedef struct RETURNDATA{
     bool coll;
-    XMFLOAT3 pos;
-    XMFLOAT3 pos2;
-    XMFLOAT3 pos3;
-    XMFLOAT3 bpos;
-    XMFLOAT3 bpos2;
-    XMFLOAT3 bpos3;
+    int index1[3];
+    int index2[3];
+    XMFLOAT3 line;
 
 }
 RETURNDATA;
+
+typedef struct RAYTRIINT
+{
+    bool coll;
+    XMFLOAT3 intersect;
+}
+RAYTRIINT;
 
 
 float fDistance(XMFLOAT3 pos1, XMFLOAT3 pos2) {
@@ -114,142 +118,113 @@ XMFLOAT3 LinePlaneIntersection(XMFLOAT3 Line, XMFLOAT3 Plane)
 }
 
 
-RETURNDATA Intersects(MODEL Tri1, MODEL Tri2)
+RAYTRIINT Tritrace(MODEL Tri1, XMFLOAT3 PointA, XMFLOAT3 PointB)
 {
-    float BasicallyZero = 0.108;
-    RETURNDATA Zer =
-    {
-    false
-    };
     XMFLOAT3 ZeroP = { 0, 0, 0 };
+
+    RAYTRIINT result = { false, ZeroP };
+
+    float BasicallyZero = 0.108;
     XMFLOAT3 PointP = Tri1.vects[0].position;
     XMFLOAT3 PointQ = Tri1.vects[1].position;
     XMFLOAT3 PointR = Tri1.vects[2].position;
+    float ABDist = fDistance(PointA, PointB);
 
+    XMFLOAT3 ABLine = SubXMFLOAT3(PointB, PointA);
+    XMFLOAT3 UABLine = MulXMFLOAT3(ABLine, 1/fDistance(ABLine, ZeroP));
 
     XMFLOAT3 VectA = SubXMFLOAT3(PointQ, PointP);
     XMFLOAT3 VectB = SubXMFLOAT3(PointR, PointP);
-
     XMFLOAT3 N = XMVector3Cross(VectA, VectB);
 
-    float NMag = fDistance(N, ZeroP);
-    XMFLOAT3 UnitN = { N.x / NMag, N.y / NMag, N.z / NMag };
-    XMFLOAT3 temp = SubXMFLOAT3(UnitN, PointP);
-    XMFLOAT3 Plane = MulXMFLOAT3(temp, NMag);
+    XMFLOAT3 Plane = SubXMFLOAT3(N, PointP);
+
+    float PMag = fDistance(ZeroP, Plane);
+    XMFLOAT3 UPlane = MulXMFLOAT3(Plane, 1 / PMag );
 
 
-    XMFLOAT3 PointA = Tri2.vects[0].position;
-    XMFLOAT3 PointB = Tri2.vects[1].position;
-    XMFLOAT3 PointC = Tri2.vects[2].position;
-    float ABDist = fDistance(PointA, PointB);
-    XMFLOAT3 ABUnitLine = MulXMFLOAT3(SubXMFLOAT3(PointB, PointA), 1/ABDist);
-
-
-    bool ABPara = false;
-    if(fabs(ABUnitLine.x) - fabs(UnitN.x) < BasicallyZero && fabs(ABUnitLine.y) - fabs(UnitN.y) < BasicallyZero && fabs(ABUnitLine.z) - fabs(UnitN.z) < BasicallyZero)
-    {
-        ABPara = true;
-    }
+    
 
 
     XMFLOAT3 ABIntersect = ZeroP;
+    
+
+
+
+    if(XMVector3Dot(MulXMFLOAT3(N, 1 / fDistance(N, ZeroP)), MulXMFLOAT3( ABLine, 1/fDistance(ABLine, ZeroP))) <= BasicallyZero)
+    {
+    }
+
+
+    float Linemag = XMVector3Dot(UPlane, UABLine)*PMag;
+
+    ABIntersect = MulXMFLOAT3(UABLine, -Linemag);
     float AInterDist = 0;
     float ABInterDist = 0;
-
-    if (!ABPara)
-    {
-        ABIntersect = LinePlaneIntersection(ABUnitLine, Plane);
-        AInterDist = fDistance(PointA, ABIntersect);
-        ABInterDist = fDistance(PointB, ABIntersect);
-        if (AInterDist + ABInterDist - ABDist < BasicallyZero)
+     AInterDist = fDistance(PointA, ABIntersect);
+     ABInterDist = fDistance(PointB, ABIntersect);
+     if (AInterDist + ABInterDist - ABDist < BasicallyZero)
         {
-            Zer.pos = ABIntersect;
-            Zer.coll = true;
+            result.intersect = ABIntersect;
+            result.coll = true;
         }
-    }
-    
-    float BCDist = fDistance(PointC, PointB);
-    XMFLOAT3 BCUnitLine = MulXMFLOAT3(SubXMFLOAT3(PointC, PointB), 1 / BCDist);
+    result.intersect = ABIntersect;
+    return result;
+}
 
 
-    bool BCPara = false;
-    if (fabs(BCUnitLine.x) - fabs(UnitN.x) < BasicallyZero && fabs(BCUnitLine.y) - fabs(UnitN.y) < BasicallyZero && fabs(BCUnitLine.z) - fabs(UnitN.z) < BasicallyZero)
+RETURNDATA Intersects(MODEL Tri1, MODEL Tri2)
+{
+    RETURNDATA Zer =
     {
-        BCPara = true;
+    false,
+    {Tri1.index[0],Tri1.index[1],Tri1.index[2]},
+    {Tri2.index[0],Tri2.index[1],Tri2.index[2]}
+    };
 
-    }
 
+    RAYTRIINT Tri1A = Tritrace(Tri1, Tri2.vects[0].position, Tri2.vects[1].position);
+    RAYTRIINT Tri1B = Tritrace(Tri1, Tri2.vects[0].position, Tri2.vects[2].position);
+    RAYTRIINT Tri1C = Tritrace(Tri1, Tri2.vects[1].position, Tri2.vects[2].position);
 
-    XMFLOAT3 BCIntersect = ZeroP;
-    float BInterDist = 0;
-    float CInterDist = 0;
+    RAYTRIINT Tri2A = Tritrace(Tri2, Tri1.vects[0].position, Tri1.vects[1].position);
+    RAYTRIINT Tri2B = Tritrace(Tri2, Tri1.vects[0].position, Tri1.vects[2].position);
+    RAYTRIINT Tri2C = Tritrace(Tri2, Tri1.vects[1].position, Tri1.vects[2].position);
 
-    if (!BCPara)
+    if(Tri1A.coll || Tri1B.coll || Tri1C.coll)
     {
-        BCIntersect = LinePlaneIntersection(BCUnitLine, Plane);
-        BInterDist = fDistance(PointB, BCIntersect);
-        CInterDist = fDistance(PointC, BCIntersect);
-        if (BInterDist + CInterDist - BCDist < BasicallyZero)
+        if(Tri2A.coll || Tri2B.coll || Tri2C.coll)
         {
-            Zer.pos2 = BCIntersect;
             Zer.coll = true;
-        }
-    }
-
-
-
-    float CADist = fDistance(PointC, PointA);
-    XMFLOAT3 CAUnitLine = MulXMFLOAT3(SubXMFLOAT3(PointA, PointC), 1 / CADist);
-
-
-    bool CAPara = false;
-    if (fabs(CAUnitLine.x) - fabs(UnitN.x) < BasicallyZero && fabs(CAUnitLine.y) - fabs(UnitN.y) < BasicallyZero && fabs(CAUnitLine.z) - fabs(UnitN.z) < BasicallyZero)
-    {
-        CAPara = true;
-    }
-
-
-    XMFLOAT3 CAIntersect = ZeroP;
-    float CBInterDist = 0;
-    float CCInterDist = 0;
-
-    if (!CAPara)
-    {
-        CAIntersect = LinePlaneIntersection(CAUnitLine, Plane);
-        CBInterDist = fDistance(PointC, CAIntersect);
-        CCInterDist = fDistance(PointB, CAIntersect);
-        if (CBInterDist + CCInterDist - CADist < BasicallyZero)
-        {
-            Zer.pos3 = CAIntersect;
-            Zer.coll = true;
+            
         }
     }
 
-
-
+    Zer.line = Tri2A.intersect;
     return Zer;
 }
 
 
-void kernel coll(global const MODEL* WModel, global const MODEL* TModel, global XMFLOAT3* Wposition, global int* sizeT, global RETURNDATA* retdat){
+void kernel coll(global const MODEL* WModel, global const MODEL* TModel, global XMFLOAT3* Wposition, global XMFLOAT3* Tposition, global const int* sizeT, global RETURNDATA* retdat){
     int id = get_global_id(0);
-    RETURNDATA temp = { false };
-    RETURNDATA temp2 = { false };
-    XMFLOAT3 zero = {0,0,0 };
-    MODEL Work1 = WModel[id];
-    Work1.vects[0].position = AddXMFLOAT3(Work1.vects[0].position, Wposition[1]);
-    Work1.vects[1].position = AddXMFLOAT3(Work1.vects[1].position, Wposition[1]);
-    Work1.vects[2].position = AddXMFLOAT3(Work1.vects[2].position, Wposition[1]);
-    
-    for(int x = 0; x < sizeT[1]; x++){
-    if (!temp.coll)
-    {
-        MODEL Work = TModel[x];
-        Work.vects[0].position = AddXMFLOAT3(Work.vects[0].position, Wposition[0]);
-        Work.vects[1].position = AddXMFLOAT3(Work.vects[1].position, Wposition[0]);
-        Work.vects[2].position = AddXMFLOAT3(Work.vects[2].position, Wposition[0]);
-        temp = Intersects(Work, Work1);
-    }
+    int Tid = get_global_id(1);
+RETURNDATA temp;
+MODEL Work = WModel[id];
+Work.vects[0].position = AddXMFLOAT3(Work.vects[0].position, Wposition[0]);
+Work.vects[1].position = AddXMFLOAT3(Work.vects[1].position, Wposition[0]);
+Work.vects[2].position = AddXMFLOAT3(Work.vects[2].position, Wposition[0]);
+MODEL WorkT = TModel[Tid];
+WorkT.vects[0].position = AddXMFLOAT3(WorkT.vects[0].position, Tposition[0]);
+WorkT.vects[1].position = AddXMFLOAT3(WorkT.vects[1].position, Tposition[0]);
+WorkT.vects[2].position = AddXMFLOAT3(WorkT.vects[2].position, Tposition[0]);
+temp = Intersects(Work, WorkT);
+
+retdat[id] = temp;
+
+if (temp.coll)
+{
 }
-    retdat[id] = temp;
+
+
+
 }

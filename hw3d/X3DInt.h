@@ -58,6 +58,7 @@ public:
 	};
 	std::vector<vFaceData> idata;
 	std::vector<pCollision> cdata;
+	std::vector<int> WeightCIndex;
 	std::vector<Bone> bdata;
 	Node ndata;
 	std::vector<boneweight> weights;

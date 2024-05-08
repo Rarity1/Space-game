@@ -16,14 +16,14 @@ void Engine::iLoad() {
     
     //begin model tracking. load a gd default world mf
 
-    trackedModels.emplace_back(new Physics::eResource{ "cube", pGfx->lModels->lModel(0), 1, 200.0, 0, {{5,0,138}} });
+    trackedModels.emplace_back(new Physics::eResource{ "cube", pGfx->lModels->lModel(0), 1, 200.0, 0, {{10,0,138}} });
     trackedModels.emplace_back(new Physics::eResource{ "untitled1", pGfx->lModels->lModel(1), 1, 200.0, 0, {{0,0,138}} });
 
     
     //wrld is 1:50000
-    trackedModels.emplace_back(new Physics::eResource{"wrld", pGfx->lModels->lModel(2), 1, 8570000000.0, 0, { {0,0,0} }});
-    //trackedModels[0]->mworld = trackedModels[4];
-    //trackedModels[1]->mworld = trackedModels[4];
+    //trackedModels.emplace_back(new Physics::eResource{"wrld", pGfx->lModels->lModel(2), 1, 8570000000.0*50000, 0, { {0,0,0} }});
+    //trackedModels[0]->mworld = trackedModels[2];
+    //trackedModels[1]->mworld = trackedModels[2];
     plModel = trackedModels[1];
     //end model tracking.
 

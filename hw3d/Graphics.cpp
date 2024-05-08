@@ -275,6 +275,8 @@ void Graphics::LoadResources(int numLoadedSrv)
 
 void Graphics::UpdateLocalTransform(RStorage::bmResource* bm)
 {
+	if (std::strstr(bm->uData->bdata[0].name.c_str(), "placeholder"))
+		return;
 	XMFLOAT4X4 temp{ 1.f,0.f,0.f,0.f,0.f,1.f,0.f,0.f,0.f,0.f,1.f,0.f,0.f,0.f,0.f,1.f };
 	XMStoreFloat4x4(&bm->uData->ndata.LocalTransform, XMLoadFloat4x4(&temp) * XMLoadFloat4x4(&bm->uData->ndata.matrix));
 
@@ -296,6 +298,7 @@ void Graphics::RecurLTrans(ReadX3D::Node* n, ReadX3D::Node* P) {
 
 void Graphics::UpdateModel(RStorage::bmResource* bm) {
 	auto GlobITrans = XMMatrixInverse(nullptr, XMLoadFloat4x4(&bm->uData->ndata.matrix));
+	if (!std::strstr(bm->uData->bdata[0].name.c_str(), "placeholder"))
 	for (auto& b : bm->uData->bdata) {
 		XMStoreFloat4x4(&b.finalTransform, XMLoadFloat4x4(&b.matrix) * XMLoadFloat4x4(&b.node->LocalTransform) * GlobITrans);
 	}

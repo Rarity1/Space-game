@@ -108,6 +108,7 @@ void ReadX3D::cvertexData()
 				bdata.emplace_back(Bone{ bone, tempc });
 				tempc++;
 			}
+			
 		} 
 		{
 			std::istringstream tm(bindpose->value());
@@ -136,7 +137,7 @@ void ReadX3D::cvertexData()
 				std::istringstream temp(matrix[b.bIndex]);
 				b.matrix = strToMatrix(temp);
 			}
-
+			
 
 			std::istringstream sw(skinweights->value());
 			std::vector<float> skeenweigh;
@@ -233,8 +234,13 @@ void ReadX3D::cvertexData()
 
 	for (auto& i : idata) {
 		tempdata.push_back(vdata[i.index]);
-		if(std::size(weights) > 0)
-		tempvcount.push_back(weights[i.index]);
+		if (std::size(weights) > 0) {
+			tempvcount.push_back(weights[i.index]);
+
+		}
+		else {
+			tempvcount.push_back(boneweight{ {0}, {1.0} });
+		}
 	}
 	for (auto& i : tempindex) {
 		tempdata[i.index].tc = tempcoord[i.index];
@@ -245,11 +251,20 @@ void ReadX3D::cvertexData()
 	idata = tempindex;
 	weights = tempvcount;
 	
+
+	if (std::size(bdata) == 0) {
+		bdata.emplace_back(Bone{ "placeholder", 0 });
+		for (auto& i : idata) {
+			bdata[0].Indices.emplace_back(i.index);
+		}
+	}
 	for (auto i = 0; i < std::size(tempvcount); i++) {
 		for (auto& j : tempvcount[i].bIndex) {
 			bdata[j].Indices.emplace_back(i);
 		}
 	}
+
+	
 	for (auto& b : bdata) {
 		DirectX::XMFLOAT3 pos{ 0,0,0 };
 		for (auto& i : b.Indices) {
@@ -283,6 +298,14 @@ void ReadX3D::cvertexData()
 		tempcount += i.index % 3 == 0 ? 1 : 0;
 		auto temp = abs(vdata[i.index].position.x) + abs(vdata[i.index].position.y) + abs(vdata[i.index].position.z);
 		collradius = temp > collradius ? temp : collradius;
+	}
+
+	WeightCIndex.resize(std::size(idata));
+
+	for (auto i = 0; i < std::size(cdata); i++) {
+		WeightCIndex[cdata[i].index[0]] = i;
+		WeightCIndex[cdata[i].index[1]] = i;
+		WeightCIndex[cdata[i].index[2]] = i;
 	}
 	Sphere.Radius = collradius;
 	Sphere.Center = { 0,0,0 };
