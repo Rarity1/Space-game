@@ -52,6 +52,7 @@ public:
 		std::vector<ReadX3D::pCollision*> currentCollision;
 		std::atomic<bool> updated = false;
 		std::atomic<bool> Collision = false;
+		std::mutex QueueMTX;
 	};
 	Physics(mThreadTime* timer, std::vector<Physics::eResource*>& trackedModels, int* UpdateRate);
 	~Physics();
@@ -94,11 +95,17 @@ private:
 		int bIndex[2];
 		XMFLOAT3 Position[2];
 	};
-	
+
+	struct OffsetC {
+		int Offset[2];
+		int ICount[2];
+	};
+	int WorkDataSize = 40;
 	std::vector<cl::Device> devices;
 	cl::Context context;
 	cl::Program::Sources sources;
 	cl::Program program;
 	cl::CommandQueue queue;
+	std::mutex QueueMTX;
 	cl::Kernel collide;
 };

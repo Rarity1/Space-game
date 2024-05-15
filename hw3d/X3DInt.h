@@ -26,8 +26,6 @@ public:
 		UINT vCount = 0;
 	};
 	struct pCollision {
-		//DirectX::XMFLOAT3 pos{0,0,0};
-		//float radius = 0;
 		int index[3]{-1,-1,-1};
 		Vertex verts[3];
 	};

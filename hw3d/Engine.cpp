@@ -21,9 +21,9 @@ void Engine::iLoad() {
 
     
     //wrld is 1:50000
-    //trackedModels.emplace_back(new Physics::eResource{"wrld", pGfx->lModels->lModel(2), 1, 8570000000.0*50000, 0, { {0,0,0} }});
-    //trackedModels[0]->mworld = trackedModels[2];
-    //trackedModels[1]->mworld = trackedModels[2];
+    trackedModels.emplace_back(new Physics::eResource{"wrld", pGfx->lModels->lModel(2), 1, 8570000000.0*50000, 0, { {0,0,0} }});
+    trackedModels[0]->mworld = trackedModels[2];
+    trackedModels[1]->mworld = trackedModels[2];
     plModel = trackedModels[1];
     //end model tracking.
 

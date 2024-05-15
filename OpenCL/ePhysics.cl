@@ -46,6 +46,12 @@ typedef struct WORKDATA
 }
 WORKDATA;
 
+typedef struct OffsetC
+{
+    int Offset[2];
+    int ICount[2];
+}OffsetC;
+
 typedef struct RETURNDATA
 {
     bool coll;
@@ -277,6 +283,92 @@ bool CoplanTriTri(XMFLOAT3 XN, float V0[3], float V1[3], float V2[3],
         } \
 }
 
+
+XMFLOAT3 CollDir(MODEL Tri1, MODEL Tri2, XMFLOAT3 Bone1, XMFLOAT3 Bone2)
+{
+    XMFLOAT3 Zero = {0,0,0};
+
+    XMFLOAT3 WAPoint = Tri1.vects[2].position;
+    XMFLOAT3 WBPoint = Tri1.vects[1].position;
+    XMFLOAT3 WCPoint = Tri1.vects[0].position;
+    XMFLOAT3 TAPoint = Tri2.vects[2].position;
+    XMFLOAT3 TBPoint = Tri2.vects[1].position;
+    XMFLOAT3 TCPoint = Tri2.vects[0].position;
+    int TIndex = 0;
+    XMFLOAT3 TDir[3];
+    float TDistance[3];
+    int WIndex = 0;
+    XMFLOAT3 WDir[3];
+    float WDistance[3];
+
+    XMFLOAT3 WAVect = SubXMFLOAT3(WBPoint, WAPoint);
+    XMFLOAT3 WBVect = SubXMFLOAT3(WCPoint, WAPoint);
+    XMFLOAT3 WABVect = XMVector3Cross(WAVect, WBVect);
+
+    XMFLOAT3 WNorm = MulXMFLOAT3(WABVect, 1/XMVector3Dot(WABVect, WABVect));
+    XMFLOAT3 WUNorm = MulXMFLOAT3(WNorm, 1/fDistance(Zero, WNorm));
+
+    XMFLOAT3 TAVect = SubXMFLOAT3(TBPoint, TAPoint);
+    XMFLOAT3 TBVect = SubXMFLOAT3(TCPoint, TAPoint);
+    XMFLOAT3 TABVect = XMVector3Cross(TAVect, TBVect);
+
+    XMFLOAT3 TNorm = MulXMFLOAT3(TABVect, 1 / XMVector3Dot(TABVect, TABVect));
+    XMFLOAT3 TUNorm = MulXMFLOAT3(TNorm, 1 / fDistance(Zero, TNorm));
+
+
+    TDir[0] = SubXMFLOAT3(TCPoint, WAPoint);
+    TDir[1] = SubXMFLOAT3(TBPoint, WAPoint);
+    TDir[2] = SubXMFLOAT3(TAPoint, WAPoint);
+    TDistance[0] = XMVector3Dot(WUNorm, TDir[0]);
+    TDistance[1] = XMVector3Dot(WUNorm, TDir[1]);
+    TDistance[2] = XMVector3Dot(WUNorm, TDir[2]);
+
+    WDir[0] = SubXMFLOAT3(WCPoint, TAPoint);
+    WDir[1] = SubXMFLOAT3(WBPoint, TAPoint);
+    WDir[2] = SubXMFLOAT3(WAPoint, TAPoint);
+    WDistance[0] = XMVector3Dot(TUNorm, WDir[0]);
+    WDistance[1] = XMVector3Dot(TUNorm, WDir[1]);
+    WDistance[2] = XMVector3Dot(TUNorm, WDir[2]);
+
+    if (TDistance[1] < TDistance[0])
+    {
+        TIndex = 1;
+        if (TDistance[2] < TDistance[1])
+        {
+            TIndex = 2;
+        }
+    } else if (TDistance[2] < TDistance[0])
+    {
+        TIndex = 2;
+    }
+
+    if (WDistance[1] < WDistance[0])
+    {
+        WIndex = 1;
+        if (WDistance[2] < WDistance[1])
+        {
+            WIndex = 2;
+        }
+    }
+    else if (WDistance[2] < WDistance[0])
+    {
+        WIndex = 2;
+    }
+
+    XMFLOAT3 TPoint = Tri2.vects[TIndex].position;
+    XMFLOAT3 NewWPoint = AddXMFLOAT3(WAPoint, MulXMFLOAT3(WUNorm, TDistance[TIndex]));
+    XMFLOAT3 NewWDir = fDirection(NewWPoint, TPoint);
+    XMFLOAT3 TNewPoint = AddXMFLOAT3(WAPoint, MulXMFLOAT3(NewWDir, fDistance(NewWPoint, TPoint)));
+
+    XMFLOAT3 WPoint = Tri1.vects[WIndex].position;
+    XMFLOAT3 NewTPoint = AddXMFLOAT3(TAPoint, MulXMFLOAT3(TUNorm, WDistance[WIndex]));
+    XMFLOAT3 NewTDir = fDirection(NewTPoint, WPoint);
+    XMFLOAT3 WNewPoint = AddXMFLOAT3(TAPoint, MulXMFLOAT3(NewTDir, fDistance(NewTPoint, WPoint)));
+
+
+    return (MulXMFLOAT3(WUNorm, TDistance[TIndex]));
+}
+
 bool Intersects(MODEL Tri1, MODEL Tri2)
 {
     float xx, yy, xxyy, tmp;
@@ -404,36 +496,45 @@ bool Intersects(MODEL Tri1, MODEL Tri2)
 }
 
 
-void kernel coll(global const MODEL* WModel, global const MODEL* TModel, global const XMFLOAT3* WBposition, global const XMFLOAT3* TBposition, global const WORKDATA* WData, global const int* WIndices, global const int* TIndices, global const int* WCollIndex, global const int* TCollIndex, global RETURNDATA* retdat){
+void kernel coll(global const MODEL* WModel, global const MODEL* TModel, global const XMFLOAT3* WBposition, global const XMFLOAT3* TBposition, global const WORKDATA* WData, global const int* WCollIndex, global const int* TCollIndex, global RETURNDATA* retdat, global const OffsetC* COffset, global const int* WorkIndices){
 int sd = get_global_id(0);
 int Wind = get_global_id(1);
 int Tind = get_global_id(2);
 
 
-
-
-XMFLOAT3 WPos = WData[sd].Position[0];
-XMFLOAT3 TPos = WData[sd].Position[1];
-
-
-bool temp = retdat[sd].coll;
-MODEL Work = WModel[WCollIndex[WIndices[Wind]]];
-Work.vects[0].position = AddXMFLOAT3(Work.vects[0].position, WPos);
-Work.vects[1].position = AddXMFLOAT3(Work.vects[1].position, WPos);
-Work.vects[2].position = AddXMFLOAT3(Work.vects[2].position, WPos);
-MODEL WorkT = TModel[TCollIndex[TIndices[Tind]]];
-WorkT.vects[0].position = AddXMFLOAT3(WorkT.vects[0].position, TPos);
-WorkT.vects[1].position = AddXMFLOAT3(WorkT.vects[1].position, TPos);
-WorkT.vects[2].position = AddXMFLOAT3(WorkT.vects[2].position, TPos);
-
-temp = Intersects(Work, WorkT);
-
-if (temp)
+if (!retdat[sd].coll)
 {
-    retdat[sd].coll = true;
-    retdat[sd].dir.x = WorkT.vects[0].position.x;
-    retdat[sd].dir.y = WorkT.vects[0].position.y;
-    retdat[sd].dir.z = WorkT.vects[0].position.z;
+        int WOffset = COffset[sd].Offset[0];
+        int TOffset = COffset[sd].Offset[1];
+
+        XMFLOAT3 WPos = WData[sd].Position[0];
+        XMFLOAT3 TPos = WData[sd].Position[1];
+
+
+        MODEL Work = WModel[WCollIndex[WorkIndices[Wind + WOffset]]];
+        Work.vects[0].position = AddXMFLOAT3(Work.vects[0].position, WPos);
+        Work.vects[1].position = AddXMFLOAT3(Work.vects[1].position, WPos);
+        Work.vects[2].position = AddXMFLOAT3(Work.vects[2].position, WPos);
+
+        MODEL TWork = TModel[TCollIndex[WorkIndices[Tind + TOffset]]];
+        TWork.vects[0].position = AddXMFLOAT3(TWork.vects[0].position, TPos);
+        TWork.vects[1].position = AddXMFLOAT3(TWork.vects[1].position, TPos);
+        TWork.vects[2].position = AddXMFLOAT3(TWork.vects[2].position, TPos);
+
+    if (Intersects(Work, TWork))
+    {
+        retdat[sd].coll = true;
+
+        XMFLOAT3 temp = CollDir(Work, TWork, WBposition[WData[sd].bIndex[0]], TBposition[WData[sd].bIndex[1]]);
+        retdat[sd].dir.x = temp.x;
+        retdat[sd].dir.y = temp.y;
+        retdat[sd].dir.z = temp.z;
+    }
+
+
+
 }
+
+
 
 }
