@@ -88,7 +88,7 @@ private:
 		bool coll;
 		int index1[3];
 		int index2[3];
-		XMFLOAT4 dir;
+		XMFLOAT4 dir[2];
 		float dist[2];
 	};
 	struct WORKDATA {

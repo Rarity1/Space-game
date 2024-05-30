@@ -22,7 +22,16 @@ typedef struct XMFLOAT3
 }
 XMFLOAT3;
 
-
+typedef struct CINTERVAL
+{
+    float V0;
+    float V1;
+    float V2;
+    float X0;
+    float X1;
+    bool CoPlan;
+}
+CINTERVAL;
 
 typedef struct Vertex
 {
@@ -57,10 +66,19 @@ typedef struct RETURNDATA
     bool coll;
     int index1[3];
     int index2[3];
-    XMFLOAT4 dir;
+    XMFLOAT4 dir[2];
     float dist[2];
 }
 RETURNDATA;
+
+
+typedef struct CLOSEFORM
+{
+    bool coll;
+    XMFLOAT3 norm[2];
+    float dist;
+}
+CLOSEFORM;
 
 
 #define SORT(a,b)       \
@@ -72,65 +90,123 @@ if (a > b)    \
                b = c;     \
              }
 
-#define POINT_IN_TRI(V0,U0,U1,U2)           \
-{                                           \
-  float a, b, c, d0, d1, d2;                     \
-  /* is T1 completly inside T2? */          \
-  /* check if V0 is inside tri(U0,U1,U2) */ \
-  a = U1[i1] - U0[i1];                          \
-  b = -(U1[i0] - U0[i0]);                       \
-  c = -a * U0[i0] - b * U0[i1];                     \
-  d0 = a * V0[i0] + b * V0[i1] + c;                   \
-                                            \
-  a = U2[i1] - U1[i1];                          \
-  b = -(U2[i0] - U1[i0]);                       \
-  c = -a * U1[i0] - b * U1[i1];                     \
-  d1 = a * V0[i0] + b * V0[i1] + c;                   \
-                                            \
-  a = U0[i1] - U2[i1];                          \
-  b = -(U0[i0] - U2[i0]);                       \
-  c = -a * U2[i0] - b * U2[i1];                     \
-  d2 = a * V0[i0] + b * V0[i1] + c;                   \
-  if (d0 * d1 > 0.0)                             \
-  {                                         \
-    if (d0 * d2 > 0.0) return true;                 \
-  }                                         \
+
+bool EdgeEdgeTest(float Axy[2], XMFLOAT3 V0, XMFLOAT3 U0, XMFLOAT3 U1, int Case0, int Case1)
+{
+    float Bx, By, Cx, Cy, e, d, f;
+    float Ax = Axy[0];
+    float Ay = Axy[1];
+    switch (Case0)
+    {
+        case 0:
+            {
+                Bx = U0.x - U1.x;                                   
+                Cx = V0.x - U0.x;
+                break;
+            }
+        case 1:
+            {
+                Bx = U0.y - U1.y;
+                Cx = V0.y - U0.y;
+                break;
+            }
+        case 2:
+            {
+                Bx = U0.z - U1.z;
+                Cx = V0.z - U0.z;
+                break;
+            }
+    }
+
+    switch (Case1)
+    {
+        case 0:
+            {
+                By = U0.x - U1.x;
+                Cy = V0.x - U0.x;
+                break;
+            }
+        case 1:
+            {
+                By = U0.y - U1.y;
+                Cy = V0.y - U0.y;
+                break;
+            }
+        case 2:
+            {
+                By = U0.z - U1.z;
+                Cy = V0.z - U0.z;
+                break;
+            }
+    }
+
+                             
+    f = Ay * Bx - Ax * By;                                      
+    d = By * Cx - Bx * Cy;                                      
+    if ((f > 0 && d >= 0 && d <= f) || (f < 0 && d <= 0 && d >= f))  
+    {                                                   
+        e = Ax * Cy - Ay * Cx;                                    
+    if (f > 0)                                           
+    {                                                 
+      if (e >= 0 && e <= f) return true;                      
+    }                                                 
+    else                                              
+    {                                                 
+      if (e <= 0 && e >= f) return true;                      
+    }                                                 
+    }
+
+    return false;
 }
 
-#define EDGE_EDGE_TEST(V0,U0,U1)                      \
-Bx = U0[i0] - U1[i0];                                   \
-  By = U0[i1] - U1[i1];                                   \
-  Cx = V0[i0] - U0[i0];                                   \
-  Cy = V0[i1] - U0[i1];                                   \
-  f = Ay * Bx - Ax * By;                                      \
-  d = By * Cx - Bx * Cy;                                      \
-  if ((f > 0 && d >= 0 && d <= f) || (f < 0 && d <= 0 && d >= f))  \
-  {                                                   \
-    e = Ax * Cy - Ay * Cx;                                    \
-    if (f > 0)                                           \
-    {                                                 \
-      if (e >= 0 && e <= f) return true;                      \
-    }                                                 \
-    else                                              \
-    {                                                 \
-      if (e <= 0 && e >= f) return true;                      \
-    }                                                 \
+bool EdgeTriTest(XMFLOAT3 V0, XMFLOAT3 V1, XMFLOAT3 U0, XMFLOAT3 U1, XMFLOAT3 U2, int Case0, int Case1)
+{
+    bool Result = false;
+    float Axy[2];
+    switch (Case0)
+    {
+        case 0:
+            {
+                Axy[0] = V1.x - V0.x;
+                break;
+            }
+        case 1:
+            {
+                Axy[0] = V1.y - V0.y;
+                break;
+            }
+        case 2:
+            {
+                Axy[0] = V1.z - V0.z;
+                break;
+            }
+    }
+    switch (Case1)
+    {
+        case 0:
+            {
+                Axy[1] = V1.x - V0.x;
+                break;
+            }
+        case 1:
+            {
+                Axy[1] = V1.y - V0.y;
+                break;
+            }
+        case 2:
+            {
+                Axy[1] = V1.z - V0.z;
+                break;
+            }
+    }
+
+    Result = EdgeEdgeTest(Axy, V0, U0, U1, Case0, Case1);
+    Result = Result ? true : EdgeEdgeTest(Axy, V0, U1, U2, Case0, Case1);
+    Result = Result ? true : EdgeEdgeTest(Axy, V0, U2, U0, Case0, Case1);
+
+
+    return Result;
 }
-
-#define EDGE_AGAINST_TRI_EDGES(V0,V1,U0,U1,U2) \
-{                                              \
-  float Ax, Ay, Bx, By, Cx, Cy, e, d, f;               \
-  Ax = V1[i0] - V0[i0];                            \
-  Ay = V1[i1] - V0[i1];                            \
-  /* test edge U0,U1 against V0,V1 */          \
-  EDGE_EDGE_TEST(V0, U0, U1);                    \
-  /* test edge U1,U2 against V0,V1 */          \
-  EDGE_EDGE_TEST(V0, U1, U2);                    \
-  /* test edge U2,U1 against V0,V1 */          \
-  EDGE_EDGE_TEST(V0, U2, U0);                    \
-}
-
-
 
 float fDistance(XMFLOAT3 pos1, XMFLOAT3 pos2)
 {
@@ -204,11 +280,74 @@ float XMVector3Dot(XMFLOAT3 a, XMFLOAT3 b)
     return result;
 }
 
-bool CoplanTriTri(XMFLOAT3 XN, float V0[3], float V1[3], float V2[3],
-                     float U0[3], float U1[3], float U2[3])
+
+
+float Xyzret(XMFLOAT3 V, int Case)
 {
+    switch (Case)
+    {
+        case 0:
+            {
+                return V.x;
+            }
+        case 1:
+            {
+                return V.y;
+            }
+        case 2:
+            {
+                return V.z;
+            }
+    }
+}
+
+bool PointInTri(XMFLOAT3 V0, XMFLOAT3 U0, XMFLOAT3 U1, XMFLOAT3 U2, int Case0, int Case1)
+{
+
+                                              
+      float a, b, c, d0, d1, d2;
+    /* is T1 completly inside T2? */
+    /* check if V0 is inside tri(U0,U1,U2) */
+
+    float U00, U01, U10, U11, U20, U21, V1, V2;
+    
+    U00 = Xyzret(U0, Case0);
+    U01 = Xyzret(U0, Case1);
+    U10 = Xyzret(U1, Case0);
+    U11 = Xyzret(U1, Case1);
+    U20 = Xyzret(U2, Case0);
+    U21 = Xyzret(U2, Case1);
+    V1 = Xyzret(V0, Case0);
+    V2 = Xyzret(V0, Case1);
+
+
+        a = U11 - U01;                          
+      b = -(U10 - U00);                       
+      c = -a * U00 - b * U01;                     
+      d0 = a * V1 + b * V2 + c;                   
+                                                
+      a = U21 - U11;                          
+      b = -(U20 - U10);                       
+      c = -a * U10 - b * U11;                     
+      d1 = a * V1 + b * V2 + c;                   
+                                                
+      a = U01 - U21;                          
+      b = -(U00 - U20);                       
+      c = -a * U20 - b * U21;                     
+      d2 = a * V1 + b * V2 + c;                   
+      if (d0 * d1 > 0.0)                             
+      {                                         
+        if (d0 * d2 > 0.0) return true;                 
+      }                                         
+
+}
+
+bool CoplanCheck(XMFLOAT3 XN, XMFLOAT3 V0, XMFLOAT3 V1, XMFLOAT3 V2,
+                     XMFLOAT3 U0, XMFLOAT3 U1, XMFLOAT3 U2)
+{
+    bool Result = false;
     float A[3];
-    short i0, i1;
+    int i0, i1;
     A[0] = fabs(XN.x);
     A[1] = fabs(XN.y);
     A[2] = fabs(XN.z);
@@ -239,54 +378,74 @@ bool CoplanTriTri(XMFLOAT3 XN, float V0[3], float V1[3], float V2[3],
         }
     }
 
-    EDGE_AGAINST_TRI_EDGES(V0, V1, U0, U1, U2);
-    EDGE_AGAINST_TRI_EDGES(V1, V2, U0, U1, U2);
-    EDGE_AGAINST_TRI_EDGES(V2, V0, U0, U1, U2);
+    Result = EdgeTriTest(V0, V1, U0, U1, U2, i0, i1);
+    Result = Result ? true : EdgeTriTest(V1, V2, U0, U1, U2, i0, i1);
+    Result = Result ? true : EdgeTriTest(V2, V0, U0, U1, U2, i0, i1);
 
-    POINT_IN_TRI(V0, U0, U1, U2);
-    POINT_IN_TRI(U0, V0, V1, V2);
+    Result = Result ? true : PointInTri(V0, U0, U1, U2, i0, i1);
+    Result = Result ? true : PointInTri(U0, V0, V1, V2, i0, i1);
 
-    return false;
+    return Result;
 }
 
 
-#define NEWCOMPUTE_INTERVALS(VV0,VV1,VV2,D0,D1,D2,D0D1,D0D2,A,B,C,X0,X1) \
-{ \
-        if (D0D1 > 0.0f) \
-        { \
-                /* here we know that D0D2<=0.0 */ \
-            /* that is D0, D1 are on the same side, D2 on the other or on the plane */ \
-                A = VV2; B = (VV0 - VV2) * D2; C = (VV1 - VV2) * D2; X0 = D2 - D0; X1 = D2 - D1; \
-        } \
-        else if (D0D2 > 0.0f)\
-        { \
-                /* here we know that d0d1<=0.0 */ \
-            A = VV1; B = (VV0 - VV1) * D1; C = (VV2 - VV1) * D1; X0 = D1 - D0; X1 = D1 - D2; \
-        } \
-        else if (D1 * D2 > 0.0f || D0 != 0.0f) \
-        { \
-                /* here we know that d0d1<=0.0 or that D0!=0.0 */ \
-                A = VV0; B = (VV1 - VV0) * D0; C = (VV2 - VV0) * D0; X0 = D0 - D1; X1 = D0 - D2; \
-        } \
-        else if (D1 != 0.0f) \
-        { \
-                A = VV1; B = (VV0 - VV1) * D1; C = (VV2 - VV1) * D1; X0 = D1 - D0; X1 = D1 - D2; \
-        } \
-        else if (D2 != 0.0f) \
-        { \
-                A = VV2; B = (VV0 - VV2) * D2; C = (VV1 - VV2) * D2; X0 = D2 - D0; X1 = D2 - D1; \
-        } \
-        else \
-        { \
-                /* triangles are coplanar */ \
-                return CoplanTriTri(NPlane1, V0, V1, V2, U0, U1, U2); \
-        } \
-}
-
-
-XMFLOAT3 CollDir(MODEL Tri1, MODEL Tri2, XMFLOAT3 Bone1, XMFLOAT3 Bone2)
+CINTERVAL ComputeInterval(float VV0, float VV1, float VV2, float Dist0, float Dist1, float Dist2)
 {
+    CINTERVAL Result;
+    Result.CoPlan = false;
+
+    float D0D1 = Dist0 * Dist1;
+    float D0D2 = Dist0 * Dist2;
+    float A, B, C, X0, X1 = 0;
+
+        if (D0D1 > 0.0f) 
+        { 
+                /* here we know that D0D2<=0.0 */ 
+            /* that is D0, D1 are on the same side, D2 on the other or on the plane */ 
+                A = VV2; B = (VV0 - VV2) * Dist2; C = (VV1 - VV2) * Dist2; X0 = Dist2 - Dist0; X1 = Dist2 - Dist1; 
+        } 
+        else if (D0D2 > 0.0f)
+        { 
+                /* here we know that d0d1<=0.0 */ 
+            A = VV1; B = (VV0 - VV1) * Dist1; C = (VV2 - VV1) * Dist1; X0 = Dist1 - Dist0; X1 = Dist1 - Dist2; 
+        } 
+        else if (Dist1 * Dist2 > 0.0f || Dist0 != 0.0f) 
+        { 
+                /* here we know that d0d1<=0.0 or that D0!=0.0 */ 
+                A = VV0; B = (VV1 - VV0) * Dist0; C = (VV2 - VV0) * Dist0; X0 = Dist0 - Dist1; X1 = Dist0 - Dist2; 
+        } 
+        else if (Dist1 != 0.0f) 
+        { 
+                A = VV1; B = (VV0 - VV1) * Dist1; C = (VV2 - VV1) * Dist1; X0 = Dist1 - Dist0; X1 = Dist1 - Dist2; 
+        } 
+        else if (Dist2 != 0.0f) 
+        { 
+                A = VV2; B = (VV0 - VV2) * Dist2; C = (VV1 - VV2) * Dist2; X0 = Dist2 - Dist0; X1 = Dist2 - Dist1; 
+        } 
+        else 
+        {
+        /* triangles are coplanar */
+        Result.CoPlan = true;
+        }
+
+    Result.V0 = A;
+    Result.V1 = B;
+    Result.V2 = C;
+    Result.X0 = X0;
+    Result.X1 = X1;
+
+    return Result;
+}
+
+CLOSEFORM TooClose(MODEL Tri1, MODEL Tri2, XMFLOAT3 Bone1, XMFLOAT3 TBone, XMFLOAT3 TPos)
+{
+    CLOSEFORM Result;
+    Result.coll = true;
+
     XMFLOAT3 Zero = {0,0,0};
+
+    XMFLOAT3 Bone2 = AddXMFLOAT3(TBone, TPos);
+    float bdist = fDistance(Bone1, Bone2);
 
     XMFLOAT3 WAPoint = Tri1.vects[2].position;
     XMFLOAT3 WBPoint = Tri1.vects[1].position;
@@ -294,205 +453,167 @@ XMFLOAT3 CollDir(MODEL Tri1, MODEL Tri2, XMFLOAT3 Bone1, XMFLOAT3 Bone2)
     XMFLOAT3 TAPoint = Tri2.vects[2].position;
     XMFLOAT3 TBPoint = Tri2.vects[1].position;
     XMFLOAT3 TCPoint = Tri2.vects[0].position;
+    TAPoint = AddXMFLOAT3(TAPoint, TPos);
+    TBPoint = AddXMFLOAT3(TBPoint, TPos);
+    TCPoint = AddXMFLOAT3(TCPoint, TPos);
+
+
     int TIndex = 0;
-    XMFLOAT3 TDir[3];
-    float TDistance[3];
+    int TIndex1 = 1;
+    int TIndex2 = 2;
+
     int WIndex = 0;
+    int WIndex1 = 1;
+    int WIndex2 = 2;
+
+
+    XMFLOAT3 TDir[3];
     XMFLOAT3 WDir[3];
+
+    float TDistance[3];
     float WDistance[3];
 
-    XMFLOAT3 WAVect = SubXMFLOAT3(WBPoint, WAPoint);
-    XMFLOAT3 WBVect = SubXMFLOAT3(WCPoint, WAPoint);
-    XMFLOAT3 WABVect = XMVector3Cross(WAVect, WBVect);
-
-    XMFLOAT3 WNorm = MulXMFLOAT3(WABVect, 1/XMVector3Dot(WABVect, WABVect));
-    XMFLOAT3 WUNorm = MulXMFLOAT3(WNorm, 1/fDistance(Zero, WNorm));
-
-    XMFLOAT3 TAVect = SubXMFLOAT3(TBPoint, TAPoint);
-    XMFLOAT3 TBVect = SubXMFLOAT3(TCPoint, TAPoint);
-    XMFLOAT3 TABVect = XMVector3Cross(TAVect, TBVect);
-
-    XMFLOAT3 TNorm = MulXMFLOAT3(TABVect, 1 / XMVector3Dot(TABVect, TABVect));
-    XMFLOAT3 TUNorm = MulXMFLOAT3(TNorm, 1 / fDistance(Zero, TNorm));
 
 
-    TDir[0] = SubXMFLOAT3(TCPoint, WAPoint);
-    TDir[1] = SubXMFLOAT3(TBPoint, WAPoint);
-    TDir[2] = SubXMFLOAT3(TAPoint, WAPoint);
-    TDistance[0] = XMVector3Dot(WUNorm, TDir[0]);
-    TDistance[1] = XMVector3Dot(WUNorm, TDir[1]);
-    TDistance[2] = XMVector3Dot(WUNorm, TDir[2]);
+    XMFLOAT3 WNorm = XMVector3Cross(SubXMFLOAT3(WBPoint, WAPoint), SubXMFLOAT3(WCPoint, WAPoint));
+    XMFLOAT3 TNorm;
+    XMFLOAT3 ISectLineDir;
+    int iSectdex = 0;
 
-    WDir[0] = SubXMFLOAT3(WCPoint, TAPoint);
-    WDir[1] = SubXMFLOAT3(WBPoint, TAPoint);
-    WDir[2] = SubXMFLOAT3(WAPoint, TAPoint);
-    WDistance[0] = XMVector3Dot(TUNorm, WDir[0]);
-    WDistance[1] = XMVector3Dot(TUNorm, WDir[1]);
-    WDistance[2] = XMVector3Dot(TUNorm, WDir[2]);
 
-    if (TDistance[1] < TDistance[0])
+    XMFLOAT3 WAverage = MulXMFLOAT3(AddXMFLOAT3(AddXMFLOAT3(WAPoint, WBPoint), WCPoint), 1.0/3.0);
+
+
+    //Check all sides then set collision apropriately. Check if inside other object
+    float WScalar = -XMVector3Dot(WNorm, WAverage);
+
+    TDistance[0] = (XMVector3Dot(WNorm, TAPoint)) + WScalar;
+    TDistance[1] = (XMVector3Dot(WNorm, TBPoint)) + WScalar;
+    TDistance[2] = (XMVector3Dot(WNorm, TCPoint)) + WScalar;
+
+
+    if (TDistance[0] * TDistance[1] > 0 && TDistance[0] * TDistance[2] > 0)
     {
-        TIndex = 1;
-        if (TDistance[2] < TDistance[1])
+        Result.coll = false;
+    }
+
+    //If T Tri is all on one side or not; false if it is, true if not
+    if (Result.coll)
+    {
+        TNorm = XMVector3Cross(SubXMFLOAT3(TBPoint, TAPoint), SubXMFLOAT3(TCPoint, TAPoint));
+        XMFLOAT3 TAverage = MulXMFLOAT3(AddXMFLOAT3(AddXMFLOAT3(TAPoint, TBPoint), TCPoint), 1.0 / 3.0);
+
+        float TScalar = -XMVector3Dot(TNorm, TAverage);
+
+        ISectLineDir = XMVector3Cross(WNorm, TNorm);
+
+
+        float ISect0 = fabs(ISectLineDir.x);
+        if (fabs(ISectLineDir.y) > ISect0) ISect0 = fabs(ISectLineDir.y), iSectdex = 1;
+        if (fabs(ISectLineDir.z) > ISect0) ISect0 = fabs(ISectLineDir.z), iSectdex = 2;
+
+        WDistance[0] = (XMVector3Dot(TNorm, WAPoint)) + TScalar;
+        WDistance[1] = (XMVector3Dot(TNorm, WBPoint)) + TScalar;
+        WDistance[2] = (XMVector3Dot(TNorm, WCPoint)) + TScalar;
+
+        if (WDistance[0] * WDistance[1] > 0 && WDistance[0] * WDistance[2] > 0)
         {
-            TIndex = 2;
+            Result.coll = false;
         }
-    } else if (TDistance[2] < TDistance[0])
-    {
-        TIndex = 2;
-    }
 
-    if (WDistance[1] < WDistance[0])
-    {
-        WIndex = 1;
-        if (WDistance[2] < WDistance[1])
+        CINTERVAL cval0;
+        CINTERVAL cval1;
+        switch (iSectdex)
         {
-            WIndex = 2;
+            case 0:
+                {
+                    cval0 = ComputeInterval(WAPoint.x, WBPoint.x, WCPoint.x, WDistance[0], WDistance[1], WDistance[2]);
+                    cval1 = ComputeInterval(TAPoint.x, TBPoint.x, TCPoint.x, TDistance[0], TDistance[1], TDistance[2]);
+                    break;
+                }
+            case 1:
+                {
+                    cval0 = ComputeInterval(WAPoint.y, WBPoint.y, WCPoint.y, WDistance[0], WDistance[1], WDistance[2]);
+                    cval1 = ComputeInterval(TAPoint.y, TBPoint.y, TCPoint.y, TDistance[0], TDistance[1], TDistance[2]);
+                    break;
+                }
+            case 2:
+                {
+                    cval0 = ComputeInterval(WAPoint.z, WBPoint.z, WCPoint.z, WDistance[0], WDistance[1], WDistance[2]);
+                    cval1 = ComputeInterval(TAPoint.z, TBPoint.z, TCPoint.z, TDistance[0], TDistance[1], TDistance[2]);
+                    break;
+                }
         }
+
+
+        if (cval0.CoPlan)
+        {
+            Result.coll = CoplanCheck(WNorm, WAPoint, WBPoint, WCPoint, TAPoint, TBPoint, TCPoint);
+        }
+        else
+        {
+            float xx = cval0.X0 * cval0.X1;
+            float yy = cval1.X0 * cval1.X1;
+            float xxyy = xx * yy;
+
+
+            float tmp = cval0.V0 * xxyy;
+            float i = tmp + cval0.V1 * cval0.X1 * yy;
+            float i1 = tmp + cval0.V2 * cval0.X0 * yy;
+
+            tmp = cval1.V0 * xxyy;
+            float u = tmp + cval1.V1 * xx * cval1.X1;
+            float u1 = tmp + cval1.V2 * xx * cval1.X0;
+
+
+            float test0[2];
+            float test1[2];
+
+            test0[0] = i;
+            test0[1] = i1;
+            test1[0] = u;
+            test1[1] = u1;
+
+            SORT(test0[0], test0[1]);
+            SORT(test1[0], test1[1]);
+            if (test0[1] < test1[0] || test1[1] < test0[0]) Result.coll = false;
+
+            Result.norm[0] = MulXMFLOAT3(WNorm, 1 / fDistance(WNorm, Zero));
+            Result.norm[1] = MulXMFLOAT3(TNorm, 1 / fDistance(TNorm, Zero));
+        }
+
+
     }
-    else if (WDistance[2] < WDistance[0])
+    else
     {
-        WIndex = 2;
-    }
+        if (TDistance[0] < 0)
+        {
+            TNorm = XMVector3Cross(SubXMFLOAT3(TBPoint, TAPoint), SubXMFLOAT3(TCPoint, TAPoint));
+            XMFLOAT3 TAverage = MulXMFLOAT3(AddXMFLOAT3(AddXMFLOAT3(TAPoint, TBPoint), TCPoint), 1.0 / 3.0);
 
-    XMFLOAT3 TPoint = Tri2.vects[TIndex].position;
-    XMFLOAT3 NewWPoint = AddXMFLOAT3(WAPoint, MulXMFLOAT3(WUNorm, TDistance[TIndex]));
-    XMFLOAT3 NewWDir = fDirection(NewWPoint, TPoint);
-    XMFLOAT3 TNewPoint = AddXMFLOAT3(WAPoint, MulXMFLOAT3(NewWDir, fDistance(NewWPoint, TPoint)));
+            float TScalar = -XMVector3Dot(TNorm, TAverage);
 
-    XMFLOAT3 WPoint = Tri1.vects[WIndex].position;
-    XMFLOAT3 NewTPoint = AddXMFLOAT3(TAPoint, MulXMFLOAT3(TUNorm, WDistance[WIndex]));
-    XMFLOAT3 NewTDir = fDirection(NewTPoint, WPoint);
-    XMFLOAT3 WNewPoint = AddXMFLOAT3(TAPoint, MulXMFLOAT3(NewTDir, fDistance(NewTPoint, WPoint)));
+            WDistance[0] = (XMVector3Dot(TNorm, WAPoint)) + TScalar;
+            WDistance[1] = (XMVector3Dot(TNorm, WBPoint)) + TScalar;
+            WDistance[2] = (XMVector3Dot(TNorm, WCPoint)) + TScalar;
 
+            if (WDistance[0] * WDistance[1] > 0 && WDistance[0] * WDistance[2] > 0 && WDistance[0] < 0)
+            {
 
-    return (MulXMFLOAT3(WUNorm, TDistance[TIndex]));
-}
+                //Check distance from bone that objects are colliding
+                //Result.coll = true;
+                Result.norm[0] = MulXMFLOAT3(WNorm, 1 /fDistance(WNorm, Zero));
+                Result.norm[1] = MulXMFLOAT3(TNorm, 1/fDistance(TNorm, Zero));
+            }
 
-bool Intersects(MODEL Tri1, MODEL Tri2)
-{
-    float xx, yy, xxyy, tmp;
-    float isect1[2], isect2[2];
-    float a, b, c, x0, x1;
-    float d, e, f, y0, y1;
-    XMFLOAT3 ZeroVert = { 0, 0, 0 };
-    XMFLOAT3 BVert0 = Tri2.vects[0].position;
-    XMFLOAT3 BVert1 = Tri2.vects[1].position;
-    XMFLOAT3 BVert2 = Tri2.vects[2].position;
-    XMFLOAT3 AVert0 = Tri1.vects[0].position;
-    XMFLOAT3 AVert1 = Tri1.vects[1].position;
-    XMFLOAT3 AVert2 = Tri1.vects[2].position;
+        }
 
-
-
-    XMFLOAT3 NPlane1 = XMVector3Cross(SubXMFLOAT3(AVert1, AVert0), SubXMFLOAT3(AVert2, AVert0));
-    float ADist = -XMVector3Dot(NPlane1, AVert0);
-
-    float BDist0 = XMVector3Dot(NPlane1, BVert0) + ADist;
-    float BDist1 = XMVector3Dot(NPlane1, BVert1) + ADist;
-    float BDist2 = XMVector3Dot(NPlane1, BVert2) + ADist;
-
-
-    float B0xB1 = BDist0 * BDist1;
-    float B0xB2 = BDist0 * BDist2;
-    if (B0xB1 > 0.0 && B0xB2 > 0.0)
-    {
-        return false;
-    }
-
-    XMFLOAT3 NPlane2 = XMVector3Cross(SubXMFLOAT3(BVert1, BVert0), SubXMFLOAT3(BVert2, BVert0));
-    float BDist = -XMVector3Dot(NPlane2, BVert0);
-
-    float ADist0 = XMVector3Dot(NPlane2, AVert0) + BDist;
-    float ADist1 = XMVector3Dot(NPlane2, AVert1) + BDist;
-    float ADist2 = XMVector3Dot(NPlane2, AVert2) + BDist;
-
-
-    float A0xA1 = ADist0 * ADist1;
-    float A0xA2 = ADist0 * ADist2;
-    if (A0xA1 > 0.0 && A0xA2 > 0.0)
-    {
-        return false;
     }
 
 
-    XMFLOAT3 IntersectLineDir = XMVector3Cross(NPlane1, NPlane2);
+    Result.dist = 0.1;
 
-
-    int index = 0;
-    float max = fabs(IntersectLineDir.x);
-    float bb = fabs(IntersectLineDir.y);
-    float cc = fabs(IntersectLineDir.z);
-    if (bb > max) max = bb, index = 1;
-    if (cc > max) max = cc, index = 2;
-
-    float V0[3];
-    float V1[3];
-    float V2[3];
-    float U0[3];
-    float U1[3];
-    float U2[3];
-
-    V0[0] = AVert0.x;
-    V0[1] = AVert0.y;
-    V0[2] = AVert0.z;
-    V1[0] = AVert1.x;
-    V1[1] = AVert1.y;
-    V1[2] = AVert1.z;
-    V2[0] = AVert2.x;
-    V2[1] = AVert2.y;
-    V2[2] = AVert2.z;
-    U0[0] = BVert0.x;
-    U0[1] = BVert0.y;
-    U0[2] = BVert0.z;
-    U1[0] = BVert1.x;
-    U1[1] = BVert1.y;
-    U1[2] = BVert1.z;
-    U2[0] = BVert2.x;
-    U2[1] = BVert2.y;
-    U2[2] = BVert2.z;
-
-
-    float vp0 = 0.0;
-    float vp1 = 0.0;
-    float vp2 = 0.0;
-
-    float up0 = 0.0;
-    float up1 = 0.0;
-    float up2 = 0.0;
-
-    vp0 = V0[index];
-    vp1 = V1[index];
-    vp2 = V2[index];
-
-    up0 = U0[index];
-    up1 = U1[index];
-    up2 = U2[index];
-
-    NEWCOMPUTE_INTERVALS(vp0, vp1, vp2, ADist0, ADist1, ADist2, A0xA1, A0xA2, a, b, c, x0, x1);
-
-    NEWCOMPUTE_INTERVALS(up0, up1, up2, BDist0, BDist1, BDist2, B0xB1, B0xB2, d, e, f, y0, y1);
-
-
-    xx = x0 * x1;
-    yy = y0 * y1;
-    xxyy = xx * yy;
-
-
-    tmp = a * xxyy;
-    isect1[0] = tmp + b * x1 * yy;
-    isect1[1] = tmp + c * x0 * yy;
-
-    tmp = d * xxyy;
-    isect2[0] = tmp + e * xx * y1;
-    isect2[1] = tmp + f * xx * y0;
-
-    SORT(isect1[0], isect1[1]);
-    SORT(isect2[0], isect2[1]);
-
-    if (isect1[1] < isect2[0] || isect2[1] < isect1[0]) return false;
-
-    return true;
+    return Result;
 }
 
 
@@ -507,28 +628,36 @@ if (!retdat[sd].coll)
         int WOffset = COffset[sd].Offset[0];
         int TOffset = COffset[sd].Offset[1];
 
-        XMFLOAT3 WPos = WData[sd].Position[0];
         XMFLOAT3 TPos = WData[sd].Position[1];
 
 
         MODEL Work = WModel[WCollIndex[WorkIndices[Wind + WOffset]]];
-        Work.vects[0].position = AddXMFLOAT3(Work.vects[0].position, WPos);
-        Work.vects[1].position = AddXMFLOAT3(Work.vects[1].position, WPos);
-        Work.vects[2].position = AddXMFLOAT3(Work.vects[2].position, WPos);
+
 
         MODEL TWork = TModel[TCollIndex[WorkIndices[Tind + TOffset]]];
-        TWork.vects[0].position = AddXMFLOAT3(TWork.vects[0].position, TPos);
-        TWork.vects[1].position = AddXMFLOAT3(TWork.vects[1].position, TPos);
-        TWork.vects[2].position = AddXMFLOAT3(TWork.vects[2].position, TPos);
 
-    if (Intersects(Work, TWork))
+
+    CLOSEFORM Result = TooClose(Work, TWork, WBposition[WData[sd].bIndex[0]], TBposition[WData[sd].bIndex[1]], TPos);
+
+    if (Result.coll)
     {
         retdat[sd].coll = true;
+        XMFLOAT3 temp = Result.norm[0];
+        XMFLOAT3 temp2 = Result.norm[1];
 
-        XMFLOAT3 temp = CollDir(Work, TWork, WBposition[WData[sd].bIndex[0]], TBposition[WData[sd].bIndex[1]]);
-        retdat[sd].dir.x = temp.x;
-        retdat[sd].dir.y = temp.y;
-        retdat[sd].dir.z = temp.z;
+        retdat[sd].dir[0].x = temp.x;
+        retdat[sd].dir[0].y = temp.y;
+        retdat[sd].dir[0].z = temp.z;
+        retdat[sd].dir[1].x = temp2.x;
+        retdat[sd].dir[1].y = temp2.y;
+        retdat[sd].dir[1].z = temp2.z;
+
+        retdat[sd].index1[0] = WData[sd].bIndex[0];
+        retdat[sd].index1[1] = WData[sd].bIndex[1];
+        retdat[sd].dist[0] = Result.dist;
+        retdat[sd].dist[1] = Result.dist;
+
+
     }
 
 

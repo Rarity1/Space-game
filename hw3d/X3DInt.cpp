@@ -275,18 +275,7 @@ void ReadX3D::cvertexData()
 		b.smallsphere = b.sphere;
 	}
 
-	for (auto& b : bdata) {
-		float dist = 0;
-		float fdist = 0;
-		float ldist = 0;
-		for (auto& i : b.Indices) {
-			fdist = fDistance(&b.sphere.Center, &vdata[i].position);
-			dist = fdist > dist ? fdist : dist;
-			ldist = (fdist < ldist) || (ldist == 0) ? fdist : ldist;
-		}
-		b.sphere.Radius =  dist;
-		b.smallsphere.Radius = ldist;
-	}
+	
 
 	cdata.resize(std::size(idata)/3);
 
@@ -307,6 +296,30 @@ void ReadX3D::cvertexData()
 		WeightCIndex[cdata[i].index[1]] = i;
 		WeightCIndex[cdata[i].index[2]] = i;
 	}
+
+	for (auto& b : bdata) {
+		float dist = 0;
+		float fdist = 0;
+		float ldist = 0;
+		float tdist = 0;
+		for (auto& i : b.Indices) {
+			fdist = fDistance(&b.sphere.Center, &vdata[i].position);
+			dist = fdist > dist ? fdist : dist;
+
+			DirectX::XMFLOAT3 zero = vdata[cdata[WeightCIndex[i]].index[0]].position;
+			DirectX::XMFLOAT3 one = vdata[cdata[WeightCIndex[i]].index[1]].position;
+			DirectX::XMFLOAT3 two = vdata[cdata[WeightCIndex[i]].index[2]].position;
+
+			DirectX::XMFLOAT3 face = {(zero.x + one.x + two.x)/3,(zero.y + one.y + two.y) / 3 ,(zero.z + one.z + two.z) / 3 };
+
+			tdist = fDistance(&b.sphere.Center, &face);
+
+			ldist = (tdist < ldist) || (ldist == 0) ? tdist : ldist;
+		}
+		b.sphere.Radius = dist;
+		b.smallsphere.Radius = ldist;
+	}
+
 	Sphere.Radius = collradius;
 	Sphere.Center = { 0,0,0 };
 
