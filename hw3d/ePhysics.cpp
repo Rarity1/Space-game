@@ -48,6 +48,8 @@ void Physics::Update() {
     if (!Retracker.load()) {
         for (auto& mUpdate : trackedModels) {
             cGravity(mUpdate);
+
+            //Always modify veldir before speccoll. Always run speccoll before mMove
             pSpecCollison(mUpdate);
             mMove(mUpdate);
         }
@@ -106,7 +108,7 @@ void Physics::cGravity(eResource* obj) {
         change.z = (obj->mworld->mPos.position.z - obj->mPos.position.z);
 
 
-        XMStoreFloat4(&change, XMQuaternionNormalize(XMLoadFloat4(&change)));
+        XMStoreFloat4(&change, XMVector3Normalize(XMLoadFloat4(&change)));
         obj->grav = change;
 
 
@@ -114,19 +116,26 @@ void Physics::cGravity(eResource* obj) {
     }
 }
 XMFLOAT4 Physics::fDirection(XMFLOAT3* pos1, XMFLOAT3* pos2) {
-    auto x = (pos2->x - pos1->x);
-    auto y = (pos2->y - pos1->y);
-    auto z = (pos2->z - pos1->z);
-    auto mag = fDistance(pos1, pos2);
-    return {(x/mag), (y/mag), (z/mag), 0};
+    XMFLOAT4 Result{ 0,0,0,0 };
+    XMFLOAT3 Dist{ 0,0,0 };
+    float d = 0;
+    XMStoreFloat4(&Result, XMLoadFloat3(pos2) - XMLoadFloat3(pos1));
+    XMStoreFloat3(&Dist, XMVector3Dot(XMLoadFloat4(&Result), XMLoadFloat4(&Result)));
+    d = sqrt(Dist.x);
+    XMStoreFloat4(&Result, XMLoadFloat4(&Result)/d);
+
+    return Result;
 }
 
 
 float Physics::fDistance(XMFLOAT3* pos1, XMFLOAT3* pos2) {
-    auto x = pow((pos2->x - pos1->x), 2);
-    auto y = pow((pos2->y - pos1->y), 2);
-    auto z = pow((pos2->z - pos1->z), 2);
-    return sqrt(x + y + z);
+    XMFLOAT4 Result{ 0,0,0,0 };
+    XMFLOAT3 Dist{ 0,0,0 };
+    float d = 0;
+    XMStoreFloat4(&Result, XMLoadFloat3(pos2) - XMLoadFloat3(pos1));
+    XMStoreFloat3(&Dist, XMVector3Dot(XMLoadFloat4(&Result), XMLoadFloat4(&Result)));
+    d = sqrt(Dist.x);
+    return d;
 }
 int Physics::bIndex(std::vector<int> w, int bInd) {
     int Index = -1;
@@ -225,6 +234,11 @@ void Physics::ProcCollide(Physics::eResource* obj, eResource::tmCollide* tmdist)
         obj->mPos.posMtx.lock();
         auto objpos = obj->mPos.position;
         obj->mPos.posMtx.unlock();
+
+        XMStoreFloat3(&ob2pos, XMLoadFloat3(&ob2pos) + XMLoadFloat4(&obj2->velDir) * obj2->speed);
+        XMStoreFloat3(&objpos, XMLoadFloat3(&objpos) + XMLoadFloat4(&obj->velDir) * obj->speed);
+
+
         auto dir = fDirection(&objpos, &ob2pos);
         auto dist = fDistance(&ob2pos, &objpos);
 
@@ -361,38 +375,29 @@ void Physics::ProcCollide(Physics::eResource* obj, eResource::tmCollide* tmdist)
             XMFLOAT4 move2{ 0,0,0,0 };
             float move1 = 0;
             XMFLOAT4 move3{ 0,0,0,0 };
+            int coutn = 0;
             for (auto& r : retdat) {
                 if (r.coll) {
-                    XMFLOAT4 obbone = { obj->model->uData->bdata[r.index1[0]].sphere.Center.x,obj->model->uData->bdata[r.index1[0]].sphere.Center.y,obj->model->uData->bdata[r.index1[0]].sphere.Center.z, 0};
-                    XMFLOAT4 obbone2 = { obj2->model->uData->bdata[r.index1[1]].sphere.Center.x,obj2->model->uData->bdata[r.index1[1]].sphere.Center.y,obj2->model->uData->bdata[r.index1[1]].sphere.Center.z, 0 };
-                    XMStoreFloat4(&obbone2, XMLoadFloat4(&obbone2)+(XMLoadFloat4(&dir)*dist));
-
-                    XMFLOAT3 temp = { obbone.x, obbone.y, obbone.z};
-                    XMFLOAT3 temp2 = { obbone2.x, obbone2.y, obbone2.z };
-
-                    XMFLOAT4 bonevect = fDirection(&temp, &temp2);
-
-                    XMFLOAT4 Dopt1;
-                    XMStoreFloat4(&Dopt1, XMVector4Dot(XMLoadFloat4(&bonevect), XMLoadFloat4(&r.dir[0])));
-                    XMFLOAT4 Dopt2;
-                    XMStoreFloat4(&Dopt2, XMVector4Dot(XMLoadFloat4(&bonevect), XMLoadFloat4(&r.dir[1])));
-                    XMFLOAT4 Dopt3;
-                    XMStoreFloat4(&Dopt3, XMVector4Dot(XMLoadFloat4(&bonevect), XMLoadFloat4(&dir)));
-
-                    float val = fabs(Dopt1.x * Dopt2.x * Dopt3.x);
-
-                    if (move1 < val) {
-                        move1 = val;
-                        XMStoreFloat4(&move2, (XMLoadFloat4(&r.dir[1]) * -r.dist[1]));
-                        XMStoreFloat4(&move3, (XMLoadFloat4(&r.dir[0]) * -r.dist[0]));
-
-                    }
-
-
+                        move1 += r.dist[0];
+                        auto dp = XMVector3Dot(XMLoadFloat4(&r.dir[1]), XMLoadFloat4(&r.dir[0]));
+                        XMStoreFloat4(&move2, XMLoadFloat4(&r.dir[1]) + (- XMLoadFloat4(&r.dir[0]) * dp));
+                        XMStoreFloat4(&move3, XMLoadFloat4(&r.dir[0]) + (- XMLoadFloat4(&r.dir[1])*dp));
+                        coutn++;
                 }
             }
-            XMStoreFloat4(&obj->pDir, XMLoadFloat4(&obj->pDir) + (XMLoadFloat4(&move2)/2 * -(obj2->mass / totmass)));
-            XMStoreFloat4(&obj2->pDir, XMLoadFloat4(&obj2->pDir) + (XMLoadFloat4(&move3)/2 * -(obj->mass / totmass)));
+            if (coutn != 0) {
+                XMFLOAT3 TempDot{ 0,0,0 };
+
+                obj->pspeed += move1 / coutn * (obj2->mass / totmass);
+                obj2->pspeed += move1 / coutn * (obj->mass / totmass);
+                XMStoreFloat4(&obj->pDir, XMVector3Normalize(XMLoadFloat4(&obj->pDir) + (XMLoadFloat4(&move2) / (coutn * 2))));
+                XMStoreFloat3(&TempDot, XMVector3Dot(XMLoadFloat4(&obj->velDir), XMLoadFloat4(&obj->pDir)));
+                obj2->pspeed += obj->speed * TempDot.x * (obj->mass / totmass);
+                XMStoreFloat4(&obj2->pDir, XMVector3Normalize(XMLoadFloat4(&obj2->pDir) + (XMLoadFloat4(&move3) / (coutn * 2))));
+                XMStoreFloat3(&TempDot, XMVector3Dot(XMLoadFloat4(&obj2->velDir), XMLoadFloat4(&obj2->pDir)));
+                obj->pspeed += obj2->speed * TempDot.x * (obj2->mass / totmass);
+            }
+
         }
 
        
@@ -427,7 +432,32 @@ void Physics::pSpecReset(eResource* obj) {
 void Physics::mMove(Physics::eResource* mUpdate) {
     mUpdate->mPos.posMtx.lock();
     XMFLOAT4 both = { 0,0,0,0 };
-    XMStoreFloat4(&both, (XMLoadFloat4(&mUpdate->velDir) * mUpdate->speed) + (XMLoadFloat4(&mUpdate->grav) * mUpdate->gravpull) + (XMLoadFloat4(&mUpdate->pDir)));
+
+    auto VelDir = XMLoadFloat4(&mUpdate->velDir);
+    auto PDir = XMLoadFloat4(&mUpdate->pDir);
+
+    auto dp = XMVector3Dot(VelDir, PDir);
+    XMFLOAT3 Scalar;
+    XMStoreFloat3(&Scalar, dp);
+    if (mUpdate->speed > 0 && mUpdate->pspeed != 0 && Scalar.x <= 0) {
+        mUpdate->speed = (mUpdate->speed * (1-fabs(Scalar.x)));
+        XMStoreFloat4(&both, XMVector3Normalize(VelDir + PDir)*mUpdate->speed);
+    }
+    else if(mUpdate->speed > 0 && mUpdate->pspeed == 0) {
+        XMStoreFloat4(&both, (VelDir) * (mUpdate->speed));
+    }
+    else if (mUpdate->pspeed > 0) {
+        mUpdate->speed = mUpdate->pspeed;
+        mUpdate->velDir = mUpdate->pDir;
+        XMStoreFloat4(&both, PDir * mUpdate->pspeed);
+    }
+    else if (mUpdate->speed > 0 && mUpdate->pspeed != 0 && Scalar.x >= 0) {
+        mUpdate->speed += mUpdate->pspeed*Scalar.x;
+        XMStoreFloat4(&mUpdate->velDir, XMVector3Normalize(VelDir + PDir));
+        XMStoreFloat4(&both, (VelDir) * (mUpdate->speed) + PDir * mUpdate->pspeed);
+    }
+
+    mUpdate->pspeed = 0;
     mUpdate->pDir = {0,0,0,0};
     mUpdate->mPos.lastposition = mUpdate->mPos.position;
     mUpdate->mPos.position = { mUpdate->mPos.position.x + both.x, mUpdate->mPos.position.y + both.y, mUpdate->mPos.position.z + both.z };

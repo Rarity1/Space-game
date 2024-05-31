@@ -81,132 +81,17 @@ typedef struct CLOSEFORM
 CLOSEFORM;
 
 
-#define SORT(a,b)       \
-if (a > b)    \
-             {          \
-               float c; \
-               c = a;     \
-               a = b;     \
-               b = c;     \
+#define SORT(min,max)        \
+          if (min > max)     \
+                 {           \
+                float temp;  \
+                temp = min;  \
+                min = max;   \
+                max = temp;  \
              }
 
 
-bool EdgeEdgeTest(float Axy[2], XMFLOAT3 V0, XMFLOAT3 U0, XMFLOAT3 U1, int Case0, int Case1)
-{
-    float Bx, By, Cx, Cy, e, d, f;
-    float Ax = Axy[0];
-    float Ay = Axy[1];
-    switch (Case0)
-    {
-        case 0:
-            {
-                Bx = U0.x - U1.x;                                   
-                Cx = V0.x - U0.x;
-                break;
-            }
-        case 1:
-            {
-                Bx = U0.y - U1.y;
-                Cx = V0.y - U0.y;
-                break;
-            }
-        case 2:
-            {
-                Bx = U0.z - U1.z;
-                Cx = V0.z - U0.z;
-                break;
-            }
-    }
 
-    switch (Case1)
-    {
-        case 0:
-            {
-                By = U0.x - U1.x;
-                Cy = V0.x - U0.x;
-                break;
-            }
-        case 1:
-            {
-                By = U0.y - U1.y;
-                Cy = V0.y - U0.y;
-                break;
-            }
-        case 2:
-            {
-                By = U0.z - U1.z;
-                Cy = V0.z - U0.z;
-                break;
-            }
-    }
-
-                             
-    f = Ay * Bx - Ax * By;                                      
-    d = By * Cx - Bx * Cy;                                      
-    if ((f > 0 && d >= 0 && d <= f) || (f < 0 && d <= 0 && d >= f))  
-    {                                                   
-        e = Ax * Cy - Ay * Cx;                                    
-    if (f > 0)                                           
-    {                                                 
-      if (e >= 0 && e <= f) return true;                      
-    }                                                 
-    else                                              
-    {                                                 
-      if (e <= 0 && e >= f) return true;                      
-    }                                                 
-    }
-
-    return false;
-}
-
-bool EdgeTriTest(XMFLOAT3 V0, XMFLOAT3 V1, XMFLOAT3 U0, XMFLOAT3 U1, XMFLOAT3 U2, int Case0, int Case1)
-{
-    bool Result = false;
-    float Axy[2];
-    switch (Case0)
-    {
-        case 0:
-            {
-                Axy[0] = V1.x - V0.x;
-                break;
-            }
-        case 1:
-            {
-                Axy[0] = V1.y - V0.y;
-                break;
-            }
-        case 2:
-            {
-                Axy[0] = V1.z - V0.z;
-                break;
-            }
-    }
-    switch (Case1)
-    {
-        case 0:
-            {
-                Axy[1] = V1.x - V0.x;
-                break;
-            }
-        case 1:
-            {
-                Axy[1] = V1.y - V0.y;
-                break;
-            }
-        case 2:
-            {
-                Axy[1] = V1.z - V0.z;
-                break;
-            }
-    }
-
-    Result = EdgeEdgeTest(Axy, V0, U0, U1, Case0, Case1);
-    Result = Result ? true : EdgeEdgeTest(Axy, V0, U1, U2, Case0, Case1);
-    Result = Result ? true : EdgeEdgeTest(Axy, V0, U2, U0, Case0, Case1);
-
-
-    return Result;
-}
 
 float fDistance(XMFLOAT3 pos1, XMFLOAT3 pos2)
 {
@@ -279,9 +164,6 @@ float XMVector3Dot(XMFLOAT3 a, XMFLOAT3 b)
     result += a.z * b.z;
     return result;
 }
-
-
-
 float Xyzret(XMFLOAT3 V, int Case)
 {
     switch (Case)
@@ -300,6 +182,124 @@ float Xyzret(XMFLOAT3 V, int Case)
             }
     }
 }
+bool EdgeEdgeTest(float Axy[2], XMFLOAT3 V0, XMFLOAT3 U0, XMFLOAT3 U1, int Case0, int Case1)
+{
+    float Bx, By, Cx, Cy, e, d, f;
+    float Ax = Axy[0];
+    float Ay = Axy[1];
+    switch (Case0)
+    {
+        case 0:
+            {
+                Bx = U0.x - U1.x;
+                Cx = V0.x - U0.x;
+                break;
+            }
+        case 1:
+            {
+                Bx = U0.y - U1.y;
+                Cx = V0.y - U0.y;
+                break;
+            }
+        case 2:
+            {
+                Bx = U0.z - U1.z;
+                Cx = V0.z - U0.z;
+                break;
+            }
+    }
+
+    switch (Case1)
+    {
+        case 0:
+            {
+                By = U0.x - U1.x;
+                Cy = V0.x - U0.x;
+                break;
+            }
+        case 1:
+            {
+                By = U0.y - U1.y;
+                Cy = V0.y - U0.y;
+                break;
+            }
+        case 2:
+            {
+                By = U0.z - U1.z;
+                Cy = V0.z - U0.z;
+                break;
+            }
+    }
+
+
+    f = Ay * Bx - Ax * By;
+    d = By * Cx - Bx * Cy;
+    if ((f > 0 && d >= 0 && d <= f) || (f < 0 && d <= 0 && d >= f))
+    {
+        e = Ax * Cy - Ay * Cx;
+        if (f > 0)
+        {
+            if (e >= 0 && e <= f) return true;
+        }
+        else
+        {
+            if (e <= 0 && e >= f) return true;
+        }
+    }
+
+    return false;
+}
+
+bool EdgeTriTest(XMFLOAT3 V0, XMFLOAT3 V1, XMFLOAT3 U0, XMFLOAT3 U1, XMFLOAT3 U2, int Case0, int Case1)
+{
+    bool Result = false;
+    float Axy[2];
+    switch (Case0)
+    {
+        case 0:
+            {
+                Axy[0] = V1.x - V0.x;
+                break;
+            }
+        case 1:
+            {
+                Axy[0] = V1.y - V0.y;
+                break;
+            }
+        case 2:
+            {
+                Axy[0] = V1.z - V0.z;
+                break;
+            }
+    }
+    switch (Case1)
+    {
+        case 0:
+            {
+                Axy[1] = V1.x - V0.x;
+                break;
+            }
+        case 1:
+            {
+                Axy[1] = V1.y - V0.y;
+                break;
+            }
+        case 2:
+            {
+                Axy[1] = V1.z - V0.z;
+                break;
+            }
+    }
+
+    Result = EdgeEdgeTest(Axy, V0, U0, U1, Case0, Case1);
+    Result = Result ? true : EdgeEdgeTest(Axy, V0, U1, U2, Case0, Case1);
+    Result = Result ? true : EdgeEdgeTest(Axy, V0, U2, U0, Case0, Case1);
+
+
+    return Result;
+}
+
+
 
 bool PointInTri(XMFLOAT3 V0, XMFLOAT3 U0, XMFLOAT3 U1, XMFLOAT3 U2, int Case0, int Case1)
 {
@@ -321,7 +321,7 @@ bool PointInTri(XMFLOAT3 V0, XMFLOAT3 U0, XMFLOAT3 U1, XMFLOAT3 U2, int Case0, i
     V2 = Xyzret(V0, Case1);
 
 
-        a = U11 - U01;                          
+      a = U11 - U01;                          
       b = -(U10 - U00);                       
       c = -a * U00 - b * U01;                     
       d0 = a * V1 + b * V2 + c;                   
@@ -437,12 +437,88 @@ CINTERVAL ComputeInterval(float VV0, float VV1, float VV2, float Dist0, float Di
     return Result;
 }
 
+float SwitchLowest(XMFLOAT3 APoint, XMFLOAT3 BPoint, XMFLOAT3 CPoint, XMFLOAT3 BoneDir, XMFLOAT3 Bone,int Case)
+{
+    float BScal = XMVector3Dot(BoneDir, BoneDir);
+
+    float Result = 0;
+
+    switch (Case)
+    {
+        case 0:
+            {
+                Result = XMVector3Dot(SubXMFLOAT3(APoint, Bone), BoneDir) / BScal;
+                break;
+            }
+        case 1:
+            {
+                Result = XMVector3Dot(SubXMFLOAT3(BPoint, Bone), BoneDir) / BScal;
+                break;
+            }
+        case 2:
+            {
+                Result = XMVector3Dot(SubXMFLOAT3(CPoint, Bone), BoneDir) / BScal;
+                break;
+            }
+    }
+
+    return Result;
+}
+
+
+//Why doesnt this workkk
+float CloseDistanceCheck(XMFLOAT3 Bone1, XMFLOAT3 Bone2, float TDistance[3], float WDistance[3], XMFLOAT3 TAPoint, XMFLOAT3 TBPoint, XMFLOAT3 TCPoint, XMFLOAT3 WAPoint, XMFLOAT3 WBPoint, XMFLOAT3 WCPoint)
+{
+    XMFLOAT3 BoneDir = fDirection(Bone1, Bone2);
+    float bDist = fDistance(Bone1, Bone2);
+    XMFLOAT3 iBDir = MulXMFLOAT3(BoneDir, -1);
+
+    int TLowestInd = 0;
+    if (TDistance[1] < TDistance[0])
+    {
+        TLowestInd = 1;
+        if (TDistance[2] < TDistance[1])
+        {
+            TLowestInd = 2;
+        }
+    }
+    else if (TDistance[2] < TDistance[0])
+    {
+        TLowestInd = 2;
+    }
+    float TPointDist = SwitchLowest(iBDir, TAPoint, TBPoint, TCPoint, Bone2,TLowestInd);
+
+    XMFLOAT3 TNewPoint = AddXMFLOAT3( MulXMFLOAT3(iBDir, TPointDist), Bone2);
+
+    int WLowestInd = 0;
+    if (WDistance[1] < WDistance[0])
+    {
+        WLowestInd = 1;
+        if (WDistance[2] < WDistance[1])
+        {
+            WLowestInd = 2;
+        }
+    }
+    else if (WDistance[2] < WDistance[0])
+    {
+        WLowestInd = 2;
+    }
+    float WPointDist = SwitchLowest(BoneDir, WAPoint, WBPoint, WCPoint, Bone1,WLowestInd);
+    XMFLOAT3 WNewPoint = AddXMFLOAT3(MulXMFLOAT3(BoneDir, WPointDist), Bone1);
+
+    return fDistance(WNewPoint, Bone2)+fDistance(TNewPoint, Bone1);
+}
+
 CLOSEFORM TooClose(MODEL Tri1, MODEL Tri2, XMFLOAT3 Bone1, XMFLOAT3 TBone, XMFLOAT3 TPos)
 {
     CLOSEFORM Result;
+    Result.dist = 0;
     Result.coll = true;
 
     XMFLOAT3 Zero = {0,0,0};
+
+    Result.norm[0] = Zero;
+    Result.norm[1] = Zero;
 
     XMFLOAT3 Bone2 = AddXMFLOAT3(TBone, TPos);
     float bdist = fDistance(Bone1, Bone2);
@@ -578,6 +654,43 @@ CLOSEFORM TooClose(MODEL Tri1, MODEL Tri2, XMFLOAT3 Bone1, XMFLOAT3 TBone, XMFLO
             SORT(test1[0], test1[1]);
             if (test0[1] < test1[0] || test1[1] < test0[0]) Result.coll = false;
 
+            int TIndex = 0;
+
+            if (TDistance[0] > TDistance[1])
+            {
+                TIndex = 1;
+                if (TDistance[1]  > TDistance[2] )
+                {
+                    TIndex = 2;
+                }
+            }
+            else
+            {
+                if (TDistance[0]  > TDistance[2] )
+                {
+                    TIndex = 2;
+                }
+            }
+
+            int WIndex = 0;
+
+            if (WDistance[0] > WDistance[1])
+            {
+                WIndex = 1;
+                if (WDistance[1] > WDistance[2])
+                {
+                    WIndex = 2;
+                }
+            }
+            else
+            {
+                if (WDistance[0] > WDistance[2])
+                {
+                    WIndex = 2;
+                }
+            }
+
+            Result.dist = TDistance[TIndex] > WDistance[WIndex] ? -(TDistance[TIndex]) : -(WDistance[WIndex]);
             Result.norm[0] = MulXMFLOAT3(WNorm, 1 / fDistance(WNorm, Zero));
             Result.norm[1] = MulXMFLOAT3(TNorm, 1 / fDistance(TNorm, Zero));
         }
@@ -586,6 +699,8 @@ CLOSEFORM TooClose(MODEL Tri1, MODEL Tri2, XMFLOAT3 Bone1, XMFLOAT3 TBone, XMFLO
     }
     else
     {
+
+        //Figure out why this doesnt work & remove false
         if (TDistance[0] < 0)
         {
             TNorm = XMVector3Cross(SubXMFLOAT3(TBPoint, TAPoint), SubXMFLOAT3(TCPoint, TAPoint));
@@ -601,17 +716,29 @@ CLOSEFORM TooClose(MODEL Tri1, MODEL Tri2, XMFLOAT3 Bone1, XMFLOAT3 TBone, XMFLO
             {
 
                 //Check distance from bone that objects are colliding
-                //Result.coll = true;
-                Result.norm[0] = MulXMFLOAT3(WNorm, 1 /fDistance(WNorm, Zero));
-                Result.norm[1] = MulXMFLOAT3(TNorm, 1/fDistance(TNorm, Zero));
+                if(CoplanCheck(WNorm, WAPoint, WBPoint, WCPoint, TAPoint, TBPoint, TCPoint))
+                {
+                    float dist = CloseDistanceCheck(Bone1, Bone2, TDistance, WDistance, TAPoint, TBPoint, TCPoint, WAPoint, WBPoint, WCPoint);
+                    XMFLOAT3 Bonedir = fDirection(Bone1, Bone2);
+                    float TDiff = XMVector3Dot(fDirection(Zero, TNorm), Bonedir);
+                    float WDiff = -XMVector3Dot(fDirection(Zero, WNorm), Bonedir);
+                    if (TDiff < 0 && WDiff < 0 && dist - fDistance(Bone1, Bone2) < 0)
+                    {
+
+                            Result.coll = true;
+                            Result.dist = fDistance(Bone1, Bone2) - dist;
+                            Result.norm[0] = MulXMFLOAT3(WNorm, 1 / fDistance(WNorm, Zero));
+                            Result.norm[1] = MulXMFLOAT3(TNorm, 1 / fDistance(TNorm, Zero));
+                    }
+                    
+                }
+
             }
 
         }
 
     }
 
-
-    Result.dist = 0.1;
 
     return Result;
 }

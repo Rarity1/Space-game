@@ -32,6 +32,7 @@ public:
 		float gravpull = 0;
 		XMFLOAT4 velDir{0,0,0,0};
 		XMFLOAT4 pDir{0,0,0,0};
+		float pspeed = 0;
 		eResource* mworld = nullptr;
 		bool isWorld = false;
 		RStorage::pChange which = RStorage::INIT;

@@ -57,26 +57,31 @@ void Engine::Update()
 }
 
 
-void Engine::cPlayermodel()
-{
-    auto movespeed = 1.0;
-    Movement move;
-    if (m_keysPressed.w) {
-       move.forward += movespeed * timer.time;
-   }if (m_keysPressed.s) {
-       move.forward -= movespeed * timer.time;
-   }if (m_keysPressed.a) {
-       move.left += movespeed * timer.time;
-   }if (m_keysPressed.d) {
-       move.left -= movespeed * timer.time;
-   }
+ void Engine::cPlayermodel()
+ {
+     auto movespeed = 1.0;
+     Movement move;
+     if (m_keysPressed.w) {
+         move.forward += movespeed * timer.time;
+     }if (m_keysPressed.s) {
+         move.forward -= movespeed * timer.time;
+     }if (m_keysPressed.a) {
+         move.left += movespeed * timer.time;
+     }if (m_keysPressed.d) {
+         move.left -= movespeed * timer.time;
+     }
 
-   
-   plModel->mPos.posMtx.lock();
-   XMStoreFloat4(&plModel->velDir, XMQuaternionNormalize(XMLoadFloat4(&plModel->velDir) + XMLoadFloat4(&pGfx->curCamera.rotation)));
-   plModel->speed = move.forward*10;
-   plModel->mPos.posMtx.unlock();
-}
+     if (move.forward != 0) {
+         plModel->mPos.posMtx.lock();
+         float oldspeed = plModel->speed;
+         XMFLOAT4 scale = { 0,0,0,0 };
+         auto scalar = XMVector3Dot(XMLoadFloat4(&plModel->velDir), XMLoadFloat4(&pGfx->curCamera.rotation) * move.forward);
+         XMStoreFloat4(&scale, scalar);
+         XMStoreFloat4(&plModel->velDir, XMVector3Normalize(XMLoadFloat4(&pGfx->curCamera.rotation) * move.forward) + XMLoadFloat4(&plModel->velDir) *scalar);
+         plModel->speed = fabs((move.forward)*10);
+         plModel->mPos.posMtx.unlock();
+    }
+ }
 
 void Engine::cMPosUpdate(){
     phyx->Update();
