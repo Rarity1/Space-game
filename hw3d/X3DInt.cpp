@@ -178,7 +178,8 @@ void ReadX3D::cvertexData()
 		bdata[i].node = ndata.aChildren[i];
 		bdata[i].node->bIndex = bdata[i].bIndex;
 	}
-	
+	std::vector<Vertex> vdata;
+
 	{
 		std::stringstream ssvertex(positions->value());
 		float x, y, z;
@@ -325,7 +326,6 @@ void ReadX3D::cvertexData()
 
 	fsize.fSize = sizeof(ReadX3D::Vertex) * std::size(vdata);
 	fsize.vCount = std::size(vdata);
-	vdata = {};
 }
 
 void ReadX3D::GetAllChildBones(Node* node, std::vector<Node*>* Parent)

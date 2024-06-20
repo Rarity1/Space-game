@@ -54,8 +54,8 @@ public:
 		DirectX::BoundingSphere sphere;
 		DirectX::BoundingSphere smallsphere;
 	};
-	std::vector<vFaceData> idata;
 	std::vector<pCollision> cdata;
+	std::vector<vFaceData> idata;
 	std::vector<int> WeightCIndex;
 	std::vector<Bone> bdata;
 	Node ndata;
@@ -63,7 +63,6 @@ public:
 	DirectX::BoundingSphere Sphere;
 	Size fsize;
 private:
-	std::vector<Vertex> vdata;
     float fDistance(DirectX::XMFLOAT3* pos1, DirectX::XMFLOAT3* pos2);
 	DirectX::XMFLOAT4X4 strToMatrix(std::istringstream& rawmatri);
 	Node ChildNodeRead(rapidxml::xml_node<char>* node);

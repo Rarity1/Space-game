@@ -9,10 +9,9 @@ public:
 	void Update();
 	Physics::mThreadTime timer;
 	bool engInit = true;
-	std::vector<Physics::eResource*> trackedModels;
-	void DoStuff();
+	std::vector<RStorage::eResource*>& trackedModels;
 private:
-	
+	double culmtime;
 	std::thread EngThread;
 	std::atomic<bool> eRun;
 	struct Movement {
@@ -25,19 +24,19 @@ private:
 	std::unique_ptr<Physics> phyx;
 	double cspin = 0;
 	void UCampos();
-	void SetModelPosition(Physics::eResource* model);
+	void SetModelPosition(RStorage::eResource* model);
 	XMFLOAT3 rWorld(XMFLOAT3 pos1);
 	XMFLOAT3 dWorld(XMFLOAT3 pos1);
 	XMFLOAT3 cnWorld(XMFLOAT3 pos1);
 	void OnKeyDown(unsigned char key);
 	void OnKeyUp(unsigned char key);
-	void cMPosUpdate();
+	void mAniUpdate();
 	void UControls();
 	void cPlayermodel();
 	void RotateCam(float Pitch = 0, float Yaw = 0, float Roll = 0);
 	Graphics* pGfx;
 
-	Physics::eResource* plModel;
+	RStorage::eResource* plModel;
 	XMFLOAT4 cWorld;
 	XMFLOAT4 nWorld;
 	int timetorot;

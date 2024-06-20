@@ -13,19 +13,20 @@ public:
 	Graphics& operator=(const Graphics&) = delete;
 	~Graphics();
 	struct pCamera {
-		XMFLOAT4 position = {0,0,0,0};
+		XMFLOAT3* position = nullptr;
 		XMFLOAT4 rotation = {1,0,0,0};
 		XMFLOAT4 upDirection = { 0,0,1,0 };
 		XMFLOAT4 forwardDirect = { 1,0,0,0 };
 		XMMATRIX cmatrix;
 	};
 	
-	void UpdateModel(RStorage::bmResource* bm);
+	void UpdateModel(RStorage::eResource* bm);
 	void RenderFrame();
 	void LoadResources(int numLoadedSrv);
 	void LoadPipeline();
-	void loadModels(UINT umID, RStorage::bmResource* model, bool init = false);
-	void UpdateLocalTransform(RStorage::bmResource* bm);
+	int loadModels(RStorage::eResource* model, bool unique = false);
+	int loadModels(std::vector<RStorage::eResource*>& model, bool replace = false);
+	void UpdateLocalTransform(RStorage::eResource* bm);
 	pCamera curCamera;
 	std::vector<std::string> loadbuff;
 	//std::vector<RStorage::bmResource*> modelVect;
@@ -50,6 +51,7 @@ private:
 
 	static const bool UseBundles = true;
 	std::vector<FrameResource*> frameResources;
+	std::vector<RStorage::eResource*>* modelVect;
 	struct PipelineStateStream
 	{
 		CD3DX12_PIPELINE_STATE_STREAM_ROOT_SIGNATURE RootSignature;

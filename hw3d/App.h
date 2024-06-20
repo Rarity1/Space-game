@@ -5,6 +5,7 @@
 
 class App {
 public:
+	std::atomic<bool> Alive = true;
 	App();
 	//Master frame/ message loop
 	int Go();

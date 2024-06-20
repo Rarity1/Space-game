@@ -45,17 +45,54 @@ public:
 		DirectX::XMMATRIX cmatrix;
 		std::atomic<bool> animate = false;
 	};
-	std::vector<RStorage::bmResource*> modelVect;
-	void Delete(RStorage::bmResource* bm);
-	RStorage::bmResource* lModel(UINT umID) noexcept;
+
+	struct eResource {
+		//Enum model name
+		std::string name = "";
+		RStorage::bmResource* model = nullptr;
+		float scale = 1;
+		float mass = 1;
+		float friction = 0;
+		struct relposVect {
+			DirectX::XMFLOAT3* position = nullptr;
+			DirectX::XMFLOAT4 rotation = { 0,0,0,0 };
+			DirectX::XMFLOAT3 lastposition = { 0,0,0 };
+			std::mutex posMtx;
+		};
+		relposVect mPos;
+		DirectX::XMFLOAT4 velDir{ 0,0,0,0 };
+		float speed = 0;
+		DirectX::XMFLOAT4 grav{ 0,0,0,0 };
+		float gravpull = 0;
+		DirectX::XMFLOAT4 pDir{ 0,0,0,0 };
+		float pspeed = 0;
+		eResource* mworld = nullptr;
+		RStorage::pChange which = RStorage::INIT;
+		std::mutex currentMtx;
+		cl::Buffer clBuff;
+		cl::Buffer clPositionBuff;
+		cl::Buffer clBoneBuff;
+		cl::Buffer clCollIndBuff;
+		//std::vector<ReadX3D::pCollision*> currentCollision;
+		std::atomic<bool> updated = false;
+		std::atomic<bool> Collision = false;
+	};
+
 	//Always call after read
-	void CreateBuffers(std::vector<bmResource*> bm, Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList, Microsoft::WRL::ComPtr<ID3D12Device> pDevice, Microsoft::WRL::ComPtr<ID3D12CommandAllocator> commandAllocator, Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue,  UINT buffercount);
-	void UpdBuffer(bmResource* bm, Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList, Microsoft::WRL::ComPtr<ID3D12Device> pDevice, Microsoft::WRL::ComPtr<ID3D12CommandAllocator> commandAllocator, Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue);
+	std::vector<RStorage::eResource*> initializedModels;
+	RStorage::bmResource* lModel(UINT umID) noexcept;
+
+ 	RStorage::eResource* initResource(char name, int filebModelIndex = 0, float mScale = 1.0, float mMass = 0.0, float mFriction = 0.01, DirectX::XMFLOAT3 initPos = {0,0,0}, DirectX::XMFLOAT3 initRot = {0,0,0}, DirectX::XMFLOAT3 initVelDir = {0,0,0}, float initSpeed = 0);
+	void CreateBuffers(std::vector<eResource*>& bm, Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList, Microsoft::WRL::ComPtr<ID3D12Device> pDevice, Microsoft::WRL::ComPtr<ID3D12CommandAllocator> commandAllocator, Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue,  UINT buffercount);
+	void UpdBuffer(eResource* bm, Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList, Microsoft::WRL::ComPtr<ID3D12Device> pDevice, Microsoft::WRL::ComPtr<ID3D12CommandAllocator> commandAllocator, Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue);
+
+
 private:
 	ReadX3D* CheckLoaded(int umID);
 	std::vector<ID3D12Resource*> vbufferPtrs;
 	std::vector<unmappedData> Models;
 	std::vector<ReadX3D*> loadedModels;
+	std::vector<RStorage::bmResource*> TrackedPtrs;
 	struct DDS_HEADER {
 		uint32_t dwSize;
 		uint32_t dwFlags;

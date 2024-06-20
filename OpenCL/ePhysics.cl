@@ -781,6 +781,8 @@ if (!retdat[sd].coll)
 
         retdat[sd].index1[0] = WData[sd].bIndex[0];
         retdat[sd].index1[1] = WData[sd].bIndex[1];
+        retdat[sd].index2[0] = WorkIndices[Wind + WOffset];
+        retdat[sd].index2[1] = WorkIndices[Tind + TOffset];
         retdat[sd].dist[0] = Result.dist;
         retdat[sd].dist[1] = Result.dist;
 

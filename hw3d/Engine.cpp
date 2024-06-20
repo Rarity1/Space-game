@@ -3,58 +3,68 @@
 Engine::Engine(Graphics* gfx, Keyboard* kbd):
 	pGfx(gfx),
     cWorld(0,0,0,0),
-    kbd(kbd)
+    kbd(kbd),
+    trackedModels(gfx->lModels->initializedModels)
 {
+    phyx = std::make_unique<Physics>(timer, trackedModels, updaterate);
+    pGfx->LoadPipeline();
 }
 
 
 void Engine::iLoad() {
-    phyx = std::make_unique<Physics>(&timer, trackedModels, &updaterate);
-    phyx->upDist.store(true);
-    pGfx->LoadPipeline();
     pGfx->umodel.lock();
-    
+
+
+
+
     //begin model tracking. load a gd default world mf
-
-    trackedModels.emplace_back(new Physics::eResource{ "cube", pGfx->lModels->lModel(0), 1, 200.0, 0, {{10,0,138}} });
-    trackedModels.emplace_back(new Physics::eResource{ "untitled1", pGfx->lModels->lModel(1), 1, 200.0, 0, {{0,0,138}} });
-
-    
+    pGfx->lModels->initResource((char)"cube", 0, 1, 200.0, 0.01, XMFLOAT3{ 10,0,138 });
+    pGfx->lModels->initResource((char)"untitled1", 1, 1, 200.0, 0.01, XMFLOAT3{ 0,0,138 });
+    pGfx->lModels->initResource((char)"wrld", 2, 1, 8570000000.0 * 200, 0.3, XMFLOAT3{ 0,0,0 });
     //wrld is 1:50000
-    trackedModels.emplace_back(new Physics::eResource{"wrld", pGfx->lModels->lModel(2), 1, 8570000000.0*50000, 0, { {0,0,0} }});
-    //trackedModels[0]->mworld = trackedModels[2];
-    //trackedModels[1]->mworld = trackedModels[2];
-    plModel = trackedModels[1];
-    //end model tracking.
 
+    //stress it out nerd
+    for (auto i = 0; i < 1; i++) {
+        float p = i * 10;
+        pGfx->lModels->initResource((char)"b", 0, 1, 200, 0.3, XMFLOAT3{ 15 + p,0,138 });
+    }
+    trackedModels[0]->mworld = trackedModels[2];
+    trackedModels[1]->mworld = trackedModels[2];
+
+    plModel = trackedModels[1];
+    pGfx->curCamera.position = plModel->mPos.position;
+    
+    //end model tracking.
+    pGfx->loadModels(trackedModels, true);
     pGfx->LoadResources(std::size(trackedModels));
     pGfx->umodel.unlock();
-    
+
     if (engInit) {
         engInit = false;
     }
     eRun.store(true);
+    for (auto& m : trackedModels) {
+        pGfx->UpdateModel(m);
+    }
 }
 
 void Engine::Update()
 {
 
+    UControls();
+    timer.mtx.lock();
+    culmtime += timer.time;
+    timer.mtx.unlock();
 
-
+    if (culmtime >= 1.0f / updaterate) {
+        cPlayermodel();
+        phyx->Update();
+        culmtime = 0;
+    }
+    UCampos();
+    mAniUpdate();
 }
 
- void Engine::DoStuff() {
-         UControls();
-         timer.mtx.lock();
-         if (timer.time >= 1.0f / updaterate) {
-             cPlayermodel();
-             cMPosUpdate();
-             UCampos();
-             timer.time = 0;
-         }
-         timer.mtx.unlock();
-    
-}
 
 
  void Engine::cPlayermodel()
@@ -62,32 +72,48 @@ void Engine::Update()
      auto movespeed = 1.0;
      Movement move;
      if (m_keysPressed.w) {
-         move.forward += movespeed * timer.time;
+         move.forward += movespeed;
      }if (m_keysPressed.s) {
-         move.forward -= movespeed * timer.time;
+         move.forward -= movespeed;
      }if (m_keysPressed.a) {
-         move.left += movespeed * timer.time;
+         move.left += movespeed;
      }if (m_keysPressed.d) {
-         move.left -= movespeed * timer.time;
+         move.left -= movespeed;
      }
 
      if (move.forward != 0) {
-         plModel->mPos.posMtx.lock();
-         float oldspeed = plModel->speed;
+         float oldspeed = plModel->speed <= 0.0001 ? 0 : plModel->speed;
+         float speedchange = move.forward * timer.time;
          XMFLOAT4 scale = { 0,0,0,0 };
-         auto scalar = XMVector3Dot(XMLoadFloat4(&plModel->velDir), XMLoadFloat4(&pGfx->curCamera.rotation) * move.forward);
-         XMStoreFloat4(&scale, scalar);
-         XMStoreFloat4(&plModel->velDir, XMVector3Normalize(XMLoadFloat4(&pGfx->curCamera.rotation) * move.forward) + XMLoadFloat4(&plModel->velDir) *scalar);
-         plModel->speed = fabs((move.forward)*10);
-         plModel->mPos.posMtx.unlock();
+         auto scalar = XMVector3Dot(XMLoadFloat4(&plModel->velDir), XMLoadFloat4(&pGfx->curCamera.rotation) * (fabs(move.forward) / move.forward));
+         DirectX::XMStoreFloat4(&scale, scalar);
+         scale.x = fabs(scale.x);
+         float totalspeed = plModel->speed + fabs(speedchange);
+
+         float speedscal = fabs(speedchange * (scale.x) - speedchange *(1 - scale.x)) / totalspeed;
+         float inspeedscal = fabs(plModel->speed * (scale.x)) / totalspeed;
+         // Figure this out
+         XMFLOAT4 Temporarydir;
+         DirectX::XMStoreFloat4(&Temporarydir, XMVector3Normalize(XMLoadFloat4(&pGfx->curCamera.rotation) * (fabs(move.forward)/move.forward) * fabs(speedscal) + XMLoadFloat4(&plModel->velDir) * inspeedscal));
+
+
+         if (scale.y < 0) {
+             plModel->speed = fabs(plModel->speed - fabs(speedchange));
+         }
+         else {
+             plModel->speed = plModel->speed + fabs(speedchange);
+
+         }
+     
+         plModel->velDir = Temporarydir;
     }
  }
 
-void Engine::cMPosUpdate(){
-    phyx->Update();
+void Engine::mAniUpdate(){
     pGfx->umodel.lock();
     for (auto& m : trackedModels) {
-            pGfx->UpdateModel(m->model);
+        //Update if doing animation
+            //pGfx->UpdateModel(m->model);
     }
     pGfx->umodel.unlock();
 }
@@ -96,12 +122,7 @@ void Engine::cMPosUpdate(){
 
 
 void Engine::UCampos() {
-    //Link the camera position here to whatever you want.
-    plModel->mPos.posMtx.lock();
-    pGfx->curCamera.position = { plModel->mPos.position.x, plModel->mPos.position.y, plModel->mPos.position.z, 0 };
 
-    //pGfx->curCamera.position = { 0,0,168, 0 };
-    plModel->mPos.posMtx.unlock();
 
     float pitch = 0;
     float yaw = 0;
@@ -165,8 +186,8 @@ void Engine::RotateCam(float Pitch, float Yaw, float Roll) {
     }
     
     
-    XMStoreFloat4(&pGfx->curCamera.rotation, lookdirect);
-    XMStoreFloat4(&pGfx->curCamera.upDirection, updirect);
+    DirectX::XMStoreFloat4(&pGfx->curCamera.rotation, lookdirect);
+    DirectX::XMStoreFloat4(&pGfx->curCamera.upDirection, updirect);
 }
 
 
@@ -263,8 +284,8 @@ void Engine::OnKeyUp(unsigned char key)
 }
 
 
-void Engine::SetModelPosition(Physics::eResource* model) {
-    
+void Engine::SetModelPosition(RStorage::eResource* model) {
+
 }
 
 void Engine::UControls() {
@@ -284,4 +305,7 @@ void Engine::UControls() {
 
 Engine::~Engine() {
     eRun.store(false);
+    phyx.reset();
+
+
 }

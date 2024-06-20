@@ -8,8 +8,12 @@ App::App()
 
 int App::Go() {
 	wnd.Eng().iLoad();
-	while (wnd.ProcessMessages() != WM_QUIT) {
-		wnd.Eng().DoStuff();
+	while (Alive.load()) {
+		//Process messages each frame
+		if (wnd.ProcessMessages() == WM_QUIT) {
+			Alive.store(false);
+			return 0;
+		}
 		App::DoFrame();
 	}
 	return 0;
@@ -17,9 +21,10 @@ int App::Go() {
 
 void App::DoFrame() {
 	wnd.Eng().timer.mtx.lock();
-	wnd.Eng().timer.time += timer.Peek()/1000;
+	wnd.Eng().timer.time = timer.Peek()/1000;
 	wnd.Eng().timer.mtx.unlock();
 	timer.Mark();
+	wnd.Eng().Update();
 	wnd.Gfx().RenderFrame();
 
 }

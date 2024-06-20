@@ -95,17 +95,16 @@ void Window::SetTitle(const std::string& title)
 }
 
 std::optional<WPARAM> Window::ProcessMessages() {
-	MSG msg;
+	MSG msg = tagMSG{nullptr, WM_NULL};
 	while (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {
 		//Translate Message will post auxilliary WM_CHAR messages from key msgs
-		if (msg.message == WM_QUIT)
-		{
+		if (msg.message == WM_QUIT) {
 			return msg.message;
 		}
 		TranslateMessage(&msg);
 		DispatchMessage(&msg);
 	}
-	return {};
+	return msg.message;
 }
 
 Graphics& Window::Gfx()
