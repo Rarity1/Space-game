@@ -3,7 +3,6 @@
 ReadX3D::ReadX3D(std::string path) :
 	file(path)
 {
-	cvertexData();
 }
 
 
@@ -371,10 +370,13 @@ ReadX3D::Node ReadX3D::ChildNodeRead(rapidxml::xml_node<char>* node) {
 }
 
 float ReadX3D::fDistance(DirectX::XMFLOAT3* pos1, DirectX::XMFLOAT3* pos2) {
-		auto x = pow((pos2->x - pos1->x), 2);
-		auto y = pow((pos2->y - pos1->y), 2);
-		auto z = pow((pos2->z - pos1->z), 2);
-	return sqrt(x + y + z);
+	DirectX::XMFLOAT4 Result{ 0,0,0,0 };
+	DirectX::XMFLOAT3 Dist{ 0,0,0 };
+	float d = 0;
+	DirectX::XMStoreFloat4(&Result, DirectX::XMVectorSubtract(XMLoadFloat3(pos2), XMLoadFloat3(pos1)));
+	DirectX::XMStoreFloat3(&Dist, DirectX::XMVector3Dot(XMLoadFloat4(&Result), XMLoadFloat4(&Result)));
+	d = sqrt(Dist.x);
+	return d;
 }
 
 DirectX::XMFLOAT4X4 ReadX3D::strToMatrix(std::istringstream& rawmatri) {

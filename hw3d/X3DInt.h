@@ -1,11 +1,11 @@
 #pragma once
 #include "CWin.h"
-#include <DirectXCollision.h>
 
 class ReadX3D{
 public:
 	ReadX3D(std::string path);
 	~ReadX3D();
+	void cvertexData();
 	struct boneweight {
 		std::vector<int> bIndex;
 		std::vector<float> weight;
@@ -66,7 +66,6 @@ private:
     float fDistance(DirectX::XMFLOAT3* pos1, DirectX::XMFLOAT3* pos2);
 	DirectX::XMFLOAT4X4 strToMatrix(std::istringstream& rawmatri);
 	Node ChildNodeRead(rapidxml::xml_node<char>* node);
-	void cvertexData();
 	void DeleteChild(Node* node);
 	void GetAllChildBones(Node* node, std::vector<Node*>* Parent);
 	std::ifstream file;

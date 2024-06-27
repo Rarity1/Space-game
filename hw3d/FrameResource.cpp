@@ -34,7 +34,7 @@ FrameResource::FrameResource(Microsoft::WRL::ComPtr<ID3D12Device> pDevice, std::
 
             {
                 const CD3DX12_HEAP_PROPERTIES heapProps{ D3D12_HEAP_TYPE_UPLOAD };
-                const auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer((sizeof(XMFLOAT4X4) + (UINT)192));
+                const auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer((sizeof(DirectX::XMFLOAT4X4) + (UINT)192));
                 pDevice->CreateCommittedResource(
                     &heapProps,
                     D3D12_HEAP_FLAG_NONE,
@@ -111,9 +111,9 @@ void FrameResource::PopulateCommandList(ID3D12GraphicsCommandList* pCommandList,
     PIXEndEvent(pCommandList);
 }
 
-void FrameResource::UpdateConstantBuffers(FXMMATRIX view, CXMMATRIX projection, std::vector<RStorage::eResource*> Modls)
+void FrameResource::UpdateConstantBuffers(DirectX::FXMMATRIX view, DirectX::CXMMATRIX projection, std::vector<RStorage::eResource*> Modls)
 {
-    XMFLOAT4X4 mvp;
+    DirectX::XMFLOAT4X4 mvp;
     auto temp = 0;
         for (auto& m : Modls)
         {

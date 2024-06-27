@@ -25,9 +25,9 @@ private:
 	double cspin = 0;
 	void UCampos();
 	void SetModelPosition(RStorage::eResource* model);
-	XMFLOAT3 rWorld(XMFLOAT3 pos1);
-	XMFLOAT3 dWorld(XMFLOAT3 pos1);
-	XMFLOAT3 cnWorld(XMFLOAT3 pos1);
+	DirectX::XMFLOAT3 rWorld(DirectX::XMFLOAT3 pos1);
+	DirectX::XMFLOAT3 dWorld(DirectX::XMFLOAT3 pos1);
+	DirectX::XMFLOAT3 cnWorld(DirectX::XMFLOAT3 pos1);
 	void OnKeyDown(unsigned char key);
 	void OnKeyUp(unsigned char key);
 	void mAniUpdate();
@@ -37,8 +37,8 @@ private:
 	Graphics* pGfx;
 
 	RStorage::eResource* plModel;
-	XMFLOAT4 cWorld;
-	XMFLOAT4 nWorld;
+	DirectX::XMFLOAT4 cWorld;
+	DirectX::XMFLOAT4 nWorld;
 	int timetorot;
 	struct KeysPressed
 	{

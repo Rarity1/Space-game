@@ -4,9 +4,7 @@
 
 
 
-RStorage::RStorage():
-	Models({})
-{
+RStorage::RStorage(){
 	OnInit();
 }
 
@@ -14,31 +12,41 @@ RStorage::RStorage():
 void RStorage::OnInit() {
 	std::vector<std::filesystem::path> folders = {};
 	auto temp = 0;
+	for (auto& m : Models) {
+		if(m->lModel != nullptr)
+			delete m->lModel;
+		delete m;
+	}
+	Models.resize(0);
+	Textures.resize(0);
 	for (auto& file : std::filesystem::directory_iterator{ std::filesystem::current_path() / "models" }) {
 		if (file.path().extension() == ".dae") {
-			unmappedData t{};
-			t.model = file.path();
-			t.texture = file.path().filename().string().substr(0, file.path().filename().string().find(file.path().extension().string()));
-			t.umID = temp;
-			t.mappedBuffer = false;
-			temp++;
+			auto t = new unmappedData;
+			t->model = file.path();
+			bool toggle = false;
+			auto name = file.path().filename().string().substr(0, file.path().filename().string().find(file.path().extension().string()));
+			std::vector<char> UniqueID(1, '0');
+			for (auto& c : name) {
+				if (c == '#') {
+					toggle = !toggle ? true : false;
+				}
+				if (toggle && c != '#') {
+					UniqueID.emplace_back(c);
+				}
+
+
+			}
+			t->umID = std::stoull((std::string)UniqueID.data());
 			Models.emplace_back(t);
 		}
 	}
 	for (auto& file : std::filesystem::directory_iterator{ std::filesystem::current_path() / "textures" }) {
 		if (file.path().extension() == ".dds") {
-			auto name = file.path().filename().string().substr(0, file.path().filename().string().find(file.path().extension().string()));
-			for (auto& m : Models) {
-				if (m.texture == name) {
-					m.texture = file.path();
-				}
-			}
+			Textures.emplace_back(file.path());
 		}
 	}
-	loadedModels.resize(std::size(Models));
-	TrackedPtrs.resize(std::size(Models));
-
 }
+
 
 
 void RStorage::CreateBuffers(std::vector<eResource*>& m, Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList, Microsoft::WRL::ComPtr<ID3D12Device> pDevice, Microsoft::WRL::ComPtr<ID3D12CommandAllocator> commandAllocator, Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue, UINT buffercount) {
@@ -47,8 +55,7 @@ void RStorage::CreateBuffers(std::vector<eResource*>& m, Microsoft::WRL::ComPtr<
 	commandList->Reset(commandAllocator.Get(), nullptr) >> chk;
 	DirectX::ResourceUploadBatch upload(pDevice.Get());
 	upload.Begin();
-	for(auto& bm : m)
-	if (!Models[bm->model->umID].mappedBuffer) {
+	for (auto& bm : m) {
 		{
 			const CD3DX12_HEAP_PROPERTIES heapProps{ D3D12_HEAP_TYPE_DEFAULT };
 			const auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(bm->model->uData->fsize.fSize);
@@ -119,26 +126,15 @@ void RStorage::CreateBuffers(std::vector<eResource*>& m, Microsoft::WRL::ComPtr<
 			}
 			bm->model->uvbuffer->Unmap(0, nullptr);
 			bm->model->uibuffer->Unmap(0, nullptr);
-			CreateDDSTextureFromFile(pDevice.Get(), upload, Models[bm->model->umID].texture.c_str(), &bm->model->tbuffer);
+			
+			CreateDDSTextureFromFile(pDevice.Get(), upload, bm->curTexture.wstring().c_str(), &bm->model->tbuffer);
 			UpdBuffer(bm, commandList, pDevice, commandAllocator, commandQueue);
 		}
-		Models[bm->model->umID].mappedBuffer = true;
-		Models[bm->model->umID].vbuffer = bm->model->vbuffer;
-		Models[bm->model->umID].ibuffer = bm->model->ibuffer;
-		Models[bm->model->umID].tbuffer = bm->model->tbuffer;
-		Models[bm->model->umID].uvbuffer = bm->model->uvbuffer;
-
-		}
-		else {
-			bm->model->vbuffer = Models[bm->model->umID].vbuffer;
-			bm->model->ibuffer = Models[bm->model->umID].ibuffer;
-			bm->model->tbuffer = Models[bm->model->umID].tbuffer;
-			bm->model->uvbuffer = Models[bm->model->umID].uvbuffer;
-		}
 		
-		upload.End(commandQueue.Get());
+	}
+	upload.End(commandQueue.Get());
  
-		commandList->Close() >> chk;
+	commandList->Close() >> chk;
 		
 }
 
@@ -172,42 +168,60 @@ void RStorage::UpdBuffer(eResource* bm, Microsoft::WRL::ComPtr<ID3D12GraphicsCom
 	}
 }
 
-
-
-
  RStorage::bmResource* RStorage::lModel(UINT umID) noexcept
 {
-	if (umID < (std::size(this->Models)) && !umID <= 0 || umID == 0) {
-		auto model = new RStorage::bmResource{ umID, CheckLoaded(umID) };
-		TrackedPtrs[umID] = model;
+	 unmappedData* uData = findUm(umID);
+	if (uData != nullptr) {
+		auto ReadData = CheckLoaded(umID);
+		if (ReadData == nullptr) {
+			ReadData = new ReadX3D{ uData->model.string() };
+			ReadData->cvertexData();
+		}
+		auto model = new RStorage::bmResource{ umID, ReadData };
 		return model;
 	}
 	return nullptr;
 }
 
-RStorage::eResource* RStorage::initResource(char name, int filebModelIndex, float mScale, float mMass, float mFriction, DirectX::XMFLOAT3 initPos, DirectX::XMFLOAT3 initRot, DirectX::XMFLOAT3 initVelDir, float initSpeed) {
-	auto& farb = initializedModels.emplace_back(new RStorage::eResource{ std::string(&name), RStorage::lModel(filebModelIndex), mScale,mMass, mFriction, new DirectX::XMFLOAT3{initPos} });
-
+RStorage::eResource* RStorage::initResource(std::string name, int filebModelIndex, float mScale, float mMass, float mFriction, DirectX::XMFLOAT3 initPos, DirectX::XMFLOAT3 initRot, DirectX::XMFLOAT3 initVelDir, float initSpeed) {
+	auto& farb = initializedModels.emplace_back(new RStorage::eResource{ name, RStorage::lModel(filebModelIndex), mScale, mMass, mFriction, new DirectX::XMFLOAT3{initPos} });
+	for (auto& text : this->Textures) {
+		if (text.filename().string().substr(0, text.filename().string().find(text.extension().string())) == farb->name) {
+			farb->curTexture = text;
+		}
+	}
 	return farb;
-
 }
 
 ReadX3D* RStorage::CheckLoaded(int umID) {
-	if(loadedModels[umID] == nullptr)
-		loadedModels[umID] = new ReadX3D(Models[umID].model.string());
-	return loadedModels[umID];
+	ReadX3D* result = nullptr;
+	unmappedData* uData = findUm(umID);
+	if (uData != nullptr) 
+		if (uData->lModel != nullptr)
+			result = uData->lModel;
+	
+	return result;
+}
+
+RStorage::unmappedData* RStorage::findUm(UINT umID)
+{
+	for (auto& u : this->Models) {
+		if (u->umID == umID) {
+			return u;
+		}
+	}
+	return nullptr;
 }
 
 
 RStorage::~RStorage()
 {
-	for (auto& l : loadedModels) {
-		delete l;
+	for (auto& m : Models) {
+		if (m->lModel != nullptr)
+			delete m->lModel;
+		delete m;
 	}
-	for (auto& t : TrackedPtrs) {
-		if(t != nullptr)
-		delete t;
-	}
+
 	for (auto& m : initializedModels) {
 		delete m->mPos.position;
 		delete m;

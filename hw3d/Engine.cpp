@@ -12,30 +12,31 @@ Engine::Engine(Graphics* gfx, Keyboard* kbd):
 
 
 void Engine::iLoad() {
+    //Move everything between this into a function in Graphics
     pGfx->umodel.lock();
 
-
-
-
     //begin model tracking. load a gd default world mf
-    pGfx->lModels->initResource((char)"cube", 0, 1, 200.0, 0.01, XMFLOAT3{ 10,0,138 });
-    pGfx->lModels->initResource((char)"untitled1", 1, 1, 200.0, 0.01, XMFLOAT3{ 0,0,138 });
-    pGfx->lModels->initResource((char)"wrld", 2, 1, 8570000000.0 * 200, 0.3, XMFLOAT3{ 0,0,0 });
+    pGfx->lModels->initResource("cube", 1, 1, 200.0, 0.01, DirectX::XMFLOAT3{ 10,0,138 });
+    pGfx->lModels->initResource("untitled", 2, 1, 200.0, 0.01, DirectX::XMFLOAT3{ 0,0,138 });
+    pGfx->lModels->initResource("wrld", 4, 1, 8570000000.0 , 0.3, DirectX::XMFLOAT3{ 0,0,0 });
     //wrld is 1:50000
 
     //stress it out nerd
     for (auto i = 0; i < 1; i++) {
         float p = i * 10;
-        pGfx->lModels->initResource((char)"b", 0, 1, 200, 0.3, XMFLOAT3{ 15 + p,0,138 });
+        pGfx->lModels->initResource("cube", 1, 1, 200, 0.3, DirectX::XMFLOAT3{ 10 + p,0,143 });
     }
     trackedModels[0]->mworld = trackedModels[2];
     trackedModels[1]->mworld = trackedModels[2];
+    trackedModels[3]->mworld = trackedModels[2];
+
 
     plModel = trackedModels[1];
     pGfx->curCamera.position = plModel->mPos.position;
     
     //end model tracking.
     pGfx->loadModels(trackedModels, true);
+    //If all models arent unique this is a waste of space
     pGfx->LoadResources(std::size(trackedModels));
     pGfx->umodel.unlock();
 
@@ -81,11 +82,12 @@ void Engine::Update()
          move.left -= movespeed;
      }
 
+     using namespace DirectX;
      if (move.forward != 0) {
          float oldspeed = plModel->speed <= 0.0001 ? 0 : plModel->speed;
          float speedchange = move.forward * timer.time;
-         XMFLOAT4 scale = { 0,0,0,0 };
-         auto scalar = XMVector3Dot(XMLoadFloat4(&plModel->velDir), XMLoadFloat4(&pGfx->curCamera.rotation) * (fabs(move.forward) / move.forward));
+         DirectX::XMFLOAT4 scale = { 0,0,0,0 };
+         auto scalar = DirectX::XMVector3Dot(XMLoadFloat4(&plModel->velDir), XMLoadFloat4(&pGfx->curCamera.rotation) * (fabs(move.forward) / move.forward));
          DirectX::XMStoreFloat4(&scale, scalar);
          scale.x = fabs(scale.x);
          float totalspeed = plModel->speed + fabs(speedchange);
@@ -128,23 +130,23 @@ void Engine::UCampos() {
     float yaw = 0;
     float roll = 0;
     if (m_keysPressed.up) {
-        pitch += XM_PIDIV2 * timer.time;
+        pitch += DirectX::XM_PIDIV2 * timer.time;
     }
     if (m_keysPressed.down) {
-        pitch += -XM_PIDIV2 * timer.time;
+        pitch += -DirectX::XM_PIDIV2 * timer.time;
     }
     if (m_keysPressed.left) {
-        yaw += -XM_PIDIV2 * timer.time;
+        yaw += -DirectX::XM_PIDIV2 * timer.time;
     }
     if (m_keysPressed.right) {
-        yaw += XM_PIDIV2 * timer.time;
+        yaw += DirectX::XM_PIDIV2 * timer.time;
     }
 
     if (m_keysPressed.q) {
-        roll += XM_PIDIV2 * timer.time;
+        roll += DirectX::XM_PIDIV2 * timer.time;
     }
     if (m_keysPressed.e) {
-        roll += -XM_PIDIV2 * timer.time;
+        roll += -DirectX::XM_PIDIV2 * timer.time;
     }
 
 
@@ -154,35 +156,35 @@ void Engine::UCampos() {
 }
 
 void Engine::RotateCam(float Pitch, float Yaw, float Roll) {
-    auto gravdirect = XMQuaternionInverse(XMLoadFloat4(&plModel->grav));
+    auto gravdirect = DirectX::XMQuaternionInverse(XMLoadFloat4(&plModel->grav));
     auto updirect = XMLoadFloat4(&pGfx->curCamera.upDirection);
     auto lookdirect = XMLoadFloat4(&pGfx->curCamera.rotation);
     
 
     if (Yaw != 0) {
-        auto temp = XMQuaternionRotationNormal(updirect, Yaw);
-        auto left = XMQuaternionMultiply(temp, lookdirect);
+        auto temp = DirectX::XMQuaternionRotationNormal(updirect, Yaw);
+        auto left = DirectX::XMQuaternionMultiply(temp, lookdirect);
         
-        lookdirect = XMQuaternionMultiply(left, XMQuaternionConjugate(temp));
-        auto qup = XMQuaternionMultiply(temp, updirect);
-        updirect = XMQuaternionMultiply(qup, XMQuaternionConjugate(temp));
+        lookdirect = DirectX::XMQuaternionMultiply(left, DirectX::XMQuaternionConjugate(temp));
+        auto qup = DirectX::XMQuaternionMultiply(temp, updirect);
+        updirect = DirectX::XMQuaternionMultiply(qup, DirectX::XMQuaternionConjugate(temp));
     }
     if (Roll != 0) {
-        auto temp = XMQuaternionRotationNormal((lookdirect), Roll);
-        auto qup = XMQuaternionMultiply(temp, updirect);
-        updirect = XMQuaternionMultiply(qup, XMQuaternionConjugate(temp));
-        auto left = XMQuaternionMultiply(temp, lookdirect);
-        lookdirect = XMQuaternionMultiply(left, XMQuaternionConjugate((temp)));
+        auto temp = DirectX::XMQuaternionRotationNormal((lookdirect), Roll);
+        auto qup = DirectX::XMQuaternionMultiply(temp, updirect);
+        updirect = DirectX::XMQuaternionMultiply(qup, DirectX::XMQuaternionConjugate(temp));
+        auto left = DirectX::XMQuaternionMultiply(temp, lookdirect);
+        lookdirect = DirectX::XMQuaternionMultiply(left, DirectX::XMQuaternionConjugate((temp)));
     }
     if (Pitch != 0) {
-        auto temp = XMQuaternionRotationNormal(XMQuaternionMultiply(lookdirect, updirect), Pitch);
-        auto qup = XMQuaternionMultiply(temp, updirect);
+        auto temp = DirectX::XMQuaternionRotationNormal(DirectX::XMQuaternionMultiply(lookdirect, updirect), Pitch);
+        auto qup = DirectX::XMQuaternionMultiply(temp, updirect);
 
 
-        updirect = XMQuaternionMultiply(qup, XMQuaternionConjugate(temp));
+        updirect = DirectX::XMQuaternionMultiply(qup, DirectX::XMQuaternionConjugate(temp));
 
-        auto left = XMQuaternionMultiply(temp, lookdirect);
-        lookdirect = XMQuaternionMultiply(left, XMQuaternionConjugate((temp)));
+        auto left = DirectX::XMQuaternionMultiply(temp, lookdirect);
+        lookdirect = DirectX::XMQuaternionMultiply(left, DirectX::XMQuaternionConjugate((temp)));
     }
     
     
@@ -191,13 +193,13 @@ void Engine::RotateCam(float Pitch, float Yaw, float Roll) {
 }
 
 
-XMFLOAT3 Engine::rWorld(XMFLOAT3 pos1) {
+DirectX::XMFLOAT3 Engine::rWorld(DirectX::XMFLOAT3 pos1) {
 	return  { cWorld.x+pos1.x,cWorld.y+pos1.y,cWorld.z+pos1.z};
 }
-XMFLOAT3 Engine::dWorld(XMFLOAT3 pos1) {
+DirectX::XMFLOAT3 Engine::dWorld(DirectX::XMFLOAT3 pos1) {
     return  { -cWorld.x + pos1.x,-cWorld.y + pos1.y,-cWorld.z + pos1.z };
 }
-XMFLOAT3 Engine::cnWorld(XMFLOAT3 pos1) {
+DirectX::XMFLOAT3 Engine::cnWorld(DirectX::XMFLOAT3 pos1) {
     auto tworld = { cWorld.x - nWorld.x, cWorld.x - nWorld.x, cWorld.x - nWorld.x};
     return  { -cWorld.x + pos1.x,-cWorld.y + pos1.y,-cWorld.z + pos1.z };
 }

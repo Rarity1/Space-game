@@ -10,9 +10,6 @@ inline void SetName(ID3D12Object* pObject, LPCWSTR name)
     pObject->SetName(name);
 }
 
-using namespace DirectX;
-using Microsoft::WRL::ComPtr;
-
 class FrameResource
 {
 private:
@@ -22,13 +19,13 @@ private:
 public:
     std::vector<D3D12_VERTEX_BUFFER_VIEW> vertexBufferView;
     std::vector<D3D12_INDEX_BUFFER_VIEW> indexBufferView;
-    ComPtr<ID3D12CommandAllocator> commandAllocator;
-    ComPtr<ID3D12CommandAllocator> bundleAllocator;
-    ComPtr<ID3D12GraphicsCommandList> bundle;
+    Microsoft::WRL::ComPtr<ID3D12CommandAllocator> commandAllocator;
+    Microsoft::WRL::ComPtr<ID3D12CommandAllocator> bundleAllocator;
+    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> bundle;
     std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> openbuffers;
     std::vector<DirectX::XMFLOAT4X4*> cbvbuff;
     UINT64 fenceValue;
-    std::vector<XMFLOAT4X4> modelMatrices;
+    std::vector<DirectX::XMFLOAT4X4> modelMatrices;
     FrameResource(Microsoft::WRL::ComPtr<ID3D12Device> pDevice, std::vector<RStorage::eResource*>& models);
     ~FrameResource();
 
@@ -39,5 +36,5 @@ public:
     void PopulateCommandList(ID3D12GraphicsCommandList* pCommandList, ID3D12PipelineState* pPso1,
         UINT frameResourceIndex, ID3D12DescriptorHeap* pCbvSrvDescriptorHeap, UINT cbvSrvDescriptorSize, ID3D12DescriptorHeap* pSamplerDescriptorHeap, ID3D12RootSignature* pRootSignature, std::vector<RStorage::eResource*> models);
 
-    void UpdateConstantBuffers(FXMMATRIX view, CXMMATRIX projection, std::vector<RStorage::eResource*> Modls);
+    void UpdateConstantBuffers(DirectX::FXMMATRIX view, DirectX::CXMMATRIX projection, std::vector<RStorage::eResource*> Modls);
 };

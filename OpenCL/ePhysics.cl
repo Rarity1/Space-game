@@ -51,15 +51,11 @@ MODEL;
 typedef struct WORKDATA
 {
     int bIndex[2];
-    XMFLOAT3 Position[2];
+    XMFLOAT3 Position;
+    int ICount[2];
+    int Offset[2];
 }
 WORKDATA;
-
-typedef struct OffsetC
-{
-    int Offset[2];
-    int ICount[2];
-}OffsetC;
 
 typedef struct RETURNDATA
 {
@@ -488,7 +484,7 @@ float CloseDistanceCheck(XMFLOAT3 Bone1, XMFLOAT3 Bone2, float TDistance[3], flo
     }
     float TPointDist = SwitchLowest(iBDir, TAPoint, TBPoint, TCPoint, Bone2,TLowestInd);
 
-    XMFLOAT3 TNewPoint = AddXMFLOAT3( MulXMFLOAT3(iBDir, TPointDist), Bone2);
+    XMFLOAT3 TNewPoint = AddXMFLOAT3( MulXMFLOAT3(iBDir, sqrt(TPointDist)), Bone2);
 
     int WLowestInd = 0;
     if (WDistance[1] < WDistance[0])
@@ -504,7 +500,7 @@ float CloseDistanceCheck(XMFLOAT3 Bone1, XMFLOAT3 Bone2, float TDistance[3], flo
         WLowestInd = 2;
     }
     float WPointDist = SwitchLowest(BoneDir, WAPoint, WBPoint, WCPoint, Bone1,WLowestInd);
-    XMFLOAT3 WNewPoint = AddXMFLOAT3(MulXMFLOAT3(BoneDir, WPointDist), Bone1);
+    XMFLOAT3 WNewPoint = AddXMFLOAT3(MulXMFLOAT3(BoneDir, sqrt(WPointDist)), Bone1);
 
     return fDistance(WNewPoint, Bone2)+fDistance(TNewPoint, Bone1);
 }
@@ -512,7 +508,7 @@ float CloseDistanceCheck(XMFLOAT3 Bone1, XMFLOAT3 Bone2, float TDistance[3], flo
 CLOSEFORM TooClose(MODEL Tri1, MODEL Tri2, XMFLOAT3 Bone1, XMFLOAT3 TBone, XMFLOAT3 TPos)
 {
     CLOSEFORM Result;
-    Result.dist = 0;
+    Result.dist = 0.0;
     Result.coll = true;
 
     XMFLOAT3 Zero = {0,0,0};
@@ -581,6 +577,7 @@ CLOSEFORM TooClose(MODEL Tri1, MODEL Tri2, XMFLOAT3 Bone1, XMFLOAT3 TBone, XMFLO
 
         float TScalar = -XMVector3Dot(TNorm, TAverage);
 
+
         ISectLineDir = XMVector3Cross(WNorm, TNorm);
 
 
@@ -621,6 +618,8 @@ CLOSEFORM TooClose(MODEL Tri1, MODEL Tri2, XMFLOAT3 Bone1, XMFLOAT3 TBone, XMFLO
                 }
         }
 
+
+        
 
         if (cval0.CoPlan)
         {
@@ -689,8 +688,7 @@ CLOSEFORM TooClose(MODEL Tri1, MODEL Tri2, XMFLOAT3 Bone1, XMFLOAT3 TBone, XMFLO
                     WIndex = 2;
                 }
             }
-
-            Result.dist = TDistance[TIndex] > WDistance[WIndex] ? -(TDistance[TIndex]) : -(WDistance[WIndex]);
+            Result.dist = TDistance[TIndex] > WDistance[WIndex] ? sqrt(-(TDistance[TIndex])) : sqrt(-(WDistance[WIndex]));
             Result.norm[0] = MulXMFLOAT3(WNorm, 1 / fDistance(WNorm, Zero));
             Result.norm[1] = MulXMFLOAT3(TNorm, 1 / fDistance(TNorm, Zero));
         }
@@ -701,7 +699,8 @@ CLOSEFORM TooClose(MODEL Tri1, MODEL Tri2, XMFLOAT3 Bone1, XMFLOAT3 TBone, XMFLO
     {
 
         //Figure out why this doesnt work & remove false
-        if (TDistance[0] < 0)
+        
+        if (TDistance[0] < 0 && false)
         {
             TNorm = XMVector3Cross(SubXMFLOAT3(TBPoint, TAPoint), SubXMFLOAT3(TCPoint, TAPoint));
             XMFLOAT3 TAverage = MulXMFLOAT3(AddXMFLOAT3(AddXMFLOAT3(TAPoint, TBPoint), TCPoint), 1.0 / 3.0);
@@ -712,7 +711,7 @@ CLOSEFORM TooClose(MODEL Tri1, MODEL Tri2, XMFLOAT3 Bone1, XMFLOAT3 TBone, XMFLO
             WDistance[1] = (XMVector3Dot(TNorm, WBPoint)) + TScalar;
             WDistance[2] = (XMVector3Dot(TNorm, WCPoint)) + TScalar;
 
-            if (WDistance[0] * WDistance[1] > 0 && WDistance[0] * WDistance[2] > 0 && WDistance[0] < 0)
+            if (WDistance[0] < 0 || WDistance[1] < 0 || WDistance[2] < 0)
             {
 
                 //Check distance from bone that objects are colliding
@@ -726,7 +725,7 @@ CLOSEFORM TooClose(MODEL Tri1, MODEL Tri2, XMFLOAT3 Bone1, XMFLOAT3 TBone, XMFLO
                     {
 
                             Result.coll = true;
-                            Result.dist = fDistance(Bone1, Bone2) - dist;
+                            Result.dist = sqrt(fDistance(Bone1, Bone2) - dist);
                             Result.norm[0] = MulXMFLOAT3(WNorm, 1 / fDistance(WNorm, Zero));
                             Result.norm[1] = MulXMFLOAT3(TNorm, 1 / fDistance(TNorm, Zero));
                     }
@@ -736,7 +735,7 @@ CLOSEFORM TooClose(MODEL Tri1, MODEL Tri2, XMFLOAT3 Bone1, XMFLOAT3 TBone, XMFLO
             }
 
         }
-
+        
     }
 
 
@@ -744,24 +743,22 @@ CLOSEFORM TooClose(MODEL Tri1, MODEL Tri2, XMFLOAT3 Bone1, XMFLOAT3 TBone, XMFLO
 }
 
 
-void kernel coll(global const MODEL* WModel, global const MODEL* TModel, global const XMFLOAT3* WBposition, global const XMFLOAT3* TBposition, global const WORKDATA* WData, global const int* WCollIndex, global const int* TCollIndex, global RETURNDATA* retdat, global const OffsetC* COffset, global const int* WorkIndices){
+void kernel coll(global const MODEL* WModel, global const MODEL* TModel, global const XMFLOAT3* WBposition, global const XMFLOAT3* TBposition, global const int* WCollIndex, global const int* TCollIndex, global const WORKDATA* WData, global const int* WIndices, global RETURNDATA* retdat){
 int sd = get_global_id(0);
 int Wind = get_global_id(1);
 int Tind = get_global_id(2);
 
 
+
 if (!retdat[sd].coll)
 {
-        int WOffset = COffset[sd].Offset[0];
-        int TOffset = COffset[sd].Offset[1];
 
-        XMFLOAT3 TPos = WData[sd].Position[1];
+    XMFLOAT3 TPos = WData[sd].Position;
 
-
-        MODEL Work = WModel[WCollIndex[WorkIndices[Wind + WOffset]]];
+    MODEL Work = WModel[WCollIndex[WIndices[Wind + WData[sd].Offset[0]]]];
 
 
-        MODEL TWork = TModel[TCollIndex[WorkIndices[Tind + TOffset]]];
+    MODEL TWork = TModel[TCollIndex[WIndices[Tind + WData[sd].Offset[1]]]];
 
 
     CLOSEFORM Result = TooClose(Work, TWork, WBposition[WData[sd].bIndex[0]], TBposition[WData[sd].bIndex[1]], TPos);
@@ -775,20 +772,24 @@ if (!retdat[sd].coll)
         retdat[sd].dir[0].x = temp.x;
         retdat[sd].dir[0].y = temp.y;
         retdat[sd].dir[0].z = temp.z;
+        retdat[sd].dir[0].w = 1;
+
         retdat[sd].dir[1].x = temp2.x;
         retdat[sd].dir[1].y = temp2.y;
         retdat[sd].dir[1].z = temp2.z;
+        retdat[sd].dir[1].w = 0;
 
-        retdat[sd].index1[0] = WData[sd].bIndex[0];
-        retdat[sd].index1[1] = WData[sd].bIndex[1];
-        retdat[sd].index2[0] = WorkIndices[Wind + WOffset];
-        retdat[sd].index2[1] = WorkIndices[Tind + TOffset];
+
+        retdat[sd].index1[0] = WIndices[Wind + WData[sd].Offset[0]];
+        retdat[sd].index1[1] = WIndices[Tind + WData[sd].Offset[1]];
+        retdat[sd].index2[0] = WData[sd].Offset[0];
+        retdat[sd].index2[1] = WData[sd].Offset[1];
         retdat[sd].dist[0] = Result.dist;
         retdat[sd].dist[1] = Result.dist;
 
 
     }
-
+    
 
 
 }

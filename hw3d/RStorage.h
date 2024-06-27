@@ -8,8 +8,6 @@ class RStorage {
 public:
 	RStorage();
 	virtual void OnInit();
-	RStorage(const RStorage&) = delete;
-	RStorage& operator=(const RStorage&) = delete;
 	~RStorage();
 	enum pChange {
 		NONE = 0,
@@ -18,30 +16,24 @@ public:
 		BOTH = 3,
 		INIT = 4
 	};
-
 	struct unmappedData {
-		std::filesystem::path texture;
 		std::filesystem::path model;
-		std::vector<ReadX3D::Vertex> vertexData;
-		std::vector<ReadX3D::vFaceData> indexData;
 		UINT fsize;
 		UINT vCount;
 		UINT umID;
-		bool mappedBuffer;
-		ID3D12Resource* vbuffer;
-		ID3D12Resource* ibuffer;
-		ID3D12Resource* tbuffer;
-		ID3D12Resource* uvbuffer;
+		ReadX3D* lModel = nullptr;
 	};
+	unmappedData* findUm(UINT umID);
 	struct bmResource {
 		UINT umID;
 		ReadX3D* uData;
 		std::string name;
-		ID3D12Resource* vbuffer;
-		ID3D12Resource* ibuffer;
-		ID3D12Resource* tbuffer;
-		ID3D12Resource* uvbuffer;
-		ID3D12Resource* uibuffer;
+		ID3D12Resource* vbuffer = nullptr;
+		ID3D12Resource* ibuffer = nullptr;
+		ID3D12Resource* tbuffer = nullptr;
+		ID3D12Resource* uvbuffer = nullptr;
+		ID3D12Resource* uibuffer = nullptr;
+		std::atomic<bool> buffersWritten;
 		DirectX::XMMATRIX cmatrix;
 		std::atomic<bool> animate = false;
 	};
@@ -69,30 +61,27 @@ public:
 		eResource* mworld = nullptr;
 		RStorage::pChange which = RStorage::INIT;
 		std::mutex currentMtx;
+		std::filesystem::path curTexture;
 		cl::Buffer clBuff;
 		cl::Buffer clPositionBuff;
 		cl::Buffer clBoneBuff;
 		cl::Buffer clCollIndBuff;
-		//std::vector<ReadX3D::pCollision*> currentCollision;
 		std::atomic<bool> updated = false;
 		std::atomic<bool> Collision = false;
 	};
 
-	//Always call after read
 	std::vector<RStorage::eResource*> initializedModels;
 	RStorage::bmResource* lModel(UINT umID) noexcept;
 
- 	RStorage::eResource* initResource(char name, int filebModelIndex = 0, float mScale = 1.0, float mMass = 0.0, float mFriction = 0.01, DirectX::XMFLOAT3 initPos = {0,0,0}, DirectX::XMFLOAT3 initRot = {0,0,0}, DirectX::XMFLOAT3 initVelDir = {0,0,0}, float initSpeed = 0);
+ 	RStorage::eResource* initResource(std::string name, int filebModelIndex = 0, float mScale = 1.0, float mMass = 0.0, float mFriction = 0.01, DirectX::XMFLOAT3 initPos = {0,0,0}, DirectX::XMFLOAT3 initRot = {0,0,0}, DirectX::XMFLOAT3 initVelDir = {0,0,0}, float initSpeed = 0);
 	void CreateBuffers(std::vector<eResource*>& bm, Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList, Microsoft::WRL::ComPtr<ID3D12Device> pDevice, Microsoft::WRL::ComPtr<ID3D12CommandAllocator> commandAllocator, Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue,  UINT buffercount);
 	void UpdBuffer(eResource* bm, Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList, Microsoft::WRL::ComPtr<ID3D12Device> pDevice, Microsoft::WRL::ComPtr<ID3D12CommandAllocator> commandAllocator, Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue);
+	ReadX3D* CheckLoaded(int umID);
 
 
 private:
-	ReadX3D* CheckLoaded(int umID);
-	std::vector<ID3D12Resource*> vbufferPtrs;
-	std::vector<unmappedData> Models;
-	std::vector<ReadX3D*> loadedModels;
-	std::vector<RStorage::bmResource*> TrackedPtrs;
+	std::vector<unmappedData*> Models;
+	std::vector<std::filesystem::path> Textures;
 	struct DDS_HEADER {
 		uint32_t dwSize;
 		uint32_t dwFlags;

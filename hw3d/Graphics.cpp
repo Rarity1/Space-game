@@ -299,6 +299,7 @@ void Graphics::LoadResources(int numLoadedSrv)
 
 void Graphics::UpdateLocalTransform(RStorage::eResource* bm)
 {
+	using namespace DirectX;
 	if (std::strstr(bm->model->uData->bdata[0].name.c_str(), "placeholder"))
 		return;
 	XMFLOAT4X4 temp{ 1.f,0.f,0.f,0.f,0.f,1.f,0.f,0.f,0.f,0.f,1.f,0.f,0.f,0.f,0.f,1.f };
@@ -386,7 +387,7 @@ void Graphics::CreateFrameResources() {
 			// Describe and create a constant buffer view (CBV).
 			D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
 			cbvDesc.BufferLocation = pFrameResource->openbuffers[temp]->GetGPUVirtualAddress();
-			cbvDesc.SizeInBytes = sizeof(XMFLOAT4X4) + (UINT)192;
+			cbvDesc.SizeInBytes = sizeof(DirectX::XMFLOAT4X4) + (UINT)192;
 			pDevice->CreateConstantBufferView(&cbvDesc, cbvSrvHandle);
 			cbvSrvHandle.Offset(srvDescriptorSize);
 
@@ -498,9 +499,9 @@ void Graphics::RenderFrame() {
 		fence->SetEventOnCompletion(cbackBuffer->fenceValue, fenceEvent);
 		WaitForSingleObject(fenceEvent, INFINITE);
 	}
-	curCamera.cmatrix = XMMatrixLookToRH(XMLoadFloat3(curCamera.position), XMLoadFloat4(&curCamera.rotation), XMLoadFloat4(&curCamera.upDirection));
+	curCamera.cmatrix = DirectX::XMMatrixLookToRH(XMLoadFloat3(curCamera.position), XMLoadFloat4(&curCamera.rotation), XMLoadFloat4(&curCamera.upDirection));
 	cbackBuffer->UpdateConstantBuffers(curCamera.cmatrix,
-		XMMatrixPerspectiveFovRH(1.333f, float(width) / float(height), 0.1f, 100000.0f), *modelVect);
+		DirectX::XMMatrixPerspectiveFovRH(1.333f, float(width) / float(height), 0.1f, 100000.0f), *modelVect);
 	umodel.unlock();
 	PopCommandList(cbackBuffer);
 	
@@ -537,10 +538,10 @@ float Graphics::Min(float minimum, float number)
 }
 float Graphics::RotateHelper(float& rNumber)
 {
-	if (rNumber > Max(rNumber, XM_2PI)) {
+	if (rNumber > Max(rNumber, DirectX::XM_2PI)) {
 		return 0;
 	}
-	if (rNumber < Min(-XM_2PI, rNumber)) {
+	if (rNumber < Min(-DirectX::XM_2PI, rNumber)) {
 		return 0;
 	}
 	return rNumber;

@@ -13,11 +13,11 @@ public:
 	Graphics& operator=(const Graphics&) = delete;
 	~Graphics();
 	struct pCamera {
-		XMFLOAT3* position = nullptr;
-		XMFLOAT4 rotation = {1,0,0,0};
-		XMFLOAT4 upDirection = { 0,0,1,0 };
-		XMFLOAT4 forwardDirect = { 1,0,0,0 };
-		XMMATRIX cmatrix;
+		DirectX::XMFLOAT3* position = nullptr;
+		DirectX::XMFLOAT4 rotation = {1,0,0,0};
+		DirectX::XMFLOAT4 upDirection = { 0,0,1,0 };
+		DirectX::XMFLOAT4 forwardDirect = { 1,0,0,0 };
+		DirectX::XMMATRIX cmatrix;
 	};
 	
 	void UpdateModel(RStorage::eResource* bm);
@@ -82,7 +82,7 @@ private:
 	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList;
 
 	Microsoft::WRL::ComPtr<ID3D12Fence> fence;
-	ComPtr<ID3D12Resource> renderTargets[bufferCount];
+	Microsoft::WRL::ComPtr<ID3D12Resource> renderTargets[bufferCount];
 	std::vector<FrameResource *> backBuffers;
 	FrameResource* cbackBuffer;
 	Microsoft::WRL::ComPtr<ID3D12Resource> depthBuffer;
