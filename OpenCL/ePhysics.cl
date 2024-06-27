@@ -688,7 +688,7 @@ CLOSEFORM TooClose(MODEL Tri1, MODEL Tri2, XMFLOAT3 Bone1, XMFLOAT3 TBone, XMFLO
                     WIndex = 2;
                 }
             }
-            Result.dist = TDistance[TIndex] > WDistance[WIndex] ? sqrt(-(TDistance[TIndex])) : sqrt(-(WDistance[WIndex]));
+            Result.dist = TDistance[TIndex] > WDistance[WIndex] ? -(TDistance[TIndex]) : -(WDistance[WIndex]);
             Result.norm[0] = MulXMFLOAT3(WNorm, 1 / fDistance(WNorm, Zero));
             Result.norm[1] = MulXMFLOAT3(TNorm, 1 / fDistance(TNorm, Zero));
         }
@@ -725,7 +725,7 @@ CLOSEFORM TooClose(MODEL Tri1, MODEL Tri2, XMFLOAT3 Bone1, XMFLOAT3 TBone, XMFLO
                     {
 
                             Result.coll = true;
-                            Result.dist = sqrt(fDistance(Bone1, Bone2) - dist);
+                            Result.dist = fDistance(Bone1, Bone2) - dist;
                             Result.norm[0] = MulXMFLOAT3(WNorm, 1 / fDistance(WNorm, Zero));
                             Result.norm[1] = MulXMFLOAT3(TNorm, 1 / fDistance(TNorm, Zero));
                     }

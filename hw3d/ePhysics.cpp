@@ -56,22 +56,18 @@ void Physics::pSpecCollison(RStorage::eResource* obj) {
             sph2.Center = AddXMFLOAT3(sph2.Center, *trackedModels[m]->mPos.position);
             if (sph2.Intersects(sph1)) {
                 Queues[m] = new cl::CommandQueue{ context, devices.front() };
-                auto& retbuff = retbuffers[m];
-                auto& Workbuff = WorkBuffers[m];
-                auto& Indbuff = IndexBuffers[m];
                 retdatVect[m] = new std::vector<RETURNDATA>;
-                WorkIndi[m] = ProcCollide(obj, m, *Queues[m], retbuff, Workbuff, Indbuff);
+                WorkIndi[m] = ProcCollide(obj, m, *Queues[m], retbuffers[m], WorkBuffers[m], IndexBuffers[m]);
             }
 
         }
     }
 
     for (auto i = 0; i < std::size(Queues); i++) {
-        auto& qP = Queues[i];
-        if (qP != nullptr && std::size(WorkIndi[i]) > 0) {
+        if (Queues[i] != nullptr && std::size(WorkIndi[i]) > 0) {
             auto& obj2 = trackedModels[i];
 
-            auto& tQueue = *qP;
+            auto& tQueue = *Queues[i];
             auto& WIVect = WorkIndi[i];
             std::vector<RETURNDATA>& retdat = *retdatVect[i];
             auto& WData = *(std::vector<WORKDATA>*)WIVect[0];
@@ -80,10 +76,7 @@ void Physics::pSpecCollison(RStorage::eResource* obj) {
             int wSize = std::size(WData);
             retdat.resize(wSize);
 
-
-
-            auto& retbuffer = *retbuffers[i];
-            tQueue.enqueueWriteBuffer(retbuffer, CL_TRUE, 0, wSize * sizeof(RETURNDATA), retdat.data());
+            tQueue.enqueueWriteBuffer(*retbuffers[i], CL_TRUE, 0, wSize * sizeof(RETURNDATA), retdat.data());
             tQueue.enqueueWriteBuffer(*IndexBuffers[i], CL_TRUE, 0, std::size(Indices) * sizeof(int), Indices.data());
             tQueue.enqueueWriteBuffer(*WorkBuffers[i], CL_TRUE, 0, wSize * sizeof(WORKDATA), WData.data());
             tQueue.flush();
@@ -96,10 +89,10 @@ void Physics::pSpecCollison(RStorage::eResource* obj) {
             collide.setArg(5, obj2->clCollIndBuff);
             collide.setArg(6, *WorkBuffers[i]);
             collide.setArg(7, *IndexBuffers[i]);
-            collide.setArg(8, retbuffer);
+            collide.setArg(8, *retbuffers[i]);
 
             for (auto i = 0; i < wSize; i++) {
-                _ASSERT( tQueue.enqueueNDRangeKernel(collide, cl::NDRange(i, 0, 0), cl::NDRange(1, WData[i].ICount[0], WData[i].ICount[1]), cl::NullRange) == CL_SUCCESS);
+                _ASSERT(tQueue.enqueueNDRangeKernel(collide, cl::NDRange(i, 0, 0), cl::NDRange(1, WData[i].ICount[0], WData[i].ICount[1]), cl::NullRange) == CL_SUCCESS);
             }
             tQueue.flush();
         }
@@ -107,98 +100,96 @@ void Physics::pSpecCollison(RStorage::eResource* obj) {
     }
     using namespace DirectX;
     for (auto i = 0; i < std::size(Queues); i++) {
-        auto& obj2 = trackedModels[i];
-        auto& qP = Queues[i];
-        if (std::size(WorkIndi[i]) > 0) {
-            auto& tQueue = *qP;
-            auto& WIVect = WorkIndi[i];
-            auto retdat = std::ref(*retdatVect[i]);
-
-
-            auto& WData = *(std::vector<WORKDATA>*)WIVect[0];
-
-            int wSize = std::size(WData);
-
-
-            auto& retbuffer = *retbuffers[i];
-            for (auto r = 0; r < wSize; r++) {
-                _ASSERT(tQueue.enqueueReadBuffer(retbuffer, CL_FALSE, r * sizeof(RETURNDATA), sizeof(RETURNDATA), &retdat.get()[r]) == CL_SUCCESS);
-                //std::thread([this, tQueue, retbuffer, r, retdat] { (tQueue.enqueueReadBuffer(retbuffer, CL_FALSE, r * sizeof(RETURNDATA), sizeof(RETURNDATA), &retdat.get()[r])); }).detach();
-            }
-
-            tQueue.finish();
-            XMFLOAT4 move2{ 0,0,0,0 };
-            float move1 = 0;
-            XMFLOAT4 move3{ 0,0,0,0 };
-            int coutn = 0;
-
-            for (auto i = 0; i < std::size(retdat.get()); i++) {
-                if (retdat.get()[i].coll) {
-                    if (move1 < retdat.get()[i].dist[0] || move1 == 0) {
-                        auto dp = XMVector3Dot(XMLoadFloat4(&retdat.get()[i].dir[1]), XMLoadFloat4(&retdat.get()[i].dir[0]));
-                        XMStoreFloat4(&move2, XMVector3Normalize(XMLoadFloat4(&retdat.get()[i].dir[1]) + (XMLoadFloat4(&retdat.get()[i].dir[0]) * dp)));
-                        XMStoreFloat4(&move3, XMVector3Normalize(XMLoadFloat4(&retdat.get()[i].dir[0]) + (XMLoadFloat4(&retdat.get()[i].dir[1]) * dp)));
-                        move1 = retdat.get()[i].dist[0];
-
-                    }
-
-                    coutn++;
+        if (Queues[i] != nullptr) {
+            if (std::size(WorkIndi[i]) > 0) {
+                auto& obj2 = trackedModels[i];
+                auto& tQueue = *Queues[i];
+                auto retdat = std::ref(*retdatVect[i]);
+                auto& WData = *(std::vector<WORKDATA>*)WorkIndi[i][0];
+                int wSize = std::size(WData);
+                auto& retbuffer = *retbuffers[i];
+                for (auto r = 0; r < wSize; r++) {
+                    _ASSERT(tQueue.enqueueReadBuffer(retbuffer, CL_FALSE, r * sizeof(RETURNDATA), sizeof(RETURNDATA), &retdat.get()[r]) == CL_SUCCESS);
+                    //std::thread([this, tQueue, retbuffer, r, retdat] { (tQueue.enqueueReadBuffer(retbuffer, CL_FALSE, r * sizeof(RETURNDATA), sizeof(RETURNDATA), &retdat.get()[r])); }).detach();
                 }
+                tQueue.finish();
+                XMFLOAT4 move2{ 0,0,0,0 };
+                float move1 = 0;
+                XMFLOAT4 move3{ 0,0,0,0 };
+                int coutn = 0;
+
+                for (auto i = 0; i < std::size(retdat.get()); i++) {
+                    if (retdat.get()[i].coll) {
+                        if (move1 < retdat.get()[i].dist[0] || move1 == 0) {
+                            auto dp = XMVector3Dot(XMLoadFloat4(&retdat.get()[i].dir[1]), XMLoadFloat4(&retdat.get()[i].dir[0]));
+                            XMStoreFloat4(&move2, XMVector3Normalize(XMLoadFloat4(&retdat.get()[i].dir[1]) + (XMLoadFloat4(&retdat.get()[i].dir[0]) * dp)));
+                            XMStoreFloat4(&move3, XMVector3Normalize(XMLoadFloat4(&retdat.get()[i].dir[0]) + (XMLoadFloat4(&retdat.get()[i].dir[1]) * dp)));
+                            move1 = retdat.get()[i].dist[0];
+
+                        }
+
+                        coutn++;
+                    }
+                }
+                retdat.get().resize(0);
+                if (coutn != 0) {
+                    auto ob2pos = *obj2->mPos.position;
+                    auto objpos = *obj->mPos.position;
+
+                    auto dpos = objpos;
+                    auto dpos2 = ob2pos;
+
+                    XMStoreFloat3(&ob2pos, XMLoadFloat3(&ob2pos) + XMLoadFloat4(&obj2->velDir) * obj2->speed);
+                    XMStoreFloat3(&objpos, XMLoadFloat3(&objpos) + XMLoadFloat4(&obj->velDir) * obj->speed);
+
+                    float massScal1 = (obj->mass / (obj->mass + obj2->mass));
+                    float massScal2 = (obj2->mass / (obj->mass + obj2->mass));
+                    massScal1 = massScal1 < 0.00001 ? 0 : massScal1;
+                    massScal2 = massScal2 < 0.00001 ? 0 : massScal2;
+
+                    XMStoreFloat3(&objpos, XMLoadFloat3(&objpos) + (XMLoadFloat4(&move2) * (move1 + 0.1)) * massScal2);
+                    XMStoreFloat3(&ob2pos, XMLoadFloat3(&ob2pos) + (XMLoadFloat4(&move3) * (move1 + 0.1)) * massScal1);
+
+                    auto objpDir = fDirection(&dpos, &objpos);
+                    auto obj2pDir = fDirection(&dpos2, &ob2pos);
+
+                    CalProportionalSpeed(obj->velDir, obj2->velDir, obj->speed, obj2->speed, obj->mass, obj2->mass);
+
+                    auto oldpDir = obj->pDir;
+                    float oldpspeed = obj->pspeed;
+                    XMStoreFloat4(&objpDir, XMLoadFloat4(&oldpDir) * oldpspeed + XMLoadFloat4(&objpDir) * (fDistance(&dpos, &objpos) * massScal2));
+                    XMFLOAT4 obdp = { 0,0,0,0 };
+                    XMStoreFloat4(&obdp, XMVector3Dot(XMLoadFloat4(&objpDir), XMLoadFloat4(&objpDir)));
+                    XMStoreFloat4(&obj->pDir, XMVector3Normalize(XMLoadFloat4(&objpDir)));
+                    obj->pspeed = sqrt(obdp.x);
+
+
+
+                    auto oldpDir2 = obj2->pDir;
+                    float oldpspeed2 = obj2->pspeed;
+                    XMStoreFloat4(&obj2pDir, XMLoadFloat4(&oldpDir2) * oldpspeed2 + XMLoadFloat4(&obj2pDir) * (fDistance(&dpos2, &ob2pos) * massScal1));
+                    XMFLOAT4 obdp2 = { 0,0,0,0 };
+                    XMStoreFloat4(&obdp2, XMVector3Dot(XMLoadFloat4(&obj2pDir), XMLoadFloat4(&obj2pDir)));
+                    XMStoreFloat4(&obj2->pDir, XMVector3Normalize(XMLoadFloat4(&obj2pDir)));
+                    obj2->pspeed = sqrt(obdp2.x);
+
+                }
+                delete retbuffers[i];
+                delete WorkBuffers[i];
+                delete IndexBuffers[i];
+                delete Queues[i];
+                delete retdatVect[i];
+                delete (std::vector<WORKDATA>*)WorkIndi[i][0];
+                delete (std::vector<int>*)WorkIndi[i][1];
+                WorkIndi[i].resize(0);
             }
-
-            delete (std::vector<WORKDATA>*)WorkIndi[i][0];
-            delete (std::vector<int>*)WorkIndi[i][1];
-
-            delete retbuffers[i];
-            delete WorkBuffers[i];
-            delete IndexBuffers[i];
-            
-            if (coutn != 0) {
-                auto ob2pos = *obj2->mPos.position;
-                auto objpos = *obj->mPos.position;
-
-                auto dpos = objpos;
-                auto dpos2 = ob2pos;
-
-                XMStoreFloat3(&ob2pos, XMLoadFloat3(&ob2pos) + XMLoadFloat4(&obj2->velDir) * obj2->speed);
-                XMStoreFloat3(&objpos, XMLoadFloat3(&objpos) + XMLoadFloat4(&obj->velDir) * obj->speed);
-
-                float massScal1 = (obj->mass / (obj->mass + obj2->mass));
-                float massScal2 = (obj2->mass / (obj->mass + obj2->mass));
-                massScal1 = massScal1 < 0.00001 ? 0 : massScal1;
-                massScal2 = massScal2 < 0.00001 ? 0 : massScal2;
-
-                XMStoreFloat3(&objpos, XMLoadFloat3(&objpos) + (XMLoadFloat4(&move2) * (move1 + 0.1)) * massScal2);
-                XMStoreFloat3(&ob2pos, XMLoadFloat3(&ob2pos) + (XMLoadFloat4(&move3) * (move1 + 0.1)) * massScal1);
-
-                auto objpDir = fDirection(&dpos, &objpos);
-                auto obj2pDir = fDirection(&dpos2, &ob2pos);
-
-                CalProportionalSpeed(obj->velDir, obj2->velDir, obj->speed, obj2->speed, obj->mass, obj2->mass);
-
-                auto oldpDir = obj->pDir;
-                float oldpspeed = obj->pspeed;
-                XMStoreFloat4(&objpDir, XMLoadFloat4(&oldpDir) * oldpspeed + XMLoadFloat4(&objpDir) * (fDistance(&dpos, &objpos) * massScal2));
-                XMFLOAT4 obdp = { 0,0,0,0 };
-                XMStoreFloat4(&obdp, XMVector3Dot(XMLoadFloat4(&objpDir), XMLoadFloat4(&objpDir)));
-                XMStoreFloat4(&obj->pDir, XMVector3Normalize(XMLoadFloat4(&objpDir)));
-                obj->pspeed = sqrt(obdp.x);
-
-
-
-                auto oldpDir2 = obj2->pDir;
-                float oldpspeed2 = obj2->pspeed;
-                XMStoreFloat4(&obj2pDir, XMLoadFloat4(&oldpDir2) * oldpspeed2 + XMLoadFloat4(&obj2pDir) * (fDistance(&dpos2, &ob2pos) * massScal1));
-                XMFLOAT4 obdp2 = { 0,0,0,0 };
-                XMStoreFloat4(&obdp2, XMVector3Dot(XMLoadFloat4(&obj2pDir), XMLoadFloat4(&obj2pDir)));
-                XMStoreFloat4(&obj2->pDir, XMVector3Normalize(XMLoadFloat4(&obj2pDir)));
-                obj2->pspeed = sqrt(obdp2.x);
-
+            else {
+                delete Queues[i];
+                delete retdatVect[i];
             }
-
         }
-        delete qP;
-        delete retdatVect[i];
+
+
     }
 }
 
@@ -383,7 +374,7 @@ std::vector <void *> Physics::ProcCollide(RStorage::eResource* obj, int tmindex,
 
     //This is where the crazy happens
     std::vector<WORKDATA>& WData = *(std::vector<WORKDATA>*)Result.emplace_back(new std::vector<WORKDATA>);
-    std::vector<int>* Indices = (std::vector<int>*)Result.emplace_back(new std::vector<int>);
+    std::vector<int>& Indices = *(std::vector<int>*)Result.emplace_back(new std::vector<int>);
 
     int wSize = 0;
     {
@@ -403,21 +394,21 @@ std::vector <void *> Physics::ProcCollide(RStorage::eResource* obj, int tmindex,
                     if (std::size(b.Indices) > 0 && std::size(b2.Indices) > 0) {
 
                         auto& w = WData.emplace_back(WORKDATA{ .bIndex = {b.bIndex, b2.bIndex}, .Position = {pos.x,pos.y,pos.z} });
-                       w.offset[0] = std::size(*Indices);
+                       w.offset[0] = std::size(Indices);
 
                        if (!WBone[w.bIndex[0]]) {
                            WBoneOff[w.bIndex[0]] = w.offset[0];
-                           Indices->append_range(objbdata[w.bIndex[0]].Indices);
+                           Indices.append_range(objbdata[w.bIndex[0]].Indices);
                            WBone[w.bIndex[0]] = true;
 
                        }else{
                             w.offset[0] = WBoneOff[w.bIndex[0]];
                        }
 
-                       w.offset[1] = std::size(*Indices);
+                       w.offset[1] = std::size(Indices);
                        if (!TBone[w.bIndex[1]]) {
                            TBoneOff[w.bIndex[1]] = w.offset[1];
-                           Indices->append_range(obj2bdata[w.bIndex[1]].Indices);
+                           Indices.append_range(obj2bdata[w.bIndex[1]].Indices);
                            TBone[w.bIndex[1]] = true;
                        }
                        else {
@@ -434,12 +425,17 @@ std::vector <void *> Physics::ProcCollide(RStorage::eResource* obj, int tmindex,
         if (std::size(WData) > 0) {
             wSize = std::size(WData);
         }
-        else return {};
+        else {
+            delete Result[0];
+            delete Result[1];
+            Result.resize(0);
+            return Result;
+        }
     }
-    WorkBuff = new cl::Buffer(context, CL_MEM_READ_ONLY, sizeof(WORKDATA) * wSize);
-    IndBuff = new cl::Buffer(context, CL_MEM_READ_ONLY, std::size(*Indices) * sizeof(int));
-    ReturnBuff = new cl::Buffer(context, CL_MEM_READ_WRITE, sizeof(RETURNDATA) * wSize);
 
+    WorkBuff = new cl::Buffer(context, CL_MEM_READ_ONLY, sizeof(WORKDATA) * wSize);
+    IndBuff = new cl::Buffer(context, CL_MEM_READ_ONLY, std::size(Indices) * sizeof(int));
+    ReturnBuff = new cl::Buffer(context, CL_MEM_READ_WRITE, sizeof(RETURNDATA) * wSize);
 
     return Result;
 }
