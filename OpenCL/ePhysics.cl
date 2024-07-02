@@ -33,18 +33,18 @@ typedef struct CINTERVAL
 }
 CINTERVAL;
 
-typedef struct Vertex
+typedef struct BONE
 {
-    XMFLOAT3 position;
-    XMFLOAT2 tc;
-    XMFLOAT3 normal;
+    XMFLOAT3 Position;
+    int numIndices;
+    int iOffset;
 }
-Vertex;
+BONE;
 
 typedef struct MODEL
 {
     int index[3];
-    Vertex vects[3];
+    XMFLOAT3 vects[3];
 }
 MODEL;
 
@@ -52,8 +52,9 @@ typedef struct WORKDATA
 {
     int bIndex[2];
     XMFLOAT3 Position;
-    int ICount[2];
-    int Offset[2];
+    int wWorkCount;
+    int tWorkCount;
+    int tOffset;
 }
 WORKDATA;
 
@@ -75,6 +76,11 @@ typedef struct CLOSEFORM
     float dist;
 }
 CLOSEFORM;
+
+typedef struct INTINDEX
+{
+    int Index[3];
+}INTINDEX;
 
 
 #define SORT(min,max)        \
@@ -519,12 +525,12 @@ CLOSEFORM TooClose(MODEL Tri1, MODEL Tri2, XMFLOAT3 Bone1, XMFLOAT3 TBone, XMFLO
     XMFLOAT3 Bone2 = AddXMFLOAT3(TBone, TPos);
     float bdist = fDistance(Bone1, Bone2);
 
-    XMFLOAT3 WAPoint = Tri1.vects[2].position;
-    XMFLOAT3 WBPoint = Tri1.vects[1].position;
-    XMFLOAT3 WCPoint = Tri1.vects[0].position;
-    XMFLOAT3 TAPoint = Tri2.vects[2].position;
-    XMFLOAT3 TBPoint = Tri2.vects[1].position;
-    XMFLOAT3 TCPoint = Tri2.vects[0].position;
+    XMFLOAT3 WAPoint = Tri1.vects[0];
+    XMFLOAT3 WBPoint = Tri1.vects[1];
+    XMFLOAT3 WCPoint = Tri1.vects[2];
+    XMFLOAT3 TAPoint = Tri2.vects[0];
+    XMFLOAT3 TBPoint = Tri2.vects[1];
+    XMFLOAT3 TCPoint = Tri2.vects[2];
     TAPoint = AddXMFLOAT3(TAPoint, TPos);
     TBPoint = AddXMFLOAT3(TBPoint, TPos);
     TCPoint = AddXMFLOAT3(TCPoint, TPos);
@@ -562,7 +568,6 @@ CLOSEFORM TooClose(MODEL Tri1, MODEL Tri2, XMFLOAT3 Bone1, XMFLOAT3 TBone, XMFLO
     TDistance[0] = (XMVector3Dot(WNorm, TAPoint)) + WScalar;
     TDistance[1] = (XMVector3Dot(WNorm, TBPoint)) + WScalar;
     TDistance[2] = (XMVector3Dot(WNorm, TCPoint)) + WScalar;
-
 
     if (TDistance[0] * TDistance[1] > 0 && TDistance[0] * TDistance[2] > 0)
     {
@@ -737,13 +742,13 @@ CLOSEFORM TooClose(MODEL Tri1, MODEL Tri2, XMFLOAT3 Bone1, XMFLOAT3 TBone, XMFLO
         }
         
     }
-
+    
 
     return Result;
 }
 
 
-void kernel coll(global const MODEL* WModel, global const MODEL* TModel, global const XMFLOAT3* WBposition, global const XMFLOAT3* TBposition, global const int* WCollIndex, global const int* TCollIndex, global const WORKDATA* WData, global const int* WIndices, global RETURNDATA* retdat){
+void kernel coll(global const XMFLOAT3* WModel, global const XMFLOAT3* TModel, global const XMFLOAT3* WBone, global const XMFLOAT3* TBone, global const INTINDEX* WbIndexBuff, global const INTINDEX* TbIndexBuff, global const WORKDATA* WData, global const int* WorkingIndices, global RETURNDATA* retdat){
 int sd = get_global_id(0);
 int Wind = get_global_id(1);
 int Tind = get_global_id(2);
@@ -755,41 +760,36 @@ if (!retdat[sd].coll)
 
     XMFLOAT3 TPos = WData[sd].Position;
 
-    MODEL Work = WModel[WCollIndex[WIndices[Wind + WData[sd].Offset[0]]]];
+    MODEL Work = { {0,0,0 }, { WModel[WbIndexBuff[WorkingIndices[Wind + WData[sd].tOffset]].Index[0]], WModel[WbIndexBuff[WorkingIndices[Wind + WData[sd].tOffset]].Index[1]], WModel[WbIndexBuff[WorkingIndices[Wind + WData[sd].tOffset]].Index[2]] } };
 
 
-    MODEL TWork = TModel[TCollIndex[WIndices[Tind + WData[sd].Offset[1]]]];
+    MODEL TWork = { { 0, 0, 0 }, { TModel[TbIndexBuff[WorkingIndices[Tind + WData[sd].wWorkCount + WData[sd].tOffset]].Index[0]], TModel[TbIndexBuff[WorkingIndices[Tind + WData[sd].wWorkCount + WData[sd].tOffset]].Index[1]], TModel[TbIndexBuff[WorkingIndices[Tind + WData[sd].wWorkCount + WData[sd].tOffset]].Index[2]] } };
+
+    CLOSEFORM Result = TooClose(Work, TWork, WBone[WData[sd].bIndex[0]], TBone[WData[sd].bIndex[1]], TPos);
 
 
-    CLOSEFORM Result = TooClose(Work, TWork, WBposition[WData[sd].bIndex[0]], TBposition[WData[sd].bIndex[1]], TPos);
-
+    bool fart = false;
     if (Result.coll)
     {
-        retdat[sd].coll = true;
-        XMFLOAT3 temp = Result.norm[0];
-        XMFLOAT3 temp2 = Result.norm[1];
+        fart = true;
+    }
 
-        retdat[sd].dir[0].x = temp.x;
-        retdat[sd].dir[0].y = temp.y;
-        retdat[sd].dir[0].z = temp.z;
-        retdat[sd].dir[0].w = 1;
-
-        retdat[sd].dir[1].x = temp2.x;
-        retdat[sd].dir[1].y = temp2.y;
-        retdat[sd].dir[1].z = temp2.z;
-        retdat[sd].dir[1].w = 0;
-
-
-        retdat[sd].index1[0] = WIndices[Wind + WData[sd].Offset[0]];
-        retdat[sd].index1[1] = WIndices[Tind + WData[sd].Offset[1]];
-        retdat[sd].index2[0] = WData[sd].Offset[0];
-        retdat[sd].index2[1] = WData[sd].Offset[1];
+    if (fart)
+    {
+        retdat[sd].index1[0] = WbIndexBuff[WorkingIndices[Wind]].Index[0];
+        retdat[sd].index1[1] = TbIndexBuff[WorkingIndices[Tind + WData[sd].wWorkCount + WData[sd].tOffset]].Index[0];
+        retdat[sd].index1[2] = Wind;
+        retdat[sd].coll = Result.coll;
         retdat[sd].dist[0] = Result.dist;
-        retdat[sd].dist[1] = Result.dist;
+        retdat[sd].dir[0].x = Result.norm[0].x;
+        retdat[sd].dir[0].y = Result.norm[0].y;
+        retdat[sd].dir[0].z = Result.norm[0].z;
+        retdat[sd].dir[1].x = Result.norm[1].x;
+        retdat[sd].dir[1].y = Result.norm[1].y;
+        retdat[sd].dir[1].z = Result.norm[1].z;
 
 
     }
-    
 
 
 }

@@ -19,16 +19,16 @@ FrameResource::FrameResource(Microsoft::WRL::ComPtr<ID3D12Device> pDevice, std::
 
     openbuffers.resize(std::size(models));
     cbvbuff.resize(std::size(models));
-    auto temp = 0;
-        for (auto& m : models) {
+    CD3DX12_RANGE readRange(0, 0);
+    for (auto i = 0; i < std::size(models); i++) {
             vertexBufferView.emplace_back(D3D12_VERTEX_BUFFER_VIEW{
-                .BufferLocation = m->model->vbuffer->GetGPUVirtualAddress(),
-                .SizeInBytes = m->model->uData->fsize.fSize,
+                .BufferLocation = models[i]->model->vbuffer->GetGPUVirtualAddress(),
+                .SizeInBytes = (UINT)std::size(models[i]->model->uData->Vertdata) * (UINT)sizeof(ReadX3D::Vertex),
                 .StrideInBytes = (UINT)sizeof(ReadX3D::Vertex)
                 });
             indexBufferView.emplace_back(D3D12_INDEX_BUFFER_VIEW{
-                .BufferLocation = m->model->ibuffer->GetGPUVirtualAddress(),
-                .SizeInBytes = (UINT)std::size(m->model->uData->idata) * (UINT)sizeof(WORD),
+                .BufferLocation = models[i]->model->ibuffer->GetGPUVirtualAddress(),
+                .SizeInBytes = (UINT)std::size(models[i]->model->uData->idata) * (UINT)sizeof(WORD),
                 .Format = DXGI_FORMAT_R16_UINT
                 });
 
@@ -41,11 +41,9 @@ FrameResource::FrameResource(Microsoft::WRL::ComPtr<ID3D12Device> pDevice, std::
                     &resourceDesc,
                     D3D12_RESOURCE_STATE_GENERIC_READ,
                     nullptr,
-                    IID_PPV_ARGS(&openbuffers[temp])) >> chk;
+                    IID_PPV_ARGS(&openbuffers[i])) >> chk;
             }
-            CD3DX12_RANGE readRange(0, 0);
-            openbuffers[temp]->Map(0, &readRange, reinterpret_cast<void**>(&cbvbuff[temp])) >> chk;
-            temp++;
+            openbuffers[i]->Map(0, &readRange, reinterpret_cast<void**>(&cbvbuff[i])) >> chk;
         }
 }
 
@@ -54,15 +52,11 @@ FrameResource::~FrameResource()
     for (auto& b : openbuffers) {
         b->Unmap(0, nullptr);
    }
-    for (auto& b : cbvbuff)
-    {
-        b = nullptr;
-    }
-    
+    cbvbuff.resize(0);
 }
 
 void FrameResource::InitBundle(ID3D12Device* pDevice, ID3D12PipelineState* pPso1,
-    UINT frameResourceIndex, ID3D12DescriptorHeap* pCbvSrvDescriptorHeap, UINT cbvSrvDescriptorSize, ID3D12DescriptorHeap* pSamplerDescriptorHeap, UINT samplerDescriptorSize, ID3D12RootSignature* pRootSignature, std::vector<RStorage::eResource*> models)
+    UINT frameResourceIndex, ID3D12DescriptorHeap* pCbvSrvDescriptorHeap, UINT cbvSrvDescriptorSize, ID3D12DescriptorHeap* pSamplerDescriptorHeap, UINT samplerDescriptorSize, ID3D12RootSignature* pRootSignature, std::vector<RStorage::eResource*>& models)
 {
     pDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_BUNDLE, bundleAllocator.Get(), pPso1, IID_PPV_ARGS(&bundle))>>chk;
 
@@ -75,7 +69,7 @@ void FrameResource::InitBundle(ID3D12Device* pDevice, ID3D12PipelineState* pPso1
 
 
 void FrameResource::PopulateCommandList(ID3D12GraphicsCommandList* pCommandList, ID3D12PipelineState* pPso1,
-    UINT frameResourceIndex, ID3D12DescriptorHeap* pCbvSrvDescriptorHeap, UINT cbvSrvDescriptorSize, ID3D12DescriptorHeap* pSamplerDescriptorHeap, ID3D12RootSignature* pRootSignature, std::vector<RStorage::eResource*> models)
+    UINT frameResourceIndex, ID3D12DescriptorHeap* pCbvSrvDescriptorHeap, UINT cbvSrvDescriptorSize, ID3D12DescriptorHeap* pSamplerDescriptorHeap, ID3D12RootSignature* pRootSignature, std::vector<RStorage::eResource*>& models)
 {
     pCommandList->SetGraphicsRootSignature(pRootSignature);
 
@@ -96,32 +90,29 @@ void FrameResource::PopulateCommandList(ID3D12GraphicsCommandList* pCommandList,
     std::vector<int> tempvect{};
 
     auto temp = 0;
-    for (auto& m : models) {
+    for (auto i = 0; i < std::size(models); i++) {
         
-            pCommandList->IASetIndexBuffer(&indexBufferView[temp]);
-            pCommandList->IASetVertexBuffers(0, 1, &vertexBufferView[temp]);
+            pCommandList->IASetIndexBuffer(&indexBufferView[i]);
+            pCommandList->IASetVertexBuffers(0, 1, &vertexBufferView[i]);
             
             pCommandList->SetGraphicsRootDescriptorTable(2, cbvSrvHandle);
             cbvSrvHandle.Offset(cbvSrvDescriptorSize);
             pCommandList->SetGraphicsRootDescriptorTable(0, cbvSrvHandle);
             cbvSrvHandle.Offset(cbvSrvDescriptorSize);
-            pCommandList->DrawIndexedInstanced(std::size(m->model->uData->idata), 1, 0, 0, 0);
-        temp++;
+            pCommandList->DrawIndexedInstanced(std::size(models[i]->model->uData->idata), 1, 0, 0, 0);
     }
     PIXEndEvent(pCommandList);
 }
 
-void FrameResource::UpdateConstantBuffers(DirectX::FXMMATRIX view, DirectX::CXMMATRIX projection, std::vector<RStorage::eResource*> Modls)
+void FrameResource::UpdateConstantBuffers(DirectX::FXMMATRIX view, DirectX::CXMMATRIX projection, std::vector<RStorage::eResource*>& Modls)
 {
     DirectX::XMFLOAT4X4 mvp;
-    auto temp = 0;
-        for (auto& m : Modls)
-        {
-            // Compute the model-view-projection matrix.
-            //XMStoreFloat4x4(&mvp,  XMMatrixTranspose(m->cmatrix * view * projection));
-            XMStoreFloat4x4(&mvp, XMMatrixTranspose(m->model->cmatrix * view * projection));
-            // Copy this matrix into the appropriate location in the upload heap subresource.
-            memcpy(cbvbuff[temp], &mvp, sizeof(mvp));
-            temp++;
-        }
+    for (auto i = 0; i < std::size(Modls); i++)
+    {
+        // Compute the model-view-projection matrix.
+        //XMStoreFloat4x4(&mvp,  XMMatrixTranspose(m->cmatrix * view * projection));
+        XMStoreFloat4x4(&mvp, XMMatrixTranspose(Modls[i]->model->cmatrix * view * projection));
+        // Copy this matrix into the appropriate location in the upload heap subresource.
+        memcpy(cbvbuff[i], &mvp, sizeof(mvp));
+    }
 }

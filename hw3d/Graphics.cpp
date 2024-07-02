@@ -13,7 +13,8 @@ Graphics::Graphics(HWND* hWnd, int height, int width)
 	CurBackBuffer(0),
 	cframeIndex(0),
 	cbackBuffer(nullptr),
-	lModels(std::make_unique<RStorage>())
+	lModels(std::make_unique<RStorage>()),
+	modelVect(lModels->initializedModels)
 {
 }
 
@@ -246,15 +247,15 @@ void Graphics::LoadPipeline() {
 }
 int Graphics::loadModels(RStorage::eResource* model, bool unique) {
 	if (unique) {
-		modelVect->emplace_back(model);
+		modelVect.emplace_back(model);
 	}
 	else {
 		bool check = false;
-		for (auto& m : *modelVect) {
+		for (auto& m : modelVect) {
 			check = m->model->umID == model->model->umID && !check ? true : check;
 		}
 		if (!check) {
-			modelVect->emplace_back(model);
+			modelVect.emplace_back(model);
 		}
 	}
 
@@ -263,10 +264,10 @@ int Graphics::loadModels(RStorage::eResource* model, bool unique) {
 
 int Graphics::loadModels(std::vector<RStorage::eResource*>& model, bool replace) {
 	if (replace) {
-		modelVect = &model;
+		modelVect = model;
 	}
 	else {
-		modelVect->append_range(model);
+		modelVect.append_range(model);
 	}
 	return 0;
 }
@@ -281,7 +282,7 @@ void Graphics::LoadResources(int numLoadedSrv)
 		pDevice->CreateDescriptorHeap(&dsc, IID_PPV_ARGS(&srvDescriptorHeap)) >> chk;
 	}
 
-	lModels->CreateBuffers(*modelVect, commandList, pDevice, commandAllocator, commandQueue, bufferCount);
+	lModels->CreateBuffers(modelVect, commandList, pDevice, commandAllocator, commandQueue, bufferCount);
 	
 	// submit command list to queue as array with single element 
 	{
@@ -327,7 +328,7 @@ void Graphics::UpdateModel(RStorage::eResource* bm) {
 	for (auto& b : bm->model->uData->bdata) {
 		//XMStoreFloat4x4(&b.finalTransform, XMLoadFloat4x4(&b.matrix) * XMLoadFloat4x4(&b.node->LocalTransform) * GlobITrans);
 	}
-	auto& vdata = bm->model->uData->cdata;
+	auto& vdata = bm->model->uData->Vertdata;
 	auto& idata = bm->model->uData->idata;
 	ReadX3D::Vertex* mappedVertexData = nullptr;
 	bm->model->uvbuffer->Map(0, nullptr, reinterpret_cast<void**>(&mappedVertexData)) >> chk;
@@ -351,10 +352,8 @@ void Graphics::UpdateModel(RStorage::eResource* bm) {
 		}
 	}*/
 	
-	auto tempcount = 0;
-	for (auto v = 0; v < std::size(idata); v++) {
-		memcpy(&mappedVertexData[v], &vdata[tempcount].verts[idata[v].index % 3], sizeof(ReadX3D::Vertex));
-		tempcount += idata[v].index % 3 == 0 ? 1 : 0;
+	for (auto i = 0; i < std::size(vdata); i++) {
+		//memcpy(&mappedVertexData[i], &vdata[i], sizeof(ReadX3D::Vertex));
 	}
 
 	bm->model->uvbuffer->Unmap(0, nullptr);
@@ -381,9 +380,9 @@ void Graphics::CreateFrameResources() {
 	CD3DX12_CPU_DESCRIPTOR_HANDLE cbvSrvHandle(srvDescriptorHeap->GetCPUDescriptorHandleForHeapStart());
 	for (UINT i = 0; i < bufferCount; i++)
 	{
-		FrameResource* pFrameResource = new FrameResource(pDevice.Get(), *modelVect);
+		FrameResource* pFrameResource = new FrameResource(pDevice.Get(), modelVect);
 		auto temp = 0;
-		for (auto& m : *modelVect) {
+		for (auto& m : modelVect) {
 			// Describe and create a constant buffer view (CBV).
 			D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
 			cbvDesc.BufferLocation = pFrameResource->openbuffers[temp]->GetGPUVirtualAddress();
@@ -403,7 +402,7 @@ void Graphics::CreateFrameResources() {
 
 		}
 
-		pFrameResource->InitBundle(pDevice.Get(), pipelineState.Get(), i, srvDescriptorHeap.Get(), srvDescriptorSize, samplerDescriptorHeap.Get(), samplerDescriptorSize, rootSignature.Get(), *modelVect);
+		pFrameResource->InitBundle(pDevice.Get(), pipelineState.Get(), i, srvDescriptorHeap.Get(), srvDescriptorSize, samplerDescriptorHeap.Get(), samplerDescriptorSize, rootSignature.Get(), modelVect);
 
 		backBuffers.emplace_back(pFrameResource);
 
@@ -415,7 +414,7 @@ void Graphics::PopCommandList(FrameResource* backBuffer) {
 	using namespace DirectX;
 	cbackBuffer->commandAllocator->Reset() >> chk;
 	commandList->Reset(cbackBuffer->commandAllocator.Get(), pipelineState.Get()) >> chk;
-	for (auto& m : *modelVect) {
+	for (auto& m : modelVect) {
 		UpdateLocalTransform(m);
 		if (m->model->animate.load()) {
 			lModels->UpdBuffer(m, commandList, pDevice, commandAllocator, commandQueue);
@@ -501,7 +500,7 @@ void Graphics::RenderFrame() {
 	}
 	curCamera.cmatrix = DirectX::XMMatrixLookToRH(XMLoadFloat3(curCamera.position), XMLoadFloat4(&curCamera.rotation), XMLoadFloat4(&curCamera.upDirection));
 	cbackBuffer->UpdateConstantBuffers(curCamera.cmatrix,
-		DirectX::XMMatrixPerspectiveFovRH(1.333f, float(width) / float(height), 0.1f, 100000.0f), *modelVect);
+		DirectX::XMMatrixPerspectiveFovRH(1.333f, float(width) / float(height), 0.1f, 100000.0f), modelVect);
 	umodel.unlock();
 	PopCommandList(cbackBuffer);
 	

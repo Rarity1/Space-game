@@ -33,6 +33,9 @@ public:
 		ID3D12Resource* tbuffer = nullptr;
 		ID3D12Resource* uvbuffer = nullptr;
 		ID3D12Resource* uibuffer = nullptr;
+		cl::Buffer clBoneBuff;
+		cl::Buffer clBuff;
+		cl::Buffer clIndexBuff;
 		std::atomic<bool> buffersWritten;
 		DirectX::XMMATRIX cmatrix;
 		std::atomic<bool> animate = false;
@@ -62,10 +65,7 @@ public:
 		RStorage::pChange which = RStorage::INIT;
 		std::mutex currentMtx;
 		std::filesystem::path curTexture;
-		cl::Buffer clBuff;
 		cl::Buffer clPositionBuff;
-		cl::Buffer clBoneBuff;
-		cl::Buffer clCollIndBuff;
 		std::atomic<bool> updated = false;
 		std::atomic<bool> Collision = false;
 	};

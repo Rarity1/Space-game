@@ -53,15 +53,17 @@ private:
 	struct WORKDATA {
 		int bIndex[2];
 		DirectX::XMFLOAT3 Position{0,0,0};
-		int ICount[2];
-		int offset[2];
+		int wWorkCount;
+		int tWorkCount;
+		int tOffset;
 	};
 
 	bool VectThreadCheck(std::vector<int>& BoolV);
 
 	//void OpenWorkUpload(Physics::WORKDATA& WData, OffsetC& offset, RStorage::eResource*& obj, RStorage::eResource*& obj2);
-
-	//int WorkDataSize = 40;
+	struct INTINDEX {
+		int Index[3];
+	};
 	std::vector<cl::Device> devices;
 	cl::Context context;
 	cl::Program::Sources sources;

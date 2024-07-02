@@ -177,15 +177,16 @@ void ReadX3D::cvertexData()
 		bdata[i].node = ndata.aChildren[i];
 		bdata[i].node->bIndex = bdata[i].bIndex;
 	}
-	std::vector<Vertex> vdata;
-
+	std::vector<Vertex>& vdata = Vertdata;
 	{
 		std::stringstream ssvertex(positions->value());
 		float x, y, z;
 	while (ssvertex >> x >> y >> z) {
 		vdata.emplace_back(Vertex{ .position{x, y, z} });
 	}
+
 	}
+	
 	std::vector<DirectX::XMFLOAT2> tempcoord;
 	{
 		std::stringstream ssmap(pmap->value());
@@ -194,6 +195,8 @@ void ReadX3D::cvertexData()
 		while (ssmap >> mx >> my) {
 			tempcoord.emplace_back(mx, 1 - my);
 	}
+	
+	
 	}
 	std::vector<DirectX::XMFLOAT3> normals;
 	{
@@ -206,50 +209,31 @@ void ReadX3D::cvertexData()
 	
 
 
-
-	std::stringstream ssindex(parray->value());
-	WORD vertex, normal, texcoord;
-	while (ssindex >> vertex >> normal >> texcoord) {
-		vFaceData t = {vertex, normal};
-		idata.emplace_back(t);
-	}
-	std::vector<Vertex> tempdata;
-	std::vector<vFaceData> tempindex;
-	std::vector<boneweight> tempvcount;
-	for (auto c = 0; c < size; c++) {
-		for (auto& i : idata) {
-			if (i.index == c) {
-				tempindex.emplace_back(i);
-			}
-
+	{
+		std::stringstream ssindex(parray->value());
+		WORD vertex, normal, texcoord;
+		while (ssindex >> vertex >> normal >> texcoord) {
+			vFaceData t = { vertex, normal, texcoord };
+			idata.emplace_back(t);
 		}
-	}
 
-	
-	auto c = std::size(tempindex)-1;
-	for (auto& i : tempindex) {
-		i.index = c;
-		c-=1;
 	}
-
-	for (auto& i : idata) {
-		tempdata.push_back(vdata[i.index]);
+	std::vector<Vertex> tempdata(std::size(idata));
+	std::vector<boneweight> tempweights(std::size(idata));
+	for (auto i = 0; i < std::size(idata); i++) {
 		if (std::size(weights) > 0) {
-			tempvcount.push_back(weights[i.index]);
+			tempweights[i] = (weights[idata[i].index]);
 
 		}
 		else {
-			tempvcount.push_back(boneweight{ {0}, {1.0} });
+			tempweights[i] = (boneweight{ {0}, {1.0} });
 		}
+		tempdata[i] = vdata[idata[i].index];
+		tempdata[i].tc = tempcoord[idata[i].texcoord];
+		tempdata[i].normal = normals[idata[i].normal];
 	}
-	for (auto& i : tempindex) {
-		tempdata[i.index].tc = tempcoord[i.index];
-		tempdata[i.index].normal = normals[i.normal];
-	}
-	
 	vdata = tempdata;
-	idata = tempindex;
-	weights = tempvcount;
+	weights = tempweights;
 	
 
 	if (std::size(bdata) == 0) {
@@ -258,8 +242,9 @@ void ReadX3D::cvertexData()
 			bdata[0].Indices.emplace_back(i.index);
 		}
 	}
-	for (auto i = 0; i < std::size(tempvcount); i++) {
-		for (auto& j : tempvcount[i].bIndex) {
+
+	for (auto i = 0; i < std::size(weights); i++) {
+		for (auto& j : weights[i].bIndex) {
 			bdata[j].Indices.emplace_back(i);
 		}
 	}
@@ -275,27 +260,26 @@ void ReadX3D::cvertexData()
 		b.smallsphere = b.sphere;
 	}
 
-	
+	int modctr = 0;
+	int sctr = 0;
+	Map.resize(std::size(idata));
+	TriData.resize(std::size(idata)/3, {nullptr, nullptr, nullptr});
+	for (auto i = 0; i < std::size(idata); i++) {
+		Map[i] = sctr;
+		TriData[sctr][modctr] = (&vdata[i]);
+		modctr++;
+		sctr += modctr == 3 ? 1 : 0;
+		modctr = modctr == 3 ? 0 : modctr;
+	}
 
-	cdata.resize(std::size(idata)/3);
 
 	float collradius = 0;
-	int tempcount = 0;
+	DirectX::XMFLOAT3 Zero{ 0,0,0 };
 	for (auto& i : idata) {
-		cdata[tempcount].verts[abs((i.index % 3) - 2)] = vdata[i.index];
-		cdata[tempcount].index[abs((i.index % 3) - 2)] = i.index;
-		tempcount += i.index % 3 == 0 ? 1 : 0;
-		auto temp = abs(vdata[i.index].position.x) + abs(vdata[i.index].position.y) + abs(vdata[i.index].position.z);
+		auto temp = fDistance(&vdata[i.index].position, &Zero);
 		collradius = temp > collradius ? temp : collradius;
 	}
 
-	WeightCIndex.resize(std::size(idata));
-
-	for (auto i = 0; i < std::size(cdata); i++) {
-		WeightCIndex[cdata[i].index[0]] = i;
-		WeightCIndex[cdata[i].index[1]] = i;
-		WeightCIndex[cdata[i].index[2]] = i;
-	}
 
 	for (auto& b : bdata) {
 		float dist = 0;
@@ -306,15 +290,19 @@ void ReadX3D::cvertexData()
 			fdist = fDistance(&b.sphere.Center, &vdata[i].position);
 			dist = fdist > dist ? fdist : dist;
 
-			DirectX::XMFLOAT3 zero = vdata[cdata[WeightCIndex[i]].index[0]].position;
-			DirectX::XMFLOAT3 one = vdata[cdata[WeightCIndex[i]].index[1]].position;
-			DirectX::XMFLOAT3 two = vdata[cdata[WeightCIndex[i]].index[2]].position;
+			std::vector<Vertex*>& Verts = FindTri(i);
+			//Ptr to vector of ptrs requires array index ????
+			DirectX::XMFLOAT3 zero = Verts[0]->position;
+			DirectX::XMFLOAT3 one = Verts[1]->position;
+			DirectX::XMFLOAT3 two = Verts[2]->position;
 
-			DirectX::XMFLOAT3 face = {(zero.x + one.x + two.x)/3,(zero.y + one.y + two.y) / 3 ,(zero.z + one.z + two.z) / 3 };
+			DirectX::XMFLOAT3 face = { (zero.x + one.x + two.x) / 3,(zero.y + one.y + two.y) / 3 ,(zero.z + one.z + two.z) / 3 };
 
 			tdist = fDistance(&b.sphere.Center, &face);
 
 			ldist = (tdist < ldist) || (ldist == 0) ? tdist : ldist;
+
+			
 		}
 		b.sphere.Radius = dist;
 		b.smallsphere.Radius = ldist;
@@ -322,9 +310,17 @@ void ReadX3D::cvertexData()
 
 	Sphere.Radius = collradius;
 	Sphere.Center = { 0,0,0 };
+}
 
-	fsize.fSize = sizeof(ReadX3D::Vertex) * std::size(vdata);
-	fsize.vCount = std::size(vdata);
+//Finds Relative Triangle Given the Index
+std::vector<ReadX3D::Vertex*>& ReadX3D::FindTri(int& Index)
+{
+	return TriData[Map[Index]];
+}
+
+int ReadX3D::FindIndex(int& Index)
+{
+	return Map[Index];
 }
 
 void ReadX3D::GetAllChildBones(Node* node, std::vector<Node*>* Parent)

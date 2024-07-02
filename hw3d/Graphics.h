@@ -51,7 +51,7 @@ private:
 
 	static const bool UseBundles = true;
 	std::vector<FrameResource*> frameResources;
-	std::vector<RStorage::eResource*>* modelVect;
+	std::vector<RStorage::eResource*>& modelVect;
 	struct PipelineStateStream
 	{
 		CD3DX12_PIPELINE_STATE_STREAM_ROOT_SIGNATURE RootSignature;

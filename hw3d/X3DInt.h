@@ -16,20 +16,14 @@ public:
 		DirectX::XMFLOAT2 tc;
 		DirectX::XMFLOAT3 normal;
 	};
+	std::vector<ReadX3D::Vertex*>& FindTri(int& Index);
+	int FindIndex(int& Index);
+
 	struct vFaceData {
 		WORD index;
 		WORD normal;
-		//WORD texcoord;
+		WORD texcoord;
 	};
-	struct Size {
-		UINT fSize = 0;
-		UINT vCount = 0;
-	};
-	struct pCollision {
-		int index[3]{-1,-1,-1};
-		Vertex verts[3];
-	};
-	
 
 	struct Node {
 		float mass = 0;
@@ -54,15 +48,17 @@ public:
 		DirectX::BoundingSphere sphere;
 		DirectX::BoundingSphere smallsphere;
 	};
-	std::vector<pCollision> cdata;
+	std::vector<Vertex> Vertdata;
 	std::vector<vFaceData> idata;
 	std::vector<int> WeightCIndex;
 	std::vector<Bone> bdata;
 	Node ndata;
 	std::vector<boneweight> weights;
 	DirectX::BoundingSphere Sphere;
-	Size fsize;
+	//Size fsize;
 private:
+	std::vector<std::vector<Vertex*>> TriData;
+	std::vector<int> Map;
     float fDistance(DirectX::XMFLOAT3* pos1, DirectX::XMFLOAT3* pos2);
 	DirectX::XMFLOAT4X4 strToMatrix(std::istringstream& rawmatri);
 	Node ChildNodeRead(rapidxml::xml_node<char>* node);

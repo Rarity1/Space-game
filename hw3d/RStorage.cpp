@@ -58,7 +58,7 @@ void RStorage::CreateBuffers(std::vector<eResource*>& m, Microsoft::WRL::ComPtr<
 	for (auto& bm : m) {
 		{
 			const CD3DX12_HEAP_PROPERTIES heapProps{ D3D12_HEAP_TYPE_DEFAULT };
-			const auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(bm->model->uData->fsize.fSize);
+			const auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(std::size(bm->model->uData->Vertdata) * sizeof(ReadX3D::Vertex));
 			pDevice->CreateCommittedResource(
 				&heapProps,
 				D3D12_HEAP_FLAG_NONE,
@@ -70,7 +70,7 @@ void RStorage::CreateBuffers(std::vector<eResource*>& m, Microsoft::WRL::ComPtr<
 
 		{
 			const CD3DX12_HEAP_PROPERTIES heapProps{ D3D12_HEAP_TYPE_UPLOAD };
-			const auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(bm->model->uData->fsize.fSize);
+			const auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(std::size(bm->model->uData->Vertdata) * sizeof(ReadX3D::Vertex));
 			pDevice->CreateCommittedResource(
 				&heapProps,
 				D3D12_HEAP_FLAG_NONE,
@@ -111,17 +111,21 @@ void RStorage::CreateBuffers(std::vector<eResource*>& m, Microsoft::WRL::ComPtr<
 				bm->model->uibuffer->Map(0, nullptr, reinterpret_cast<void**>(&mappedIndexData)) >> chk;
 
 
-				auto& temporaryVertex = bm->model->uData->cdata;
+				auto& temporaryVertex = bm->model->uData->Vertdata;
 				auto& idata = bm->model->uData->idata;
-				auto tempcount = 0;
 				for (auto i = 0; i < std::size(temporaryVertex); i++) {
-					memcpy(&mappedVertexData[i], &temporaryVertex[tempcount].verts[idata[i].index % 3], sizeof(ReadX3D::Vertex));
-					tempcount += idata[i].index % 3 == 0 ? 1 : 0;
-				}
 
+						memcpy(&mappedVertexData[i], &temporaryVertex[i], sizeof(ReadX3D::Vertex));
+
+
+				}
 				auto& temporaryIndex = bm->model->uData->idata;
-				for (auto i = 0; i < std::size(temporaryIndex); i++) {
-					memcpy(&mappedIndexData[i], &temporaryIndex[i].index, sizeof(WORD));
+
+				//For some reason models only render correctly if the indices are inverted?
+				int sizeofin = std::size(temporaryIndex);
+				for (auto i = 0; i < sizeofin; i++) {
+					int index = sizeofin - 1 - i;
+					memcpy(&mappedIndexData[i], &index, sizeof(WORD));
 				}
 			}
 			bm->model->uvbuffer->Unmap(0, nullptr);
@@ -152,7 +156,6 @@ void RStorage::UpdBuffer(eResource* bm, Microsoft::WRL::ComPtr<ID3D12GraphicsCom
 		commandList->ResourceBarrier(1, &barrier);
 	}
 	commandList->CopyResource(bm->model->vbuffer, bm->model->uvbuffer);
-	if(bm->model->uibuffer != nullptr)
 	commandList->CopyResource(bm->model->ibuffer, bm->model->uibuffer);
 	{
 		const auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
