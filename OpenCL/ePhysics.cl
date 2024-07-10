@@ -41,10 +41,18 @@ typedef struct BONE
 }
 BONE;
 
+typedef struct UPVERTNORM
+{
+    XMFLOAT3 Vert;
+    XMFLOAT3 Norm;
+}
+UPVERTNORM;
+
+
 typedef struct MODEL
 {
     int index[3];
-    XMFLOAT3 vects[3];
+    UPVERTNORM vects[3];
 }
 MODEL;
 
@@ -58,12 +66,13 @@ typedef struct WORKDATA
 }
 WORKDATA;
 
+
 typedef struct RETURNDATA
 {
     bool coll;
     int index1[3];
     int index2[3];
-    XMFLOAT4 dir[2];
+    XMFLOAT3 dir[2];
     float dist[2];
 }
 RETURNDATA;
@@ -81,18 +90,6 @@ typedef struct INTINDEX
 {
     int Index[3];
 }INTINDEX;
-
-
-#define SORT(min,max)        \
-          if (min > max)     \
-                 {           \
-                float temp;  \
-                temp = min;  \
-                min = max;   \
-                max = temp;  \
-             }
-
-
 
 
 float fDistance(XMFLOAT3 pos1, XMFLOAT3 pos2)
@@ -519,18 +516,17 @@ CLOSEFORM TooClose(MODEL Tri1, MODEL Tri2, XMFLOAT3 Bone1, XMFLOAT3 TBone, XMFLO
 
     XMFLOAT3 Zero = {0,0,0};
 
-    Result.norm[0] = Zero;
-    Result.norm[1] = Zero;
+
 
     XMFLOAT3 Bone2 = AddXMFLOAT3(TBone, TPos);
     float bdist = fDistance(Bone1, Bone2);
 
-    XMFLOAT3 WAPoint = Tri1.vects[0];
-    XMFLOAT3 WBPoint = Tri1.vects[1];
-    XMFLOAT3 WCPoint = Tri1.vects[2];
-    XMFLOAT3 TAPoint = Tri2.vects[0];
-    XMFLOAT3 TBPoint = Tri2.vects[1];
-    XMFLOAT3 TCPoint = Tri2.vects[2];
+    XMFLOAT3 WAPoint = Tri1.vects[0].Vert;
+    XMFLOAT3 WBPoint = Tri1.vects[1].Vert;
+    XMFLOAT3 WCPoint = Tri1.vects[2].Vert;
+    XMFLOAT3 TAPoint = Tri2.vects[0].Vert;
+    XMFLOAT3 TBPoint = Tri2.vects[1].Vert;
+    XMFLOAT3 TCPoint = Tri2.vects[2].Vert;
     TAPoint = AddXMFLOAT3(TAPoint, TPos);
     TBPoint = AddXMFLOAT3(TBPoint, TPos);
     TCPoint = AddXMFLOAT3(TCPoint, TPos);
@@ -553,8 +549,10 @@ CLOSEFORM TooClose(MODEL Tri1, MODEL Tri2, XMFLOAT3 Bone1, XMFLOAT3 TBone, XMFLO
 
 
 
-    XMFLOAT3 WNorm = XMVector3Cross(SubXMFLOAT3(WBPoint, WAPoint), SubXMFLOAT3(WCPoint, WAPoint));
-    XMFLOAT3 TNorm;
+    XMFLOAT3 WNorm = Tri1.vects[0].Norm;
+    XMFLOAT3 TNorm = Tri2.vects[0].Norm;
+    Result.norm[0] = WNorm;
+    Result.norm[1] = TNorm;
     XMFLOAT3 ISectLineDir;
     int iSectdex = 0;
 
@@ -577,7 +575,6 @@ CLOSEFORM TooClose(MODEL Tri1, MODEL Tri2, XMFLOAT3 Bone1, XMFLOAT3 TBone, XMFLO
     //If T Tri is all on one side or not; false if it is, true if not
     if (Result.coll)
     {
-        TNorm = XMVector3Cross(SubXMFLOAT3(TBPoint, TAPoint), SubXMFLOAT3(TCPoint, TAPoint));
         XMFLOAT3 TAverage = MulXMFLOAT3(AddXMFLOAT3(AddXMFLOAT3(TAPoint, TBPoint), TCPoint), 1.0 / 3.0);
 
         float TScalar = -XMVector3Dot(TNorm, TAverage);
@@ -654,8 +651,22 @@ CLOSEFORM TooClose(MODEL Tri1, MODEL Tri2, XMFLOAT3 Bone1, XMFLOAT3 TBone, XMFLO
             test1[0] = u;
             test1[1] = u1;
 
-            SORT(test0[0], test0[1]);
-            SORT(test1[0], test1[1]);
+            if (test0[0] > test0[1])     
+                 {           
+                float temp;  
+                temp = test0[0];
+                test0[0] = test0[1];
+                test0[1] = temp; 
+             }
+
+            if (test1[0] > test1[1])
+            {
+                float temp;
+                temp = test1[0];
+                test1[0] = test1[1];
+                test1[1] = temp;
+            }
+
             if (test0[1] < test1[0] || test1[1] < test0[0]) Result.coll = false;
 
             int TIndex = 0;
@@ -694,8 +705,6 @@ CLOSEFORM TooClose(MODEL Tri1, MODEL Tri2, XMFLOAT3 Bone1, XMFLOAT3 TBone, XMFLO
                 }
             }
             Result.dist = TDistance[TIndex] > WDistance[WIndex] ? -(TDistance[TIndex]) : -(WDistance[WIndex]);
-            Result.norm[0] = MulXMFLOAT3(WNorm, 1 / fDistance(WNorm, Zero));
-            Result.norm[1] = MulXMFLOAT3(TNorm, 1 / fDistance(TNorm, Zero));
         }
 
 
@@ -704,10 +713,8 @@ CLOSEFORM TooClose(MODEL Tri1, MODEL Tri2, XMFLOAT3 Bone1, XMFLOAT3 TBone, XMFLO
     {
 
         //Figure out why this doesnt work & remove false
-        
         if (TDistance[0] < 0 && false)
         {
-            TNorm = XMVector3Cross(SubXMFLOAT3(TBPoint, TAPoint), SubXMFLOAT3(TCPoint, TAPoint));
             XMFLOAT3 TAverage = MulXMFLOAT3(AddXMFLOAT3(AddXMFLOAT3(TAPoint, TBPoint), TCPoint), 1.0 / 3.0);
 
             float TScalar = -XMVector3Dot(TNorm, TAverage);
@@ -748,7 +755,7 @@ CLOSEFORM TooClose(MODEL Tri1, MODEL Tri2, XMFLOAT3 Bone1, XMFLOAT3 TBone, XMFLO
 }
 
 
-void kernel coll(global const XMFLOAT3* WModel, global const XMFLOAT3* TModel, global const XMFLOAT3* WBone, global const XMFLOAT3* TBone, global const INTINDEX* WbIndexBuff, global const INTINDEX* TbIndexBuff, global const WORKDATA* WData, global const int* WorkingIndices, global RETURNDATA* retdat){
+void kernel coll(global const UPVERTNORM* WModel, global const UPVERTNORM* TModel, global const XMFLOAT3* WBone, global const XMFLOAT3* TBone, global const INTINDEX* WbIndexBuff, global const INTINDEX* TbIndexBuff, global const WORKDATA* WData, global const int* WorkingIndices, global RETURNDATA* retdat){
 int sd = get_global_id(0);
 int Wind = get_global_id(1);
 int Tind = get_global_id(2);
@@ -780,13 +787,11 @@ if (!retdat[sd].coll)
         retdat[sd].index1[1] = TbIndexBuff[WorkingIndices[Tind + WData[sd].wWorkCount + WData[sd].tOffset]].Index[0];
         retdat[sd].index1[2] = Wind;
         retdat[sd].coll = Result.coll;
-        retdat[sd].dist[0] = Result.dist;
-        retdat[sd].dir[0].x = Result.norm[0].x;
-        retdat[sd].dir[0].y = Result.norm[0].y;
-        retdat[sd].dir[0].z = Result.norm[0].z;
-        retdat[sd].dir[1].x = Result.norm[1].x;
-        retdat[sd].dir[1].y = Result.norm[1].y;
-        retdat[sd].dir[1].z = Result.norm[1].z;
+        retdat[sd].dist[0] = 0.1;
+        retdat[sd].dist[1] = 0.1;
+        retdat[sd].dir[0] = Result.norm[0];
+        retdat[sd].dir[1] = Result.norm[1];
+
 
 
     }

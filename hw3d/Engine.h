@@ -9,7 +9,7 @@ public:
 	void Update();
 	Physics::mThreadTime timer;
 	bool engInit = true;
-	std::vector<RStorage::eResource*>& trackedModels;
+	std::vector<RStorage::eResource>& trackedModels;
 private:
 	double culmtime;
 	std::thread EngThread;

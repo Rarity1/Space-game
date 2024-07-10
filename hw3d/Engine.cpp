@@ -27,15 +27,14 @@ void Engine::iLoad() {
         //pGfx->lModels->initResource("cube", 1, 1, 200, 0.3, DirectX::XMFLOAT3{ 10 + p,0,143 });
     }
     //trackedModels[0]->mworld = trackedModels[2];
-    //trackedModels[1]->mworld = trackedModels[2];
+    //trackedModels[1].mworld = &trackedModels[2];
     //trackedModels[3]->mworld = trackedModels[2];
 
 
-    plModel = trackedModels[1];
-    pGfx->curCamera.position = plModel->mPos.position;
+    plModel = &trackedModels[1];
+    pGfx->curCamera.position = plModel->mPos->position;
     
     //end model tracking.
-    pGfx->loadModels(trackedModels, true);
     //If all models arent unique this is a waste of space
     pGfx->LoadResources(std::size(trackedModels));
     pGfx->umodel.unlock();
@@ -45,7 +44,7 @@ void Engine::iLoad() {
     }
     eRun.store(true);
     for (auto& m : trackedModels) {
-        pGfx->UpdateModel(m);
+        pGfx->UpdateModel(&m);
     }
 }
 
@@ -152,7 +151,8 @@ void Engine::UCampos() {
 
     if(pitch != 0 || yaw != 0 || roll != 0)
     RotateCam(pitch, yaw, roll);
-    
+    pGfx->curCamera.position = plModel->mPos->position;
+
 }
 
 void Engine::RotateCam(float Pitch, float Yaw, float Roll) {

@@ -24,9 +24,7 @@ public:
 	void RenderFrame();
 	void LoadResources(int numLoadedSrv);
 	void LoadPipeline();
-	int loadModels(RStorage::eResource* model, bool unique = false);
-	int loadModels(std::vector<RStorage::eResource*>& model, bool replace = false);
-	void UpdateLocalTransform(RStorage::eResource* bm);
+	void UpdateLocalTransform(RStorage::eResource& bm);
 	pCamera curCamera;
 	std::vector<std::string> loadbuff;
 	//std::vector<RStorage::bmResource*> modelVect;
@@ -51,7 +49,7 @@ private:
 
 	static const bool UseBundles = true;
 	std::vector<FrameResource*> frameResources;
-	std::vector<RStorage::eResource*>& modelVect;
+	std::vector<RStorage::eResource>& modelVect;
 	struct PipelineStateStream
 	{
 		CD3DX12_PIPELINE_STATE_STREAM_ROOT_SIGNATURE RootSignature;

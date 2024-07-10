@@ -1,4 +1,4 @@
-#include "X3DInt.h"
+ #include "X3DInt.h"
 
 ReadX3D::ReadX3D(std::string path) :
 	file(path)

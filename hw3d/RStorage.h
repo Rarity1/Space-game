@@ -10,11 +10,8 @@ public:
 	virtual void OnInit();
 	~RStorage();
 	enum pChange {
-		NONE = 0,
-		ORBIT = 1,
-		POSITION = 2,
-		BOTH = 3,
-		INIT = 4
+		ALL = 0,
+		ONE = 1
 	};
 	struct unmappedData {
 		std::filesystem::path model;
@@ -41,41 +38,96 @@ public:
 		std::atomic<bool> animate = false;
 	};
 
+	struct relposVect {
+		relposVect(DirectX::XMFLOAT3 initPos);
+		~relposVect();
+		DirectX::XMFLOAT3* position = nullptr;
+		DirectX::XMFLOAT4 rotation = { 0,0,0,0 };
+		DirectX::XMFLOAT3 lastposition = { 0,0,0 };
+		std::mutex& posMtx;
+	};
+
 	struct eResource {
-		//Enum model name
+		eResource(std::string name, RStorage::bmResource* model, float mScale, float mMass, float mFriction, DirectX::XMFLOAT3 initPos, DirectX::XMFLOAT3 initRot, DirectX::XMFLOAT3 initVelDir, float initSpeed);
+		~eResource() {
+			delete mPos;
+			delete& currentMtx;
+			delete& PhysicsUpdate;
+			delete& Filled;
+			delete& updated;
+			delete& Collision;
+		}
+		eResource(const eResource& old) :
+			currentMtx(*new std::mutex),
+			PhysicsUpdate(*new std::mutex),
+			Filled(*new std::atomic<bool>),
+			updated(*new std::atomic<bool>),
+			Collision(*new std::atomic<bool>),
+			mPos(new relposVect(*old.mPos->position))
+		{
+			model = old.model;
+			name = old.name;
+			scale = old.scale;
+			mass = old.mass;
+			friction = old.friction;
+			velDir = old.velDir;
+			speed = old.speed;
+			grav = old.grav;
+			gravpull = old.gravpull;
+			mworld = old.mworld;
+			curTexture = old.curTexture;
+			clPositionBuff = old.clPositionBuff;
+			pDir = old.pDir;
+		}
+		eResource& operator=(const eResource& old) {
+			if (this == &old)
+				return *this;
+			name = old.name;
+			scale = old.scale;
+			mass = old.mass;
+			friction = old.friction;
+			velDir = old.velDir;
+			speed = old.speed;
+			grav = old.grav;
+			gravpull = old.gravpull;
+			mworld = old.mworld;
+			curTexture = old.curTexture;
+			clPositionBuff = old.clPositionBuff;
+			pDir = old.pDir;
+			model = old.model;
+			mPos->position = old.mPos->position;
+		}
 		std::string name = "";
-		RStorage::bmResource* model = nullptr;
+		RStorage::bmResource* model;
 		float scale = 1;
 		float mass = 1;
 		float friction = 0;
-		struct relposVect {
-			DirectX::XMFLOAT3* position = nullptr;
-			DirectX::XMFLOAT4 rotation = { 0,0,0,0 };
-			DirectX::XMFLOAT3 lastposition = { 0,0,0 };
-			std::mutex posMtx;
-		};
-		relposVect mPos;
+		relposVect* mPos;
 		DirectX::XMFLOAT4 velDir{ 0,0,0,0 };
 		float speed = 0;
 		DirectX::XMFLOAT4 grav{ 0,0,0,0 };
 		float gravpull = 0;
-		DirectX::XMFLOAT4 pDir{ 0,0,0,0 };
-		float pspeed = 0;
 		eResource* mworld = nullptr;
-		RStorage::pChange which = RStorage::INIT;
-		std::mutex currentMtx;
 		std::filesystem::path curTexture;
 		cl::Buffer clPositionBuff;
-		std::atomic<bool> updated = false;
-		std::atomic<bool> Collision = false;
+		std::vector<DirectX::XMFLOAT4> pDir;
+		void CollisionUp(DirectX::XMFLOAT4 Dir, float Dist = 1);
+		void CollReset();
+		bool CollCheck();
+		DirectX::XMFLOAT4 CollDir(pChange Which = ALL, int Index = 0);
+		std::atomic<bool>& updated;
+		std::atomic<bool>& Collision;
+		std::mutex& currentMtx;
+		std::mutex& PhysicsUpdate;
+		std::atomic<bool>& Filled;
+
 	};
 
-	std::vector<RStorage::eResource*> initializedModels;
+	std::vector<RStorage::eResource> initializedModels;
 	RStorage::bmResource* lModel(UINT umID) noexcept;
-
  	RStorage::eResource* initResource(std::string name, int filebModelIndex = 0, float mScale = 1.0, float mMass = 0.0, float mFriction = 0.01, DirectX::XMFLOAT3 initPos = {0,0,0}, DirectX::XMFLOAT3 initRot = {0,0,0}, DirectX::XMFLOAT3 initVelDir = {0,0,0}, float initSpeed = 0);
-	void CreateBuffers(std::vector<eResource*>& bm, Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList, Microsoft::WRL::ComPtr<ID3D12Device> pDevice, Microsoft::WRL::ComPtr<ID3D12CommandAllocator> commandAllocator, Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue,  UINT buffercount);
-	void UpdBuffer(eResource* bm, Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList, Microsoft::WRL::ComPtr<ID3D12Device> pDevice, Microsoft::WRL::ComPtr<ID3D12CommandAllocator> commandAllocator, Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue);
+	void CreateBuffers(std::vector<eResource>& bm, Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList, Microsoft::WRL::ComPtr<ID3D12Device> pDevice, Microsoft::WRL::ComPtr<ID3D12CommandAllocator> commandAllocator, Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue,  UINT buffercount);
+	void UpdBuffer(eResource& bm, Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList, Microsoft::WRL::ComPtr<ID3D12Device> pDevice, Microsoft::WRL::ComPtr<ID3D12CommandAllocator> commandAllocator, Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue);
 	ReadX3D* CheckLoaded(int umID);
 
 
