@@ -770,7 +770,7 @@ if (!retdat[sd].coll)
     MODEL Work = { {0,0,0 }, { WModel[WbIndexBuff[WorkingIndices[Wind + WData[sd].tOffset]].Index[0]], WModel[WbIndexBuff[WorkingIndices[Wind + WData[sd].tOffset]].Index[1]], WModel[WbIndexBuff[WorkingIndices[Wind + WData[sd].tOffset]].Index[2]] } };
 
 
-    MODEL TWork = { { 0, 0, 0 }, { TModel[TbIndexBuff[WorkingIndices[Tind + WData[sd].wWorkCount + WData[sd].tOffset]].Index[0]], TModel[TbIndexBuff[WorkingIndices[Tind + WData[sd].wWorkCount + WData[sd].tOffset]].Index[1]], TModel[TbIndexBuff[WorkingIndices[Tind + WData[sd].wWorkCount + WData[sd].tOffset]].Index[2]] } };
+    //MODEL TWork = { { 0, 0, 0 }, { TModel[TbIndexBuff[Tind]], TModel[TbIndexBuff[Tind]], TModel[TbIndexBuff[Tind]] } };
 
     CLOSEFORM Result = TooClose(Work, TWork, WBone[WData[sd].bIndex[0]], TBone[WData[sd].bIndex[1]], TPos);
 
