@@ -26,7 +26,7 @@ void Engine::iLoad() {
         float p = i * 10;
         //pGfx->lModels->initResource("cube", 1, 1, 200, 0.3, DirectX::XMFLOAT3{ 10 + p,0,143 });
     }
-    //trackedModels[0]->mworld = trackedModels[2];
+    //trackedModels[0].mworld = &trackedModels[2];
     //trackedModels[1].mworld = &trackedModels[2];
     //trackedModels[3]->mworld = trackedModels[2];
 

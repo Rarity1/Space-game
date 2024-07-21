@@ -414,9 +414,9 @@ void Graphics::PopCommandList(FrameResource* backBuffer) {
 	CD3DX12_CPU_DESCRIPTOR_HANDLE dsv(dsvDescriptorHeap->GetCPUDescriptorHandleForHeapStart());
 	commandList->OMSetRenderTargets(1, &rtv, FALSE, &dsv);
 	const FLOAT clearColor[] = {
-		sin(2.f + 1.f) / 2.f + 0.5f,
-		sin(3.f + 2.f) / 2.f + 0.5f,
-		sin(5.f + 3.f) / 2.f + 0.5f
+		0,
+		0,
+		0
 	};
 	commandList->ClearRenderTargetView(rtv, clearColor, 0, nullptr);
 	commandList->ClearDepthStencilView(dsvDescriptorHeap->GetCPUDescriptorHandleForHeapStart(), D3D12_CLEAR_FLAG_DEPTH, 1.f, 0, 0, nullptr);

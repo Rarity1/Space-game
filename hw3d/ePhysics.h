@@ -15,7 +15,6 @@ public:
 	~Physics();
 	void Update();
 	float fDistance(DirectX::XMFLOAT3* pos1, DirectX::XMFLOAT3* pos2);
-	DirectX::XMFLOAT3 AddXMFLOAT3(DirectX::XMFLOAT3& a, DirectX::XMFLOAT3& b);
 	std::atomic<bool> Retracker = true;
 private:
 	cl_ulong clLocalMemSize;
@@ -31,7 +30,6 @@ private:
 	std::vector<collstruct> CollModels;
 	std::mutex cmMtx;
 	void Retrack();
-	template <typename T> int sgn(T val);
 	std::vector<RStorage::eResource>& trackedModels;
 	mThreadTime& timer;
 	int& urate;
@@ -40,7 +38,7 @@ private:
 	DirectX::XMFLOAT4 fDirection(DirectX::XMFLOAT3* pos1, DirectX::XMFLOAT3* pos2);
 	int bIndex(std::vector<int> w, int bInd);
 	void CalProportionalSpeed(DirectX::XMFLOAT4& VelDir1, DirectX::XMFLOAT4& VelDir2, float& VSpeed1, float& VSpeed2, float& Mass1, float& Mass2);
-	void pSpecCollison(RStorage::eResource* obj);
+	void pSpecCollison(RStorage::eResource& obj);
 	void pSpecReset();
 
 	void mMove(RStorage::eResource& mUpdate);
@@ -62,9 +60,9 @@ private:
 	struct WORKDATA {
 		int bIndex[2];
 		DirectX::XMFLOAT3 Position{0,0,0};
-		int wWorkCount;
-		int tWorkCount;
-		int tOffset;
+		int wWorkCount = 0;
+		int tWorkCount = 0;
+		int tOffset = 0;
 	};
 	struct UpVertNorm {
 		DirectX::XMFLOAT3 Vert;
@@ -78,7 +76,7 @@ private:
 		std::vector<WORKDATA>* WData = nullptr;
 		std::vector<int>* Indices = nullptr;
 	};
-	WORKINDI ProcCollide(RStorage::eResource* obj, int tmindex, cl::CommandQueue& tQueue, cl::Buffer*& ReturnBuff, cl::Buffer*& WorkBuff, cl::Buffer*& IndBuff);
+	WORKINDI ProcCollide(RStorage::eResource& obj, RStorage::eResource& obj2, cl::CommandQueue& tQueue, cl::Buffer*& ReturnBuff, cl::Buffer*& WorkBuff, cl::Buffer*& IndBuff, DirectX::XMFLOAT3& objpos, DirectX::XMFLOAT3& obj2pos, DirectX::XMFLOAT4& dir, float& dist);
 
 	std::vector<cl::Device> devices;
 	cl::Context context;

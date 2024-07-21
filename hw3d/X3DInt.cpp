@@ -252,11 +252,14 @@ void ReadX3D::cvertexData()
 	
 	for (auto& b : bdata) {
 		DirectX::XMFLOAT3 pos{ 0,0,0 };
-		for (auto& i : b.Indices) {
-			pos = { pos.x + vdata[i].position.x, pos.y + vdata[i].position.y, pos.z + vdata[i].position.z };
+		using namespace DirectX;
+		std::for_each(b.Indices.begin(), b.Indices.end(), [this, &pos, &vdata](auto& x) {
+			XMStoreFloat3(&pos, XMLoadFloat3(&vdata[x].position) + XMLoadFloat3(&pos));
+		});
+		auto isize = b.Indices.size();
+		if (isize > 0) {
+			XMStoreFloat3(&b.sphere.Center, XMLoadFloat3(&pos)/isize);
 		}
-		auto isize = std::size(b.Indices);
-		b.sphere.Center = isize > 0 ? DirectX::XMFLOAT3{pos.x / isize, pos.y / isize, pos.z / isize} : pos;
 		b.smallsphere = b.sphere;
 	}
 

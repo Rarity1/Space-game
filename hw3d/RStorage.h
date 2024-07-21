@@ -33,6 +33,7 @@ public:
 		cl::Buffer clBoneBuff;
 		cl::Buffer clBuff;
 		cl::Buffer clIndexBuff;
+		cl::Buffer clIndexMap;
 		std::atomic<bool> buffersWritten;
 		DirectX::XMMATRIX cmatrix;
 		std::atomic<bool> animate = false;
@@ -96,6 +97,20 @@ public:
 			pDir = old.pDir;
 			model = old.model;
 			mPos->position = old.mPos->position;
+		}
+		bool operator==(const eResource& comparison) {
+			if (this != &comparison) return false;
+			if(name != comparison.name) return false;
+			if(clPositionBuff != comparison.clPositionBuff)return false;
+			if(mPos->position != comparison.mPos->position) return false;
+			return true;
+		}
+		bool operator!=(const eResource& comparison) {
+			if (this == &comparison) return false;
+			if (name == comparison.name) return false;
+			if (clPositionBuff == comparison.clPositionBuff)return false;
+			if (mPos->position == comparison.mPos->position) return false;
+			return true;
 		}
 		std::string name = "";
 		RStorage::bmResource* model;

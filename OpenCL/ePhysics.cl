@@ -62,7 +62,7 @@ typedef struct WORKDATA
     XMFLOAT3 Position;
     int wWorkCount;
     int tWorkCount;
-    int tOffset;
+    int Offset;
 }
 WORKDATA;
 
@@ -755,7 +755,7 @@ CLOSEFORM TooClose(MODEL Tri1, MODEL Tri2, XMFLOAT3 Bone1, XMFLOAT3 TBone, XMFLO
 }
 
 
-void kernel coll(global const UPVERTNORM* WModel, global const UPVERTNORM* TModel, global const XMFLOAT3* WBone, global const XMFLOAT3* TBone, global const INTINDEX* WbIndexBuff, global const INTINDEX* TbIndexBuff, global const WORKDATA* WData, global const int* WorkingIndices, global RETURNDATA* retdat){
+void kernel coll(global const UPVERTNORM* WModel, global const UPVERTNORM* TModel, global const XMFLOAT3* WBone, global const XMFLOAT3* TBone, global const INTINDEX* WbIndexBuff, global const INTINDEX* TbIndexBuff, global const int* WbIndexMap, global const int* TbIndexMap, global const WORKDATA* WData, global const int* WorkingIndices, global RETURNDATA* retdat){
 int sd = get_global_id(0);
 int Wind = get_global_id(1);
 int Tind = get_global_id(2);
@@ -764,28 +764,19 @@ int Tind = get_global_id(2);
 
 if (!retdat[sd].coll)
 {
-
     XMFLOAT3 TPos = WData[sd].Position;
 
-    MODEL Work = { {0,0,0 }, { WModel[WbIndexBuff[WorkingIndices[Wind + WData[sd].tOffset]].Index[0]], WModel[WbIndexBuff[WorkingIndices[Wind + WData[sd].tOffset]].Index[1]], WModel[WbIndexBuff[WorkingIndices[Wind + WData[sd].tOffset]].Index[2]] } };
+    int wOffset = WData[sd].Offset;
+    int tOffset = wOffset + WData[sd].wWorkCount;
 
+    MODEL Work = { { 0, 0, 0 }, { WModel[WbIndexBuff[WbIndexMap[WorkingIndices[wOffset + Wind]]].Index[0]], WModel[WbIndexBuff[WbIndexMap[WorkingIndices[wOffset + Wind]]].Index[1]], WModel[WbIndexBuff[WbIndexMap[WorkingIndices[wOffset + Wind]]].Index[2]] } };
 
-    //MODEL TWork = { { 0, 0, 0 }, { TModel[TbIndexBuff[Tind]], TModel[TbIndexBuff[Tind]], TModel[TbIndexBuff[Tind]] } };
+    MODEL TWork = { { 0, 0, 0 }, { TModel[TbIndexBuff[TbIndexMap[WorkingIndices[tOffset + Tind]]].Index[0]], TModel[TbIndexBuff[TbIndexMap[WorkingIndices[tOffset + Tind]]].Index[1]], TModel[TbIndexBuff[TbIndexMap[WorkingIndices[tOffset + Tind]]].Index[2]] } };
 
     CLOSEFORM Result = TooClose(Work, TWork, WBone[WData[sd].bIndex[0]], TBone[WData[sd].bIndex[1]], TPos);
 
-
-    bool fart = false;
     if (Result.coll)
     {
-        fart = true;
-    }
-
-    if (fart)
-    {
-        retdat[sd].index1[0] = WbIndexBuff[WorkingIndices[Wind]].Index[0];
-        retdat[sd].index1[1] = TbIndexBuff[WorkingIndices[Tind + WData[sd].wWorkCount + WData[sd].tOffset]].Index[0];
-        retdat[sd].index1[2] = Wind;
         retdat[sd].coll = Result.coll;
         retdat[sd].dist[0] = 0.1;
         retdat[sd].dist[1] = 0.1;
