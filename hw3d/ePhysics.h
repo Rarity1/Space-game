@@ -1,22 +1,36 @@
 #pragma once
+#include "EngineTime.h"
 #include "Graphics.h"
 
 
 class Physics {
 public:
-	struct mThreadTime {
-		float time = 0;
-		std::mutex mtx;
-	};
-	
-
-
-	Physics(mThreadTime& timer, std::vector<RStorage::eResource>& trackedModels, int& UpdateRate);
+	Physics(EngineTime& timer, std::vector<RStorage::eResource>& trackedModels, const int& UpdateRate);
 	~Physics();
 	void Update();
-	float fDistance(DirectX::XMFLOAT3* pos1, DirectX::XMFLOAT3* pos2);
-	std::atomic<bool> Retracker = true;
+	//Call if loaded models/tracked models changes
+	void trackM();
+	struct tpsCounter {
+	public:
+		tpsCounter() {
+			count = 0;
+		}
+		void incCount(short int ammount = 1) {
+			count += ammount;
+		}
+		void reset() {
+			count = 0;
+		}
+		short int cGet() {
+			return count;
+		}
+	private:
+		std::atomic<short int> count;
+	};
+	tpsCounter ticker;
 private:
+	 float fDistance(DirectX::XMFLOAT3* pos1, DirectX::XMFLOAT3* pos2);
+	 DirectX::XMFLOAT4 fDirection(DirectX::XMFLOAT3* pos1, DirectX::XMFLOAT3* pos2);
 	cl_ulong clLocalMemSize;
 	struct collstruct {
 		RStorage::eResource* obj = nullptr;
@@ -29,13 +43,11 @@ private:
 
 	std::vector<collstruct> CollModels;
 	std::mutex cmMtx;
-	void Retrack();
 	std::vector<RStorage::eResource>& trackedModels;
-	mThreadTime& timer;
-	int& urate;
+	EngineTime& timer;
+	const int& urate;
 	float GConst = 0;
 	void cGravity(RStorage::eResource* obj);
-	DirectX::XMFLOAT4 fDirection(DirectX::XMFLOAT3* pos1, DirectX::XMFLOAT3* pos2);
 	int bIndex(std::vector<int> w, int bInd);
 	void CalProportionalSpeed(DirectX::XMFLOAT4& VelDir1, DirectX::XMFLOAT4& VelDir2, float& VSpeed1, float& VSpeed2, float& Mass1, float& Mass2);
 	void pSpecCollison(RStorage::eResource& obj);
@@ -45,6 +57,13 @@ private:
 	std::vector<std::thread> collisionThreads;
 	std::vector<std::thread> distanceThreads = {};
 
+
+	std::vector<cl::Device> devices;
+	cl::Context context;
+	cl::Program::Sources sources;
+	cl::Program program;
+	cl::CommandQueue queue;
+	std::mutex QueueMTX;
 	struct RETURNDATA {
 		bool coll;
 		int index1[3];
@@ -59,7 +78,7 @@ private:
 	};
 	struct WORKDATA {
 		int bIndex[2];
-		DirectX::XMFLOAT3 Position{0,0,0};
+		DirectX::XMFLOAT3 Position{ 0,0,0 };
 		int wWorkCount = 0;
 		int tWorkCount = 0;
 		int tOffset = 0;
@@ -73,15 +92,11 @@ private:
 	};
 
 	struct WORKINDI {
-		std::vector<WORKDATA>* WData = nullptr;
-		std::vector<int>* Indices = nullptr;
+		std::vector<WORKDATA> WData;
+		std::vector<int> Indices;
 	};
-	WORKINDI ProcCollide(RStorage::eResource& obj, RStorage::eResource& obj2, cl::CommandQueue& tQueue, cl::Buffer*& ReturnBuff, cl::Buffer*& WorkBuff, cl::Buffer*& IndBuff, DirectX::XMFLOAT3& objpos, DirectX::XMFLOAT3& obj2pos, DirectX::XMFLOAT4& dir, float& dist);
-
-	std::vector<cl::Device> devices;
-	cl::Context context;
-	cl::Program::Sources sources;
-	cl::Program program;
-	cl::CommandQueue queue;
-	std::mutex QueueMTX;
+	WORKINDI* ProcCollide(RStorage::eResource& obj, RStorage::eResource& obj2, cl::CommandQueue& tQueue, cl::Buffer*& ReturnBuff, cl::Buffer*& WorkBuff, cl::Buffer*& IndBuff, DirectX::XMFLOAT3& objpos, DirectX::XMFLOAT3& obj2pos, DirectX::XMFLOAT4& dir, float& dist);
+	std::thread lastPhyxThread;
+	std::mutex phyxBusy;
+	std::atomic<bool> Updated;
 };

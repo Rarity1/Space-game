@@ -67,6 +67,7 @@ private:
 public:
 	Mouse mouse;
 	Keyboard kbd;
+	EngineTime clock;
 private:
 	int width;
 	int height;

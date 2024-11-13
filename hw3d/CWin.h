@@ -79,6 +79,7 @@
 #include <numbers>
 #include <ranges>
 #include <memory>
+#include <map>
 #include <random>
 #include <sstream>
 #include <pix3.h>

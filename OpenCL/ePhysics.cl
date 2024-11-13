@@ -91,34 +91,13 @@ typedef struct INTINDEX
     int Index[3];
 }INTINDEX;
 
-
-float fDistance(XMFLOAT3 pos1, XMFLOAT3 pos2)
-{
-    float x = pow((pos2.x - pos1.x), 2);
-    float y = pow((pos2.y - pos1.y), 2);
-    float z = pow((pos2.z - pos1.z), 2);
-    return sqrt(x + y + z);
-}
-
-XMFLOAT3 fDirection(XMFLOAT3 pos1, XMFLOAT3 pos2) {
-    XMFLOAT3 result = { 0, 0, 0};
-    result.x = (pos2.x - pos1.x);
-    result.y = (pos2.y - pos1.y);
-    result.z = (pos2.z - pos1.z);
-    float mag = fDistance(pos1, pos2);
-    result.x = result.x / mag;
-    result.y = result.y / mag;
-    result.z = result.z / mag;
-    return result;
-}
-
-XMFLOAT3 AddXMFLOAT3(XMFLOAT3 a, XMFLOAT3 b)
+XMFLOAT3 MulXMFLOAT3(XMFLOAT3 a, float b)
 {
     XMFLOAT3 result = { 0, 0, 0 };
 
-    result.x = a.x + b.x;
-    result.y = a.y + b.y;
-    result.z = a.z + b.z;
+    result.x = a.x * b;
+    result.y = a.y * b;
+    result.z = a.z * b;
 
     return result;
 }
@@ -134,16 +113,50 @@ XMFLOAT3 SubXMFLOAT3(XMFLOAT3 a, XMFLOAT3 b)
     return result;
 }
 
-XMFLOAT3 MulXMFLOAT3(XMFLOAT3 a, float b)
+float XMVector3Dot(XMFLOAT3 a, XMFLOAT3 b)
+{
+    float result = 0;
+    result += a.x * b.x;
+    result += a.y * b.y;
+    result += a.z * b.z;
+    return result;
+}
+
+float fDistance(XMFLOAT3 pos1, XMFLOAT3 pos2)
+{
+    XMFLOAT3 Result = SubXMFLOAT3(pos2, pos1);
+    float dist = XMVector3Dot(Result, Result);
+    if(dist <= 0.001)
+    {
+        return 0.0;
+    }
+    else
+    {
+        return sqrt(dist);
+    }
+}
+
+XMFLOAT3 fDirection(XMFLOAT3 pos1, XMFLOAT3 pos2) {
+    XMFLOAT3 Result = SubXMFLOAT3(pos2, pos1);
+    float mag = fDistance(pos1, pos2);
+    Result = MulXMFLOAT3(Result, 1/mag);
+    return Result;
+}
+
+XMFLOAT3 AddXMFLOAT3(XMFLOAT3 a, XMFLOAT3 b)
 {
     XMFLOAT3 result = { 0, 0, 0 };
 
-    result.x = a.x * b;
-    result.y = a.y * b;
-    result.z = a.z * b;
+    result.x = a.x + b.x;
+    result.y = a.y + b.y;
+    result.z = a.z + b.z;
 
     return result;
 }
+
+
+
+
 
 XMFLOAT3 XMVector3Cross(XMFLOAT3 a, XMFLOAT3 b)
 {
@@ -155,14 +168,7 @@ XMFLOAT3 XMVector3Cross(XMFLOAT3 a, XMFLOAT3 b)
 
     return result;
 }
-float XMVector3Dot(XMFLOAT3 a, XMFLOAT3 b)
-{
-    float result = 0;
-    result += a.x * b.x;
-    result += a.y * b.y;
-    result += a.z * b.z;
-    return result;
-}
+
 float Xyzret(XMFLOAT3 V, int Case)
 {
     switch (Case)
@@ -387,45 +393,96 @@ bool CoplanCheck(XMFLOAT3 XN, XMFLOAT3 V0, XMFLOAT3 V1, XMFLOAT3 V2,
     return Result;
 }
 
+int Sign(float x)
+{
+    int result = 0;
+    if(x != 0)
+    {
+        if (x < 0) result = -1;
+        if (x > 0) result = 1;
+    }
 
+    return result;
+}
+
+int OddOneOut(float x, float y, float z)
+{
+
+    int result = 0;
+    if(Sign(x) * Sign(y) > 0)
+    {
+        result = 2;
+    }else if(Sign(x) * Sign(z) > 0)
+    {
+        result = 1;
+    }
+    else if (Sign(y) * Sign(z) > 0 || Sign(x) != 0)
+    {
+        result = 0;
+    }else if(Sign(y) != 0)
+    {
+        result = 1;
+    }else if(Sign(z) != 0)
+    {
+        result = 2;
+    }
+    else
+    {
+        result = 3;
+    }
+
+
+    return result;
+}
+
+//Dist is dist from plane. Positive means in front negative means behind. 
 CINTERVAL ComputeInterval(float VV0, float VV1, float VV2, float Dist0, float Dist1, float Dist2)
 {
     CINTERVAL Result;
     Result.CoPlan = false;
 
-    float D0D1 = Dist0 * Dist1;
-    float D0D2 = Dist0 * Dist2;
     float A, B, C, X0, X1 = 0;
 
-        if (D0D1 > 0.0f) 
-        { 
-                /* here we know that D0D2<=0.0 */ 
-            /* that is D0, D1 are on the same side, D2 on the other or on the plane */ 
-                A = VV2; B = (VV0 - VV2) * Dist2; C = (VV1 - VV2) * Dist2; X0 = Dist2 - Dist0; X1 = Dist2 - Dist1; 
-        } 
-        else if (D0D2 > 0.0f)
-        { 
-                /* here we know that d0d1<=0.0 */ 
-            A = VV1; B = (VV0 - VV1) * Dist1; C = (VV2 - VV1) * Dist1; X0 = Dist1 - Dist0; X1 = Dist1 - Dist2; 
-        } 
-        else if (Dist1 * Dist2 > 0.0f || Dist0 != 0.0f) 
-        { 
-                /* here we know that d0d1<=0.0 or that D0!=0.0 */ 
-                A = VV0; B = (VV1 - VV0) * Dist0; C = (VV2 - VV0) * Dist0; X0 = Dist0 - Dist1; X1 = Dist0 - Dist2; 
-        } 
-        else if (Dist1 != 0.0f) 
-        { 
-                A = VV1; B = (VV0 - VV1) * Dist1; C = (VV2 - VV1) * Dist1; X0 = Dist1 - Dist0; X1 = Dist1 - Dist2; 
-        } 
-        else if (Dist2 != 0.0f) 
-        { 
-                A = VV2; B = (VV0 - VV2) * Dist2; C = (VV1 - VV2) * Dist2; X0 = Dist2 - Dist0; X1 = Dist2 - Dist1; 
-        } 
-        else 
-        {
-        /* triangles are coplanar */
-        Result.CoPlan = true;
-        }
+    //A or X should be odd man out. YZ or BC should be on same side.
+
+    switch (OddOneOut(Dist0, Dist1, Dist2))
+    {
+        case 0:
+            {
+
+                A = VV0;
+                B = (VV1 - VV0) * Dist0;
+                C = (VV2 - VV0) * Dist0;
+                X0 = Dist0 - Dist1;
+                X1 = Dist0 - Dist2;
+                break;
+            }
+        case 1:
+            {
+
+                A = VV1;
+                B = (VV0 - VV1) * Dist1;
+                C = (VV2 - VV1) * Dist1;
+                X0 = Dist1 - Dist0;
+                X1 = Dist1 - Dist2;
+                break;
+            }
+        case 2:
+            {
+
+                A = VV2;
+                B = (VV0 - VV2) * Dist2;
+                C = (VV1 - VV2) * Dist2;
+                X0 = Dist2 - Dist0;
+                X1 = Dist2 - Dist1;
+                break;
+            }
+        case 3:
+            {
+                Result.CoPlan = true;
+                break;
+            }
+    }
 
     Result.V0 = A;
     Result.V1 = B;
@@ -436,77 +493,60 @@ CINTERVAL ComputeInterval(float VV0, float VV1, float VV2, float Dist0, float Di
     return Result;
 }
 
-float SwitchLowest(XMFLOAT3 APoint, XMFLOAT3 BPoint, XMFLOAT3 CPoint, XMFLOAT3 BoneDir, XMFLOAT3 Bone,int Case)
+
+
+//This is supposed to say object is colliding when triangle is inside another object but doesnt work currently
+CLOSEFORM CloseCheck(float TDistance[3], XMFLOAT3 WAPoint, XMFLOAT3 WBPoint, XMFLOAT3 WCPoint, XMFLOAT3 TAPoint, XMFLOAT3 TBPoint, XMFLOAT3 TCPoint, XMFLOAT3 Bone1, XMFLOAT3 TPos, XMFLOAT3 Bone2, float bdist, XMFLOAT3 bdir, XMFLOAT3 WNorm, XMFLOAT3 TNorm)
 {
-    float BScal = XMVector3Dot(BoneDir, BoneDir);
+    CLOSEFORM Result;
+    Result.dist = 0.0;
+    Result.coll = true;
 
-    float Result = 0;
+    float WDistance[3];
+    Result.norm[0] = WNorm;
+    Result.norm[1] = TNorm;
 
-    switch (Case)
+    float TScalar = XMVector3Dot(TNorm, TAPoint);
+    WDistance[0] = XMVector3Dot(TNorm, AddXMFLOAT3(WAPoint, MulXMFLOAT3(bdir, -bdist))) - TScalar;
+    WDistance[1] = XMVector3Dot(TNorm, AddXMFLOAT3(WBPoint, MulXMFLOAT3(bdir, -bdist))) - TScalar;
+    WDistance[2] = XMVector3Dot(TNorm, AddXMFLOAT3(WCPoint, MulXMFLOAT3(bdir, -bdist))) - TScalar;
+
+    if (WDistance[0] < 0 && WDistance[1] < 0 && WDistance[2] < 0)
     {
-        case 0:
-            {
-                Result = XMVector3Dot(SubXMFLOAT3(APoint, Bone), BoneDir) / BScal;
-                break;
-            }
-        case 1:
-            {
-                Result = XMVector3Dot(SubXMFLOAT3(BPoint, Bone), BoneDir) / BScal;
-                break;
-            }
-        case 2:
-            {
-                Result = XMVector3Dot(SubXMFLOAT3(CPoint, Bone), BoneDir) / BScal;
-                break;
-            }
+
+        XMFLOAT3 iBDir = MulXMFLOAT3(bdir, -1);
+        XMFLOAT3 Bonedir = bdir;
+        XMFLOAT3 Bone2 = MulXMFLOAT3(bdir, bdist);
+        XMFLOAT3 WNewPointA = SubXMFLOAT3(WAPoint, MulXMFLOAT3(Bonedir, XMVector3Dot(WAPoint, Bonedir)));
+        XMFLOAT3 WNewPointB = SubXMFLOAT3(WBPoint, MulXMFLOAT3(Bonedir, XMVector3Dot(WBPoint, Bonedir)));
+        XMFLOAT3 WNewPointC = SubXMFLOAT3(WCPoint, MulXMFLOAT3(Bonedir, XMVector3Dot(WCPoint, Bonedir)));
+
+
+        XMFLOAT3 TNewPointA = SubXMFLOAT3(TAPoint, MulXMFLOAT3(Bonedir, XMVector3Dot(TAPoint, Bonedir)));
+        XMFLOAT3 TNewPointB = SubXMFLOAT3(TBPoint, MulXMFLOAT3(Bonedir, XMVector3Dot(TBPoint, Bonedir)));
+        XMFLOAT3 TNewPointC = SubXMFLOAT3(TCPoint, MulXMFLOAT3(Bonedir, XMVector3Dot(TCPoint, Bonedir)));
+
+
+        //Make sure triangles are actually ontop of each other
+        if (CoplanCheck(Bonedir, WNewPointA, WNewPointB, WNewPointC, TNewPointA, TNewPointB, TNewPointC))
+        {
+            Result.dist = 0.1;
+
+        }
+        else
+        {
+            Result.coll = false;
+        }
     }
+    else
+    {
+        Result.coll = false;
+    }
+
 
     return Result;
 }
 
-
-//Why doesnt this workkk
-float CloseDistanceCheck(XMFLOAT3 Bone1, XMFLOAT3 Bone2, float TDistance[3], float WDistance[3], XMFLOAT3 TAPoint, XMFLOAT3 TBPoint, XMFLOAT3 TCPoint, XMFLOAT3 WAPoint, XMFLOAT3 WBPoint, XMFLOAT3 WCPoint)
-{
-    XMFLOAT3 BoneDir = fDirection(Bone1, Bone2);
-    float bDist = fDistance(Bone1, Bone2);
-    XMFLOAT3 iBDir = MulXMFLOAT3(BoneDir, -1);
-
-    int TLowestInd = 0;
-    if (TDistance[1] < TDistance[0])
-    {
-        TLowestInd = 1;
-        if (TDistance[2] < TDistance[1])
-        {
-            TLowestInd = 2;
-        }
-    }
-    else if (TDistance[2] < TDistance[0])
-    {
-        TLowestInd = 2;
-    }
-    float TPointDist = SwitchLowest(iBDir, TAPoint, TBPoint, TCPoint, Bone2,TLowestInd);
-
-    XMFLOAT3 TNewPoint = AddXMFLOAT3( MulXMFLOAT3(iBDir, sqrt(TPointDist)), Bone2);
-
-    int WLowestInd = 0;
-    if (WDistance[1] < WDistance[0])
-    {
-        WLowestInd = 1;
-        if (WDistance[2] < WDistance[1])
-        {
-            WLowestInd = 2;
-        }
-    }
-    else if (WDistance[2] < WDistance[0])
-    {
-        WLowestInd = 2;
-    }
-    float WPointDist = SwitchLowest(BoneDir, WAPoint, WBPoint, WCPoint, Bone1,WLowestInd);
-    XMFLOAT3 WNewPoint = AddXMFLOAT3(MulXMFLOAT3(BoneDir, sqrt(WPointDist)), Bone1);
-
-    return fDistance(WNewPoint, Bone2)+fDistance(TNewPoint, Bone1);
-}
 
 CLOSEFORM TooClose(MODEL Tri1, MODEL Tri2, XMFLOAT3 Bone1, XMFLOAT3 TBone, XMFLOAT3 TPos)
 {
@@ -514,87 +554,52 @@ CLOSEFORM TooClose(MODEL Tri1, MODEL Tri2, XMFLOAT3 Bone1, XMFLOAT3 TBone, XMFLO
     Result.dist = 0.0;
     Result.coll = true;
 
-    XMFLOAT3 Zero = {0,0,0};
-
-
-
-    XMFLOAT3 Bone2 = AddXMFLOAT3(TBone, TPos);
-    float bdist = fDistance(Bone1, Bone2);
 
     XMFLOAT3 WAPoint = Tri1.vects[0].Vert;
     XMFLOAT3 WBPoint = Tri1.vects[1].Vert;
     XMFLOAT3 WCPoint = Tri1.vects[2].Vert;
-    XMFLOAT3 TAPoint = Tri2.vects[0].Vert;
-    XMFLOAT3 TBPoint = Tri2.vects[1].Vert;
-    XMFLOAT3 TCPoint = Tri2.vects[2].Vert;
-    TAPoint = AddXMFLOAT3(TAPoint, TPos);
-    TBPoint = AddXMFLOAT3(TBPoint, TPos);
-    TCPoint = AddXMFLOAT3(TCPoint, TPos);
+    XMFLOAT3 TAPoint = AddXMFLOAT3(Tri2.vects[0].Vert, TPos);
+    XMFLOAT3 TBPoint = AddXMFLOAT3(Tri2.vects[1].Vert, TPos);
+    XMFLOAT3 TCPoint = AddXMFLOAT3(Tri2.vects[2].Vert, TPos);
 
 
-    int TIndex = 0;
-    int TIndex1 = 1;
-    int TIndex2 = 2;
-
-    int WIndex = 0;
-    int WIndex1 = 1;
-    int WIndex2 = 2;
-
-
-    XMFLOAT3 TDir[3];
-    XMFLOAT3 WDir[3];
 
     float TDistance[3];
     float WDistance[3];
-
-
 
     XMFLOAT3 WNorm = Tri1.vects[0].Norm;
     XMFLOAT3 TNorm = Tri2.vects[0].Norm;
     Result.norm[0] = WNorm;
     Result.norm[1] = TNorm;
-    XMFLOAT3 ISectLineDir;
-    int iSectdex = 0;
-
-
-    XMFLOAT3 WAverage = MulXMFLOAT3(AddXMFLOAT3(AddXMFLOAT3(WAPoint, WBPoint), WCPoint), 1.0/3.0);
-
 
     //Check all sides then set collision apropriately. Check if inside other object
-    float WScalar = -XMVector3Dot(WNorm, WAverage);
+    TDistance[0] = XMVector3Dot(WNorm, SubXMFLOAT3(TAPoint, WAPoint));
+    TDistance[1] = XMVector3Dot(WNorm, SubXMFLOAT3(TBPoint, WAPoint));
+    TDistance[2] = XMVector3Dot(WNorm, SubXMFLOAT3(TCPoint, WAPoint));
 
-    TDistance[0] = (XMVector3Dot(WNorm, TAPoint)) + WScalar;
-    TDistance[1] = (XMVector3Dot(WNorm, TBPoint)) + WScalar;
-    TDistance[2] = (XMVector3Dot(WNorm, TCPoint)) + WScalar;
 
-    if (TDistance[0] * TDistance[1] > 0 && TDistance[0] * TDistance[2] > 0)
+
+    if (!(Sign(TDistance[0]) == Sign(TDistance[1]) && Sign(TDistance[0]) == Sign(TDistance[2])))
     {
-        Result.coll = false;
-    }
-
-    //If T Tri is all on one side or not; false if it is, true if not
-    if (Result.coll)
-    {
-        XMFLOAT3 TAverage = MulXMFLOAT3(AddXMFLOAT3(AddXMFLOAT3(TAPoint, TBPoint), TCPoint), 1.0 / 3.0);
-
-        float TScalar = -XMVector3Dot(TNorm, TAverage);
+        WDistance[0] = XMVector3Dot(TNorm, SubXMFLOAT3(WAPoint, TAPoint));
+        WDistance[1] = XMVector3Dot(TNorm, SubXMFLOAT3(WBPoint, TAPoint));
+        WDistance[2] = XMVector3Dot(TNorm, SubXMFLOAT3(WCPoint, TAPoint));
 
 
-        ISectLineDir = XMVector3Cross(WNorm, TNorm);
-
-
-        float ISect0 = fabs(ISectLineDir.x);
-        if (fabs(ISectLineDir.y) > ISect0) ISect0 = fabs(ISectLineDir.y), iSectdex = 1;
-        if (fabs(ISectLineDir.z) > ISect0) ISect0 = fabs(ISectLineDir.z), iSectdex = 2;
-
-        WDistance[0] = (XMVector3Dot(TNorm, WAPoint)) + TScalar;
-        WDistance[1] = (XMVector3Dot(TNorm, WBPoint)) + TScalar;
-        WDistance[2] = (XMVector3Dot(TNorm, WCPoint)) + TScalar;
-
-        if (WDistance[0] * WDistance[1] > 0 && WDistance[0] * WDistance[2] > 0)
+        if (Sign(WDistance[0]) == Sign(WDistance[1]) && Sign(WDistance[0]) == Sign(WDistance[2]))
         {
             Result.coll = false;
+            return Result;
         }
+
+
+        XMFLOAT3 ISectLineDir = XMVector3Cross(WNorm, TNorm);
+        int iSectdex = 0;
+
+        float ISect0 = fabs(ISectLineDir.x);
+
+        if (fabs(ISectLineDir.y) > ISect0) ISect0 = fabs(ISectLineDir.y), iSectdex = 1;
+        if (fabs(ISectLineDir.z) > ISect0) ISect0 = fabs(ISectLineDir.z), iSectdex = 2;
 
         CINTERVAL cval0;
         CINTERVAL cval1;
@@ -620,15 +625,14 @@ CLOSEFORM TooClose(MODEL Tri1, MODEL Tri2, XMFLOAT3 Bone1, XMFLOAT3 TBone, XMFLO
                 }
         }
 
-
-        
-
         if (cval0.CoPlan)
         {
             Result.coll = CoplanCheck(WNorm, WAPoint, WBPoint, WCPoint, TAPoint, TBPoint, TCPoint);
         }
         else
         {
+
+            //figure out what this code means and fix it because its wrong.
             float xx = cval0.X0 * cval0.X1;
             float yy = cval1.X0 * cval1.X1;
             float xxyy = xx * yy;
@@ -651,13 +655,13 @@ CLOSEFORM TooClose(MODEL Tri1, MODEL Tri2, XMFLOAT3 Bone1, XMFLOAT3 TBone, XMFLO
             test1[0] = u;
             test1[1] = u1;
 
-            if (test0[0] > test0[1])     
-                 {           
-                float temp;  
+            if (test0[0] > test0[1])
+            {
+                float temp;
                 temp = test0[0];
                 test0[0] = test0[1];
-                test0[1] = temp; 
-             }
+                test0[1] = temp;
+            }
 
             if (test1[0] > test1[1])
             {
@@ -667,89 +671,27 @@ CLOSEFORM TooClose(MODEL Tri1, MODEL Tri2, XMFLOAT3 Bone1, XMFLOAT3 TBone, XMFLO
                 test1[1] = temp;
             }
 
-            if (test0[1] < test1[0] || test1[1] < test0[0]) Result.coll = false;
-
-            int TIndex = 0;
-
-            if (TDistance[0] > TDistance[1])
-            {
-                TIndex = 1;
-                if (TDistance[1]  > TDistance[2] )
-                {
-                    TIndex = 2;
-                }
+            if (test0[1] < test1[0] || test1[1] < test0[0]) {
+                Result.coll = false;
             }
             else
             {
-                if (TDistance[0]  > TDistance[2] )
-                {
-                    TIndex = 2;
-                }
+                Result.dist = 0.1;
+                return Result;
             }
-
-            int WIndex = 0;
-
-            if (WDistance[0] > WDistance[1])
-            {
-                WIndex = 1;
-                if (WDistance[1] > WDistance[2])
-                {
-                    WIndex = 2;
-                }
-            }
-            else
-            {
-                if (WDistance[0] > WDistance[2])
-                {
-                    WIndex = 2;
-                }
-            }
-            Result.dist = TDistance[TIndex] > WDistance[WIndex] ? -(TDistance[TIndex]) : -(WDistance[WIndex]);
         }
+    }
+    else if(TDistance[0] < 0 && TDistance[1] < 0 && TDistance[2] < 0)
+    {
 
-
+        //Result = CloseCheck(TDistance, WAPoint, WBPoint, WCPoint, TAPoint, TBPoint, TCPoint, Bone1, TPos, Bone2, bdist, bdir, WNorm, TNorm);
+        Result.coll = false;
     }
     else
     {
-
-        //Figure out why this doesnt work & remove false
-        if (TDistance[0] < 0 && false)
-        {
-            XMFLOAT3 TAverage = MulXMFLOAT3(AddXMFLOAT3(AddXMFLOAT3(TAPoint, TBPoint), TCPoint), 1.0 / 3.0);
-
-            float TScalar = -XMVector3Dot(TNorm, TAverage);
-
-            WDistance[0] = (XMVector3Dot(TNorm, WAPoint)) + TScalar;
-            WDistance[1] = (XMVector3Dot(TNorm, WBPoint)) + TScalar;
-            WDistance[2] = (XMVector3Dot(TNorm, WCPoint)) + TScalar;
-
-            if (WDistance[0] < 0 || WDistance[1] < 0 || WDistance[2] < 0)
-            {
-
-                //Check distance from bone that objects are colliding
-                if(CoplanCheck(WNorm, WAPoint, WBPoint, WCPoint, TAPoint, TBPoint, TCPoint))
-                {
-                    float dist = CloseDistanceCheck(Bone1, Bone2, TDistance, WDistance, TAPoint, TBPoint, TCPoint, WAPoint, WBPoint, WCPoint);
-                    XMFLOAT3 Bonedir = fDirection(Bone1, Bone2);
-                    float TDiff = XMVector3Dot(fDirection(Zero, TNorm), Bonedir);
-                    float WDiff = -XMVector3Dot(fDirection(Zero, WNorm), Bonedir);
-                    if (TDiff < 0 && WDiff < 0 && dist - fDistance(Bone1, Bone2) < 0)
-                    {
-
-                            Result.coll = true;
-                            Result.dist = fDistance(Bone1, Bone2) - dist;
-                            Result.norm[0] = MulXMFLOAT3(WNorm, 1 / fDistance(WNorm, Zero));
-                            Result.norm[1] = MulXMFLOAT3(TNorm, 1 / fDistance(TNorm, Zero));
-                    }
-                    
-                }
-
-            }
-
-        }
-        
+        Result.coll = false;
     }
-    
+
 
     return Result;
 }
@@ -772,21 +714,26 @@ if (!retdat[sd].coll)
     MODEL Work = { { 0, 0, 0 }, { WModel[WbIndexBuff[WbIndexMap[WorkingIndices[wOffset + Wind]]].Index[0]], WModel[WbIndexBuff[WbIndexMap[WorkingIndices[wOffset + Wind]]].Index[1]], WModel[WbIndexBuff[WbIndexMap[WorkingIndices[wOffset + Wind]]].Index[2]] } };
 
     MODEL TWork = { { 0, 0, 0 }, { TModel[TbIndexBuff[TbIndexMap[WorkingIndices[tOffset + Tind]]].Index[0]], TModel[TbIndexBuff[TbIndexMap[WorkingIndices[tOffset + Tind]]].Index[1]], TModel[TbIndexBuff[TbIndexMap[WorkingIndices[tOffset + Tind]]].Index[2]] } };
-
+    
     CLOSEFORM Result = TooClose(Work, TWork, WBone[WData[sd].bIndex[0]], TBone[WData[sd].bIndex[1]], TPos);
 
-    if (Result.coll)
+    if (Result.dist != 0)
     {
+        retdat[sd].index1[0] = WbIndexBuff[WbIndexMap[WorkingIndices[wOffset + Wind]]].Index[0];
+        retdat[sd].index1[1] = WbIndexBuff[WbIndexMap[WorkingIndices[wOffset + Wind]]].Index[1];
+        retdat[sd].index1[2] = WbIndexBuff[WbIndexMap[WorkingIndices[wOffset + Wind]]].Index[2];
+        retdat[sd].index2[0] = TbIndexBuff[TbIndexMap[WorkingIndices[tOffset + Tind]]].Index[0];
+        retdat[sd].index2[1] = TbIndexBuff[TbIndexMap[WorkingIndices[tOffset + Tind]]].Index[1];
+        retdat[sd].index2[2] = TbIndexBuff[TbIndexMap[WorkingIndices[tOffset + Tind]]].Index[2];
+
         retdat[sd].coll = Result.coll;
-        retdat[sd].dist[0] = 0.1;
-        retdat[sd].dist[1] = 0.1;
+        retdat[sd].dist[0] = Result.dist;
+        retdat[sd].dist[1] = 0;
         retdat[sd].dir[0] = Result.norm[0];
         retdat[sd].dir[1] = Result.norm[1];
 
-
-
     }
-
+    
 
 }
 

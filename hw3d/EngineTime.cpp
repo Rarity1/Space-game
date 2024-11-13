@@ -1,22 +1,28 @@
 #include "EngineTime.h"
 using namespace std::chrono;
 
-EngineTime::EngineTime() noexcept
+
+
+
+EngineTime::EngineTime()
 {
 	last = high_resolution_clock::now();
 }
-float EngineTime::Mark() noexcept
+double EngineTime::Mark() noexcept
 {
 	const auto old = last;
 	last = high_resolution_clock::now();
-	const duration<float> frameTime = last - old;
-	std::chrono::milliseconds d = std::chrono::duration_cast<std::chrono::milliseconds>(frameTime);
-	return d.count();
+	const duration<double> frameTime = last - old;
+	frame = frameTime.count();
+	return frame;
+}
+double EngineTime::Peek() const noexcept
+{
+	duration<double> fs(high_resolution_clock::now() - last);
+	return fs.count();
 }
 
-float EngineTime::Peek() const noexcept
+double EngineTime::Current() const
 {
-	duration<float> fs(high_resolution_clock::now() - last);
-	std::chrono::milliseconds d = std::chrono::duration_cast<std::chrono::milliseconds>(fs);
-	return d.count();
+	return frame;
 }

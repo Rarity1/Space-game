@@ -4,9 +4,11 @@
 class EngineTime
 {
 public:
-	EngineTime() noexcept;
-	float Mark() noexcept;
-	float Peek() const noexcept;
+	EngineTime();
+	double Mark() noexcept;
+	double Peek() const noexcept;
+	double Current() const;
 private:
 	std::chrono::high_resolution_clock::time_point last;
+	double frame = 0.0;
 };

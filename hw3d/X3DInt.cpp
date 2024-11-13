@@ -71,7 +71,6 @@ void ReadX3D::cvertexData()
 					}else
 					if (std::strstr(source->first_attribute()->value(), "weights") != nullptr) {
 						skinweights = source->first_node("float_array");
-						auto pee = 0;
 					}else if (std::strcmp(source->name(), "vertex_weights") == 0) {
 						vcount = source->first_node("vcount");
 						vertexweights = source->first_node("v");
@@ -376,6 +375,21 @@ float ReadX3D::fDistance(DirectX::XMFLOAT3* pos1, DirectX::XMFLOAT3* pos2) {
 	DirectX::XMStoreFloat3(&Dist, DirectX::XMVector3Dot(XMLoadFloat4(&Result), XMLoadFloat4(&Result)));
 	d = sqrt(Dist.x);
 	return d;
+}
+
+DirectX::XMFLOAT4 ReadX3D::fDirection(DirectX::XMFLOAT3* pos1, DirectX::XMFLOAT3* pos2) {
+	using namespace DirectX;
+	DirectX::XMFLOAT4 Result{ 0,0,0,0 };
+	DirectX::XMFLOAT3 Dist{ 0,0,0 };
+	float d = 0;
+	DirectX::XMStoreFloat4(&Result, XMLoadFloat3(pos2) - XMLoadFloat3(pos1));
+	XMStoreFloat3(&Dist, DirectX::XMVector3Dot(XMLoadFloat4(&Result), XMLoadFloat4(&Result)));
+	d = sqrt(Dist.x);
+	if (d > 0) {
+		XMStoreFloat4(&Result, XMLoadFloat4(&Result) / d);
+		return Result;
+	}
+	return { 0,0,0,0 };
 }
 
 DirectX::XMFLOAT4X4 ReadX3D::strToMatrix(std::istringstream& rawmatri) {

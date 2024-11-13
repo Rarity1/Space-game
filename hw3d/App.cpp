@@ -20,11 +20,14 @@ int App::Go() {
 }
 
 void App::DoFrame() {
-	wnd.Eng().timer.mtx.lock();
-	wnd.Eng().timer.time = timer.Peek()/1000;
-	wnd.Eng().timer.mtx.unlock();
-	timer.Mark();
-	wnd.Eng().Update();
+	auto delta = wnd.Eng().Clock.Mark();
+	wnd.Eng().Update(delta);
+	updaterate += delta;
+	if (updaterate >= 1.0) {
+		wnd.SetTitle(std::to_string(wnd.Eng().phyx->ticker.cGet()));
+		wnd.Eng().phyx->ticker.reset();
+		updaterate = 0.0;
+	}
 	wnd.Gfx().RenderFrame();
 
 }

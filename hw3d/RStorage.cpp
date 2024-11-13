@@ -194,16 +194,16 @@ void RStorage::UpdBuffer(eResource& bm, Microsoft::WRL::ComPtr<ID3D12GraphicsCom
 RStorage::eResource* RStorage::initResource(std::string name, int filebModelIndex, float mScale, float mMass, float mFriction, DirectX::XMFLOAT3 initPos, DirectX::XMFLOAT3 initRot, DirectX::XMFLOAT3 initVelDir, float initSpeed) {
 
 
-	RStorage::eResource stuff(name, RStorage::lModel(filebModelIndex), mScale, mMass, mFriction, initPos, initRot, initVelDir, initSpeed);
+	RStorage::eResource tempModel(name, RStorage::lModel(filebModelIndex), mScale, mMass, mFriction, initPos, initRot, initVelDir, initSpeed);
 	
 	
-	auto& farb = initializedModels.emplace_back(stuff);
+	auto& tmodelAddress = initializedModels.emplace_back(tempModel);
 	for (auto& text : this->Textures) {
-		if (text.filename().string().substr(0, text.filename().string().find(text.extension().string())) == farb.name) {
-			farb.curTexture = text;
+		if (text.filename().string().substr(0, text.filename().string().find(text.extension().string())) == tmodelAddress.name) {
+			tmodelAddress.curTexture = text;
 		}
 	}
-	return &farb;
+	return &tmodelAddress;
 }
 
 ReadX3D* RStorage::CheckLoaded(int umID) {

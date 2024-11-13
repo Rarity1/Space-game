@@ -12,6 +12,6 @@ public:
 private:
 	void DoFrame();
 	Window wnd;
-	EngineTime timer;
 	std::atomic<bool> ignKey;
+	double updaterate = 0;
 };

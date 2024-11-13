@@ -56,10 +56,12 @@ public:
 	std::vector<boneweight> weights;
 	DirectX::BoundingSphere Sphere;
 	//Size fsize;
+
 private:
+	float fDistance(DirectX::XMFLOAT3* pos1, DirectX::XMFLOAT3* pos2);
+	DirectX::XMFLOAT4 fDirection(DirectX::XMFLOAT3* pos1, DirectX::XMFLOAT3* pos2);
 	std::vector<std::vector<Vertex*>> TriData;
 	std::vector<int> Map;
-    float fDistance(DirectX::XMFLOAT3* pos1, DirectX::XMFLOAT3* pos2);
 	DirectX::XMFLOAT4X4 strToMatrix(std::istringstream& rawmatri);
 	Node ChildNodeRead(rapidxml::xml_node<char>* node);
 	void DeleteChild(Node* node);

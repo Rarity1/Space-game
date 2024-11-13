@@ -2,7 +2,7 @@
 #include "Graphics.h"
 
 
-Graphics::Graphics(HWND* hWnd, int height, int width)
+Graphics::Graphics(HWND& hWnd, int height, int width)
 	:
 	width(width),
 	height(height),
@@ -68,14 +68,14 @@ void Graphics::LoadPipeline() {
 	sd.SampleDesc.Count = 1;
 	dxgiFactory->CreateSwapChainForHwnd(
 		commandQueue.Get(),
-		*hWnd,
+		hWnd,
 		&sd,
 		nullptr,
 		nullptr,
 		&TswapChain
 	) >> chk;
 
-	dxgiFactory->MakeWindowAssociation(*hWnd, DXGI_MWA_NO_ALT_ENTER) >> chk;
+	dxgiFactory->MakeWindowAssociation(hWnd, DXGI_MWA_NO_ALT_ENTER) >> chk;
 	TswapChain.As(&swapChain) >> chk;
 	cframeIndex = swapChain->GetCurrentBackBufferIndex();
 
@@ -167,22 +167,18 @@ void Graphics::LoadPipeline() {
 	//Root signaling
 	{
 		CD3DX12_DESCRIPTOR_RANGE1 ranges[3]{};
-		ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
-		ranges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER, 1, 0);
-		ranges[2].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
+		ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_NONE);
+		ranges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE);
+		ranges[2].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_NONE);
 
 		CD3DX12_ROOT_PARAMETER1 rootParameters[3]{};
 		rootParameters[0].InitAsDescriptorTable(1, &ranges[0], D3D12_SHADER_VISIBILITY_PIXEL);
 		rootParameters[1].InitAsDescriptorTable(1, &ranges[1], D3D12_SHADER_VISIBILITY_PIXEL);
-		rootParameters[2].InitAsDescriptorTable(1, &ranges[2], D3D12_SHADER_VISIBILITY_ALL);
+		rootParameters[2].InitAsDescriptorTable(1, &ranges[2], D3D12_SHADER_VISIBILITY_VERTEX);
 
 		const D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
 			D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
-			D3D12_ROOT_SIGNATURE_FLAG_DENY_MESH_SHADER_ROOT_ACCESS |
-			D3D12_ROOT_SIGNATURE_FLAG_DENY_AMPLIFICATION_SHADER_ROOT_ACCESS |
-			D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
-			D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
-			D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
+			D3D12_ROOT_SIGNATURE_FLAG_NONE;
 
 		CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc{};
 		rootSignatureDesc.Init_1_2(rootSignatureDesc, (UINT)std::size(rootParameters), rootParameters,
@@ -296,7 +292,7 @@ void Graphics::RecurLTrans(ReadX3D::Node* n, ReadX3D::Node* P) {
 	XMStoreFloat4x4(&n->LocalTransform, XMMatrixMultiply(XMLoadFloat4x4(&P->LocalTransform), XMLoadFloat4x4(&n->matrix)));
 }
 
-
+//Fix model updates
 void Graphics::UpdateModel(RStorage::eResource* bm) {
 	auto GlobITrans = XMMatrixInverse(nullptr, XMLoadFloat4x4(&bm->model->uData->ndata.matrix));
 	if (!std::strstr(bm->model->uData->bdata[0].name.c_str(), "placeholder"))
@@ -308,7 +304,14 @@ void Graphics::UpdateModel(RStorage::eResource* bm) {
 	ReadX3D::Vertex* mappedVertexData = nullptr;
 	bm->model->uvbuffer->Map(0, nullptr, reinterpret_cast<void**>(&mappedVertexData)) >> chk;
 	//Fix animations
-	/*if (std::size(bm->uData->bdata) > 0) {
+	/*for (auto& m : modelVect) {
+		//UpdateLocalTransform(m);
+		if (m.model->animate.load()) {
+			lModels->UpdBuffer(m, commandList, pDevice, commandAllocator, commandQueue);
+			m.model->animate.store(false);
+		}
+	}
+	if (std::size(bm->uData->bdata) > 0) {
 		auto tcount = 0;
 		for (auto v = 0; v < std::size(idata); v++) {
 			auto& weights = bm->uData->weights[v];
@@ -367,9 +370,9 @@ void Graphics::CreateFrameResources() {
 
 			D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
 			srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-			srvDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+			srvDesc.Format = DXGI_FORMAT_UNKNOWN;
 			srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-			srvDesc.Texture2D.MipLevels = 1;
+			srvDesc.Texture2D.MipLevels = -1;
 			pDevice->CreateShaderResourceView(m.model->tbuffer, &srvDesc, cbvSrvHandle);
 			cbvSrvHandle.Offset(srvDescriptorSize);
 			temp++;
@@ -377,7 +380,7 @@ void Graphics::CreateFrameResources() {
 
 		}
 
-		pFrameResource->InitBundle(pDevice.Get(), pipelineState.Get(), i, srvDescriptorHeap.Get(), srvDescriptorSize, samplerDescriptorHeap.Get(), samplerDescriptorSize, rootSignature.Get(), modelVect);
+		//pFrameResource->InitBundle(pDevice.Get(), pipelineState.Get(), i, srvDescriptorHeap.Get(), srvDescriptorSize, samplerDescriptorHeap.Get(), samplerDescriptorSize, rootSignature.Get(), modelVect);
 
 		backBuffers.emplace_back(pFrameResource);
 
@@ -389,13 +392,7 @@ void Graphics::PopCommandList(FrameResource* backBuffer) {
 	using namespace DirectX;
 	cbackBuffer->commandAllocator->Reset() >> chk;
 	commandList->Reset(cbackBuffer->commandAllocator.Get(), pipelineState.Get()) >> chk;
-	for (auto& m : modelVect) {
-		UpdateLocalTransform(m);
-		if (m.model->animate.load()) {
-			lModels->UpdBuffer(m, commandList, pDevice, commandAllocator, commandQueue);
-			m.model->animate.store(false);
-		}
-	}
+
 	commandList->SetGraphicsRootSignature(rootSignature.Get());
 
 	ID3D12DescriptorHeap* ppHeaps[] = { srvDescriptorHeap.Get(), samplerDescriptorHeap.Get() };
@@ -423,8 +420,8 @@ void Graphics::PopCommandList(FrameResource* backBuffer) {
 
 	//Bundle execution?
 
-	commandList->ExecuteBundle(backBuffer->bundle.Get());
-	//backBuffer->PopulateCommandList(commandList.Get(), pipelineState.Get(), CurBackBuffer, srvDescriptorHeap.Get(), srvDescriptorSize, samplerDescriptorHeap.Get(), rootSignature.Get(), lModels->modelVect);
+	//commandList->ExecuteBundle(backBuffer->bundle.Get());
+	backBuffer->PopulateCommandList(commandList.Get(), pipelineState.Get(), CurBackBuffer, srvDescriptorHeap.Get(), srvDescriptorSize, samplerDescriptorHeap.Get(), rootSignature.Get(), modelVect);
 
 
 	{
@@ -473,7 +470,9 @@ void Graphics::RenderFrame() {
 		fence->SetEventOnCompletion(cbackBuffer->fenceValue, fenceEvent);
 		WaitForSingleObject(fenceEvent, INFINITE);
 	}
+	curCamera.posMtx->lock();
 	curCamera.cmatrix = DirectX::XMMatrixLookToRH(XMLoadFloat3(curCamera.position), XMLoadFloat4(&curCamera.rotation), XMLoadFloat4(&curCamera.upDirection));
+	curCamera.posMtx->unlock();
 	cbackBuffer->UpdateConstantBuffers(curCamera.cmatrix,
 		DirectX::XMMatrixPerspectiveFovRH(1.333f, float(width) / float(height), 0.1f, 100000.0f), modelVect);
 	umodel.unlock();

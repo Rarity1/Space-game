@@ -8,12 +8,13 @@ class Graphics
 {
 public:
 	static const UINT bufferCount = 3;
-	Graphics(HWND* hWnd, int height, int widthm);
+	Graphics(HWND& hWnd, int height, int widthm);
 	Graphics(const Graphics&) = delete;
 	Graphics& operator=(const Graphics&) = delete;
 	~Graphics();
 	struct pCamera {
 		DirectX::XMFLOAT3* position = nullptr;
+		std::mutex* posMtx;
 		DirectX::XMFLOAT4 rotation = {1,0,0,0};
 		DirectX::XMFLOAT4 upDirection = { 0,0,1,0 };
 		DirectX::XMFLOAT4 forwardDirect = { 1,0,0,0 };
@@ -44,7 +45,7 @@ private:
 	GErrors::CheckerToken chk;
 	UINT width;
 	UINT height;
-	HWND* hWnd;
+	HWND& hWnd;
 	
 
 	static const bool UseBundles = true;
