@@ -5,20 +5,7 @@
 
 
 RStorage::RStorage(){
-	OnInit();
-}
-
-
-void RStorage::OnInit() {
 	std::vector<std::filesystem::path> folders = {};
-	auto temp = 0;
-	for (auto& m : Models) {
-		if(m->lModel != nullptr)
-			delete m->lModel;
-		delete m;
-	}
-	Models.resize(0);
-	Textures.resize(0);
 	for (auto& file : std::filesystem::directory_iterator{ std::filesystem::current_path() / "models" }) {
 		if (file.path().extension() == ".dae") {
 			auto t = new unmappedData;
@@ -33,7 +20,9 @@ void RStorage::OnInit() {
 				if (toggle && c != '#') {
 					UniqueID.emplace_back(c);
 				}
-
+				if (!toggle && c != '#') {
+					t->name = t->name + c;
+				}
 
 			}
 			t->umID = std::stoull((std::string)UniqueID.data());
@@ -58,7 +47,7 @@ void RStorage::CreateBuffers(std::vector<eResource>& m, Microsoft::WRL::ComPtr<I
 	for (auto& bm : m) {
 		{
 			const CD3DX12_HEAP_PROPERTIES heapProps{ D3D12_HEAP_TYPE_DEFAULT };
-			const auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(std::size(bm.model->uData->Vertdata) * sizeof(ReadX3D::Vertex));
+			const auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(std::size(bm.model->uData->idata) * sizeof(ReadX3D::Vertex));
 			pDevice->CreateCommittedResource(
 				&heapProps,
 				D3D12_HEAP_FLAG_NONE,
@@ -70,7 +59,7 @@ void RStorage::CreateBuffers(std::vector<eResource>& m, Microsoft::WRL::ComPtr<I
 
 		{
 			const CD3DX12_HEAP_PROPERTIES heapProps{ D3D12_HEAP_TYPE_UPLOAD };
-			const auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(std::size(bm.model->uData->Vertdata) * sizeof(ReadX3D::Vertex));
+			const auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(std::size(bm.model->uData->idata) * sizeof(ReadX3D::Vertex));
 			pDevice->CreateCommittedResource(
 				&heapProps,
 				D3D12_HEAP_FLAG_NONE,
@@ -111,20 +100,13 @@ void RStorage::CreateBuffers(std::vector<eResource>& m, Microsoft::WRL::ComPtr<I
 				bm.model->uibuffer->Map(0, nullptr, reinterpret_cast<void**>(&mappedIndexData)) >> chk;
 
 
-				auto& temporaryVertex = bm.model->uData->Vertdata;
-				auto& idata = bm.model->uData->idata;
-				for (auto i = 0; i < std::size(temporaryVertex); i++) {
-
-						memcpy(&mappedVertexData[i], &temporaryVertex[i], sizeof(ReadX3D::Vertex));
-
-
-				}
-				auto& temporaryIndex = bm.model->uData->idata;
-
+				auto temporaryVertex = bm.model->uData->MappedVertices;
+				auto temporaryIndex = bm.model->uData->idata;
+				auto map = bm.model->uData->NormalMap;
 				//For some reason models only render correctly if the indices are inverted?
-				int sizeofin = std::size(temporaryIndex);
-				for (auto i = 0; i < sizeofin; i++) {
-					int index = sizeofin - 1 - i;
+				for (auto i = 0; i < std::size(temporaryIndex); i++) {
+					memcpy(&mappedVertexData[i], &temporaryVertex[map[i]][i % 3], sizeof(ReadX3D::Vertex));
+					int index = std::size(temporaryIndex) - 1 - i;
 					memcpy(&mappedIndexData[i], &index, sizeof(WORD));
 				}
 			}
@@ -178,9 +160,8 @@ void RStorage::UpdBuffer(eResource& bm, Microsoft::WRL::ComPtr<ID3D12GraphicsCom
 		auto ReadData = CheckLoaded(umID);
 		if (ReadData == nullptr) {
 			ReadData = new ReadX3D{ uData->model.string() };
-			ReadData->cvertexData();
 		}
-		auto model = new RStorage::bmResource{ umID, ReadData };
+		auto model = new RStorage::bmResource{ umID, ReadData, uData->name };
 		return model;
 	}
 	return nullptr;
@@ -193,13 +174,9 @@ void RStorage::UpdBuffer(eResource& bm, Microsoft::WRL::ComPtr<ID3D12GraphicsCom
 
 RStorage::eResource* RStorage::initResource(std::string name, int filebModelIndex, float mScale, float mMass, float mFriction, DirectX::XMFLOAT3 initPos, DirectX::XMFLOAT3 initRot, DirectX::XMFLOAT3 initVelDir, float initSpeed) {
 
-
-	RStorage::eResource tempModel(name, RStorage::lModel(filebModelIndex), mScale, mMass, mFriction, initPos, initRot, initVelDir, initSpeed);
-	
-	
-	auto& tmodelAddress = initializedModels.emplace_back(tempModel);
+	auto& tmodelAddress = initializedModels.emplace_back(RStorage::eResource(name, RStorage::lModel(filebModelIndex), mScale, mMass, mFriction, initPos, initRot, initVelDir, initSpeed));
 	for (auto& text : this->Textures) {
-		if (text.filename().string().substr(0, text.filename().string().find(text.extension().string())) == tmodelAddress.name) {
+		if (text.filename().string().substr(0, text.filename().string().find(text.extension().string())) == tmodelAddress.model->name) {
 			tmodelAddress.curTexture = text;
 		}
 	}
@@ -241,8 +218,9 @@ RStorage::eResource::eResource(std::string name, RStorage::bmResource* model, fl
 	Filled(*new std::atomic<bool>),
 	updated(*new std::atomic<bool>),
 	Collision(*new std::atomic<bool>),
-	mPos(new relposVect(initPos))
+	mPos(*new relposVect(initPos))
 {
+
 }
 
 

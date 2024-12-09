@@ -23,7 +23,7 @@ FrameResource::FrameResource(Microsoft::WRL::ComPtr<ID3D12Device> pDevice, std::
     for (auto i = 0; i < std::size(models); i++) {
             vertexBufferView.emplace_back(D3D12_VERTEX_BUFFER_VIEW{
                 .BufferLocation = models[i].model->vbuffer->GetGPUVirtualAddress(),
-                .SizeInBytes = (UINT)std::size(models[i].model->uData->Vertdata) * (UINT)sizeof(ReadX3D::Vertex),
+                .SizeInBytes = (UINT)std::size(models[i].model->uData->idata) * (UINT)sizeof(ReadX3D::Vertex),
                 .StrideInBytes = (UINT)sizeof(ReadX3D::Vertex)
                 });
             indexBufferView.emplace_back(D3D12_INDEX_BUFFER_VIEW{

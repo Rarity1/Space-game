@@ -299,7 +299,7 @@ void Graphics::UpdateModel(RStorage::eResource* bm) {
 	for (auto& b : bm->model->uData->bdata) {
 		//XMStoreFloat4x4(&b.finalTransform, XMLoadFloat4x4(&b.matrix) * XMLoadFloat4x4(&b.node->LocalTransform) * GlobITrans);
 	}
-	auto& vdata = bm->model->uData->Vertdata;
+	//auto& vdata = bm->model->uData->Vertdata;
 	auto& idata = bm->model->uData->idata;
 	ReadX3D::Vertex* mappedVertexData = nullptr;
 	bm->model->uvbuffer->Map(0, nullptr, reinterpret_cast<void**>(&mappedVertexData)) >> chk;
@@ -328,11 +328,14 @@ void Graphics::UpdateModel(RStorage::eResource* bm) {
 			vdata[tcount].verts[idata[v].index % 3].position.z += vf.z;
 			tcount += idata[v].index % 3 == 0 ? 1 : 0;
 		}
-	}*/
-	
-	for (auto i = 0; i < std::size(vdata); i++) {
+	}
+		for (auto i = 0; i < std::size(vdata); i++) {
 		//memcpy(&mappedVertexData[i], &vdata[i], sizeof(ReadX3D::Vertex));
 	}
+	
+	*/
+	
+
 
 	bm->model->uvbuffer->Unmap(0, nullptr);
 	bm->model->animate.store(true);

@@ -3,12 +3,6 @@
 ReadX3D::ReadX3D(std::string path) :
 	file(path)
 {
-}
-
-
-void ReadX3D::cvertexData()
-{
-
 	std::vector<char> buffer((std::istreambuf_iterator<char>(file)),
 		std::istreambuf_iterator<char>());
 	buffer.push_back('\0');
@@ -32,22 +26,24 @@ void ReadX3D::cvertexData()
 			auto source = node->first_node("geometry")->first_node("mesh")->first_node();
 			while (source != nullptr)
 			{
-				if(source->first_attribute() != nullptr)
-				if ((std::strstr((source->first_attribute()->value()), "positions") != nullptr) && (positions == nullptr)) {
-					positions = source->first_node("float_array");
-					auto ssource = source->first_node("technique_common")->first_node("accessor");
-					std::stringstream(ssource->first_attribute("count")->value()) >> size;
-				}else if((std::strstr((source->first_attribute()->value()), "normals") != nullptr) && (pnorm == nullptr)) {
-					pnorm = source->first_node("float_array");
+				if (source->first_attribute() != nullptr)
+					if ((std::strstr((source->first_attribute()->value()), "positions") != nullptr) && (positions == nullptr)) {
+						positions = source->first_node("float_array");
+						auto ssource = source->first_node("technique_common")->first_node("accessor");
+						std::stringstream(ssource->first_attribute("count")->value()) >> size;
+					}
+					else if ((std::strstr((source->first_attribute()->value()), "normals") != nullptr) && (pnorm == nullptr)) {
+						pnorm = source->first_node("float_array");
 
-				}
-				else if ((std::strstr((source->first_attribute()->value()), "map") != nullptr) && (pmap == nullptr)) {
-					pmap = source->first_node("float_array");
-					
-				}else
-				if ((std::strcmp(source->name(), "triangles") == 0) && (parray == nullptr)) {
-					parray = source->first_node("p");
-				}
+					}
+					else if ((std::strstr((source->first_attribute()->value()), "map") != nullptr) && (pmap == nullptr)) {
+						pmap = source->first_node("float_array");
+
+					}
+					else
+						if ((std::strcmp(source->name(), "triangles") == 0) && (parray == nullptr)) {
+							parray = source->first_node("p");
+						}
 				source = source->next_sibling();
 
 			}
@@ -55,9 +51,9 @@ void ReadX3D::cvertexData()
 		}
 		if (std::strcmp(node->name(), "library_controllers") == 0) {
 			auto source = node->first_node("controller")->first_node("skin")->first_node();
-				while (source != nullptr)
-				{
-					if(source->first_attribute() != nullptr)
+			while (source != nullptr)
+			{
+				if (source->first_attribute() != nullptr)
 					if ((std::strstr(source->first_attribute()->value(), "joints") != nullptr) && (bonenames == nullptr)) {
 
 
@@ -65,30 +61,33 @@ void ReadX3D::cvertexData()
 						auto ssource = source->first_node("technique_common");
 						ssource = ssource->first_node("accessor");
 						std::stringstream(ssource->first_attribute("count")->value()) >> numbones;
-					}else
-					if (std::strstr(source->first_attribute()->value(), "bind_poses") != nullptr) {
-						bindpose = source->first_node("float_array");
-					}else
-					if (std::strstr(source->first_attribute()->value(), "weights") != nullptr) {
-						skinweights = source->first_node("float_array");
-					}else if (std::strcmp(source->name(), "vertex_weights") == 0) {
-						vcount = source->first_node("vcount");
-						vertexweights = source->first_node("v");
 					}
-					source = source->next_sibling();
-					
-				}
+					else
+						if (std::strstr(source->first_attribute()->value(), "bind_poses") != nullptr) {
+							bindpose = source->first_node("float_array");
+						}
+						else
+							if (std::strstr(source->first_attribute()->value(), "weights") != nullptr) {
+								skinweights = source->first_node("float_array");
+							}
+							else if (std::strcmp(source->name(), "vertex_weights") == 0) {
+								vcount = source->first_node("vcount");
+								vertexweights = source->first_node("v");
+							}
+				source = source->next_sibling();
 
-				
-				
+			}
+
+
+
 		}
 		if (std::strcmp(node->name(), "library_visual_scenes") == 0) {
 			auto source = node->first_node("visual_scene")->first_node("node");
 			while (source != nullptr) {
-				if(source->first_attribute() != nullptr){
-					
+				if (source->first_attribute() != nullptr) {
+
 					ndata = ChildNodeRead(source);
-				
+
 				}
 				source = source->next_sibling();
 			}
@@ -106,8 +105,8 @@ void ReadX3D::cvertexData()
 				bdata.emplace_back(Bone{ bone, tempc });
 				tempc++;
 			}
-			
-		} 
+
+		}
 		{
 			std::istringstream tm(bindpose->value());
 
@@ -126,8 +125,8 @@ void ReadX3D::cvertexData()
 				if ((counter % 16) == 0) {
 					counter2++;
 				}
-				
-				
+
+
 			}
 
 
@@ -135,7 +134,7 @@ void ReadX3D::cvertexData()
 				std::istringstream temp(matrix[b.bIndex]);
 				b.matrix = strToMatrix(temp);
 			}
-			
+
 
 			std::istringstream sw(skinweights->value());
 			std::vector<float> skeenweigh;
@@ -166,46 +165,45 @@ void ReadX3D::cvertexData()
 				}
 			}
 		}
-		
+
 	}
 
 	GetAllChildBones(&ndata, &ndata.aChildren);
 	ndata.name = "Armature";
-	
+	std::vector<Vertex> Vertdata;
 	for (auto i = 0; i < std::size(bdata); i++) {
 		bdata[i].node = ndata.aChildren[i];
 		bdata[i].node->bIndex = bdata[i].bIndex;
 	}
-	std::vector<Vertex>& vdata = Vertdata;
 	{
 		std::stringstream ssvertex(positions->value());
 		float x, y, z;
-	while (ssvertex >> x >> y >> z) {
-		vdata.emplace_back(Vertex{ .position{x, y, z} });
-	}
+		while (ssvertex >> x >> y >> z) {
+			Vertdata.emplace_back(Vertex{ .position{x, y, z} });
+		}
 
 	}
-	
+
 	std::vector<DirectX::XMFLOAT2> tempcoord;
 	{
 		std::stringstream ssmap(pmap->value());
 		float mx, my;
-		
+
 		while (ssmap >> mx >> my) {
-			tempcoord.emplace_back(mx, 1 - my);
-	}
-	
-	
+			tempcoord.emplace_back(mx, 1.0 - my);
+		}
+
+
 	}
 	std::vector<DirectX::XMFLOAT3> normals;
 	{
 		float nx, ny, nz;
 		std::stringstream ssnorm(pnorm->value());
 		while (ssnorm >> nx >> ny >> nz) {
-			normals.emplace_back(DirectX::XMFLOAT3{nx, ny, nz});
+			normals.emplace_back(DirectX::XMFLOAT3{ nx, ny, nz });
 		}
 	}
-	
+
 
 
 	{
@@ -227,18 +225,18 @@ void ReadX3D::cvertexData()
 		else {
 			tempweights[i] = (boneweight{ {0}, {1.0} });
 		}
-		tempdata[i] = vdata[idata[i].index];
+		tempdata[i] = Vertdata[idata[i].index];
 		tempdata[i].tc = tempcoord[idata[i].texcoord];
 		tempdata[i].normal = normals[idata[i].normal];
 	}
-	vdata = tempdata;
+	Vertdata = tempdata;
 	weights = tempweights;
-	
+
 
 	if (std::size(bdata) == 0) {
 		bdata.emplace_back(Bone{ "placeholder", 0 });
-		for (auto& i : idata) {
-			bdata[0].Indices.emplace_back(i.index);
+		for (auto i = 0; i < idata.size(); i++) {
+			bdata[0].Indices.emplace_back(i);
 		}
 	}
 
@@ -248,37 +246,42 @@ void ReadX3D::cvertexData()
 		}
 	}
 
-	
+
 	for (auto& b : bdata) {
 		DirectX::XMFLOAT3 pos{ 0,0,0 };
 		using namespace DirectX;
-		std::for_each(b.Indices.begin(), b.Indices.end(), [this, &pos, &vdata](auto& x) {
-			XMStoreFloat3(&pos, XMLoadFloat3(&vdata[x].position) + XMLoadFloat3(&pos));
+		std::for_each(b.Indices.begin(), b.Indices.end(), [this, &pos, &Vertdata](auto& x) {
+			XMStoreFloat3(&pos, XMLoadFloat3(&Vertdata[x].position) + XMLoadFloat3(&pos));
 		});
 		auto isize = b.Indices.size();
 		if (isize > 0) {
-			XMStoreFloat3(&b.sphere.Center, XMLoadFloat3(&pos)/isize);
+			XMStoreFloat3(&b.sphere.Center, XMLoadFloat3(&pos) / isize);
 		}
 		b.smallsphere = b.sphere;
 	}
 
 	int modctr = 0;
 	int sctr = 0;
-	Map.resize(std::size(idata));
-	TriData.resize(std::size(idata)/3, {nullptr, nullptr, nullptr});
+	NormalMap.resize(idata.size(), 0);
+	std::map<int, std::array<int, 3>> TriData;
 	for (auto i = 0; i < std::size(idata); i++) {
-		Map[i] = sctr;
-		TriData[sctr][modctr] = (&vdata[i]);
+		NormalMap[i] = sctr;
+		auto& vect = TriData[sctr];
+		vect[modctr] = i;
 		modctr++;
 		sctr += modctr == 3 ? 1 : 0;
 		modctr = modctr == 3 ? 0 : modctr;
 	}
 
+	MappedVertices.resize(TriData.size());
+	for (auto x = 0; x < TriData.size(); x++) {
+		MappedVertices[x] = std::array<Vertex, 3>{ Vertdata[TriData[x][0]], Vertdata[TriData[x][1]], Vertdata[TriData[x][2]] };
+	}
 
 	float collradius = 0;
 	DirectX::XMFLOAT3 Zero{ 0,0,0 };
 	for (auto& i : idata) {
-		auto temp = fDistance(&vdata[i.index].position, &Zero);
+		auto temp = fDistance(Vertdata[i.index].position, Zero);
 		collradius = temp > collradius ? temp : collradius;
 	}
 
@@ -289,41 +292,38 @@ void ReadX3D::cvertexData()
 		float ldist = 0;
 		float tdist = 0;
 		for (auto& i : b.Indices) {
-			fdist = fDistance(&b.sphere.Center, &vdata[i].position);
+			fdist = fDistance(b.sphere.Center, Vertdata[i].position);
 			dist = fdist > dist ? fdist : dist;
 
-			std::vector<Vertex*>& Verts = FindTri(i);
+			std::array<ReadX3D::Vertex, 3>& Verts = MappedVertices[NormalMap[i]];
 			//Ptr to vector of ptrs requires array index ????
-			DirectX::XMFLOAT3 zero = Verts[0]->position;
-			DirectX::XMFLOAT3 one = Verts[1]->position;
-			DirectX::XMFLOAT3 two = Verts[2]->position;
+			DirectX::XMFLOAT3 zero = Verts[0].position;
+			DirectX::XMFLOAT3 one = Verts[1].position;
+			DirectX::XMFLOAT3 two = Verts[2].position;
 
 			DirectX::XMFLOAT3 face = { (zero.x + one.x + two.x) / 3,(zero.y + one.y + two.y) / 3 ,(zero.z + one.z + two.z) / 3 };
 
-			tdist = fDistance(&b.sphere.Center, &face);
+			tdist = fDistance(b.sphere.Center, face);
 
 			ldist = (tdist < ldist) || (ldist == 0) ? tdist : ldist;
 
-			
+
 		}
 		b.sphere.Radius = dist;
 		b.smallsphere.Radius = ldist;
 	}
-
 	Sphere.Radius = collradius;
 	Sphere.Center = { 0,0,0 };
 }
 
-//Finds Relative Triangle Given the Index
-std::vector<ReadX3D::Vertex*>& ReadX3D::FindTri(int& Index)
+
+
+
+int ReadX3D::FindIndex(int Index)
 {
-	return TriData[Map[Index]];
+	return NormalMap[Index];
 }
 
-int ReadX3D::FindIndex(int& Index)
-{
-	return Map[Index];
-}
 
 void ReadX3D::GetAllChildBones(Node* node, std::vector<Node*>* Parent)
 {
@@ -367,22 +367,22 @@ ReadX3D::Node ReadX3D::ChildNodeRead(rapidxml::xml_node<char>* node) {
 	return mParent;
 }
 
-float ReadX3D::fDistance(DirectX::XMFLOAT3* pos1, DirectX::XMFLOAT3* pos2) {
+float ReadX3D::fDistance(DirectX::XMFLOAT3& pos1, DirectX::XMFLOAT3& pos2) {
 	DirectX::XMFLOAT4 Result{ 0,0,0,0 };
 	DirectX::XMFLOAT3 Dist{ 0,0,0 };
 	float d = 0;
-	DirectX::XMStoreFloat4(&Result, DirectX::XMVectorSubtract(XMLoadFloat3(pos2), XMLoadFloat3(pos1)));
+	DirectX::XMStoreFloat4(&Result, DirectX::XMVectorSubtract(XMLoadFloat3(&pos2), XMLoadFloat3(&pos1)));
 	DirectX::XMStoreFloat3(&Dist, DirectX::XMVector3Dot(XMLoadFloat4(&Result), XMLoadFloat4(&Result)));
 	d = sqrt(Dist.x);
 	return d;
 }
 
-DirectX::XMFLOAT4 ReadX3D::fDirection(DirectX::XMFLOAT3* pos1, DirectX::XMFLOAT3* pos2) {
+DirectX::XMFLOAT4 ReadX3D::fDirection(DirectX::XMFLOAT3& pos1, DirectX::XMFLOAT3& pos2) {
 	using namespace DirectX;
 	DirectX::XMFLOAT4 Result{ 0,0,0,0 };
 	DirectX::XMFLOAT3 Dist{ 0,0,0 };
 	float d = 0;
-	DirectX::XMStoreFloat4(&Result, XMLoadFloat3(pos2) - XMLoadFloat3(pos1));
+	DirectX::XMStoreFloat4(&Result, XMLoadFloat3(&pos2) - XMLoadFloat3(&pos1));
 	XMStoreFloat3(&Dist, DirectX::XMVector3Dot(XMLoadFloat4(&Result), XMLoadFloat4(&Result)));
 	d = sqrt(Dist.x);
 	if (d > 0) {

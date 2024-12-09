@@ -704,8 +704,6 @@ int Tind = get_global_id(2);
 
 
 
-if (!retdat[sd].coll)
-{
     XMFLOAT3 TPos = WData[sd].Position;
 
     int wOffset = WData[sd].Offset;
@@ -735,7 +733,7 @@ if (!retdat[sd].coll)
     }
     
 
-}
+
 
 
 

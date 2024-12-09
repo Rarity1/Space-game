@@ -7,7 +7,6 @@
 class RStorage {
 public:
 	RStorage();
-	virtual void OnInit();
 	~RStorage();
 	enum pChange {
 		ALL = 0,
@@ -15,6 +14,7 @@ public:
 	};
 	struct unmappedData {
 		std::filesystem::path model;
+		std::string name = "";
 		UINT fsize;
 		UINT vCount;
 		UINT umID;
@@ -51,7 +51,7 @@ public:
 	struct eResource {
 		eResource(std::string name, RStorage::bmResource* model, float mScale, float mMass, float mFriction, DirectX::XMFLOAT3 initPos, DirectX::XMFLOAT3 initRot, DirectX::XMFLOAT3 initVelDir, float initSpeed);
 		~eResource() {
-			delete mPos;
+			delete& mPos;
 			delete& currentMtx;
 			delete& PhysicsUpdate;
 			delete& Filled;
@@ -64,7 +64,7 @@ public:
 			Filled(*new std::atomic<bool>),
 			updated(*new std::atomic<bool>),
 			Collision(*new std::atomic<bool>),
-			mPos(new relposVect(*old.mPos->position))
+			mPos(*new relposVect(*old.mPos.position))
 		{
 			model = old.model;
 			name = old.name;
@@ -96,20 +96,18 @@ public:
 			clPositionBuff = old.clPositionBuff;
 			pDir = old.pDir;
 			model = old.model;
-			mPos->position = old.mPos->position;
+			mPos.position = old.mPos.position;
 		}
 		bool operator==(const eResource& comparison) {
 			if (this != &comparison) return false;
-			if(name != comparison.name) return false;
 			if(clPositionBuff != comparison.clPositionBuff)return false;
-			if(mPos->position != comparison.mPos->position) return false;
+			if(mPos.position != comparison.mPos.position) return false;
 			return true;
 		}
 		bool operator!=(const eResource& comparison) {
 			if (this == &comparison) return false;
-			if (name == comparison.name) return false;
 			if (clPositionBuff == comparison.clPositionBuff)return false;
-			if (mPos->position == comparison.mPos->position) return false;
+			if (mPos.position == comparison.mPos.position) return false;
 			return true;
 		}
 		std::string name = "";
@@ -117,7 +115,7 @@ public:
 		float scale = 1;
 		float mass = 1;
 		float friction = 0;
-		relposVect* mPos;
+		relposVect& mPos;
 		DirectX::XMFLOAT4 velDir{ 0,0,0,0 };
 		float speed = 0;
 		DirectX::XMFLOAT4 grav{ 0,0,0,0 };

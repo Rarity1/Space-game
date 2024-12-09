@@ -18,22 +18,26 @@ void Engine::iLoad() {
     pGfx.umodel.lock();
 
     //begin model tracking. load a gd default world mf
-    pGfx.lModels->initResource("cube", 1, 1, 200.0, 0.01, DirectX::XMFLOAT3{ 10,0,138 });
     pGfx.lModels->initResource("untitled", 2, 1, 200.0, 0.01, DirectX::XMFLOAT3{ 0,0,138 });
+    pGfx.lModels->initResource("cube", 1, 1, 200.0, 0.01, DirectX::XMFLOAT3{ 10,0,138 });
     pGfx.lModels->initResource("wrld", 4, 1, 8570000000.0 , 0.3, DirectX::XMFLOAT3{ 0,0,0 });
     //wrld is 1:50000
 
     //stress it out nerd
-    for (auto i = 0; i < 1; i++) {
-        float p = i * 10;
-        //pGfx.lModels->initResource("cube", 1, 1, 200, 0.3, DirectX::XMFLOAT3{ 10 + p,0,143 });
+    for (auto i = 0; i < 20; i++) {
+        float p = i * 2;
+        pGfx.lModels->initResource(std::to_string(i), 1, 1, 200, 0.3, DirectX::XMFLOAT3{12 + p,0,138});
+    }
+    for (auto i = 0; i < 5; i++) {
+        float p = i * 2;
+        pGfx.lModels->initResource(std::to_string(i), 2, 1, 200, 0.3, DirectX::XMFLOAT3{ 12 + p,0,138 });
     }
     //trackedModels[0].mworld = &trackedModels[2];
     //trackedModels[1].mworld = &trackedModels[2];
     //trackedModels[3]->mworld = trackedModels[2];
 
 
-    plModel = &trackedModels[1];
+    plModel = &trackedModels[0];
     
     //end model tracking.
     //If all models arent unique this is a waste of space
@@ -227,10 +231,10 @@ void Engine::UCampos() {
 
     //Please add a threadsafe way to update position
     if (pGfx.curCamera.position == nullptr) {
-        plModel->mPos->posMtx.lock();
-        pGfx.curCamera.position = plModel->mPos->position;
-        pGfx.curCamera.posMtx = &plModel->mPos->posMtx;
-        plModel->mPos->posMtx.unlock();
+        plModel->mPos.posMtx.lock();
+        pGfx.curCamera.position = plModel->mPos.position;
+        pGfx.curCamera.posMtx = &plModel->mPos.posMtx;
+        plModel->mPos.posMtx.unlock();
     }
 }
 
