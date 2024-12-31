@@ -65,14 +65,20 @@
 
 #define STRICT
 
+
 #include <Windows.h>
+#include <sstream>
+#include <utility>
+#include <wrl.h>
+#include <exception>
+#include <string>
+#include <source_location>
 #include <d3d12.h>
 #include <dxgi1_6.h>
 #include <D3Dcompiler.h>
 #include <DirectXMath.h>
 #include <fstream>
 #include <rapidxml/rapidxml.hpp>
-#include <DirectXMath.h>
 #include <DirectXCollision.h>
 #include <iostream>
 #include <cmath>
@@ -81,15 +87,9 @@
 #include <memory>
 #include <map>
 #include <random>
-#include <sstream>
 #include <pix3.h>
-#include <wrl.h>
 #include <filesystem>
 #include <d3dx12.h>
-#include <d3d12.h>
-#include <dxgi1_6.h>
-#include <d3dcompiler.h> 
-#include <DirectXMath.h> 
 #include <dstorage.h>
 #include <DDSTextureLoader.h>
 #include <ResourceUploadBatch.h>

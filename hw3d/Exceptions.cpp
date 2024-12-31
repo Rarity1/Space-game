@@ -1,13 +1,11 @@
-#include "CWin.h"
 #include "Exceptions.h"
-#include <sstream>
-#include <utility>
-#include <wrl.h>
+
 
 Exceptions::Exceptions(int line, const char* file) noexcept
 	:
 	line(line),
-	file(file){}
+	file(file) {
+}
 
 
 

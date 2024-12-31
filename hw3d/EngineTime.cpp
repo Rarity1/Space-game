@@ -19,8 +19,7 @@ double EngineTime::Mark() noexcept
 double EngineTime::Peek() const noexcept
 {
 	duration<double> fs(high_resolution_clock::now() - last);
-	return fs.count();
-}
+	return fs.count();}
 
 double EngineTime::Current() const
 {

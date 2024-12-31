@@ -731,10 +731,5 @@ int Tind = get_global_id(2);
         retdat[sd].dir[1] = Result.norm[1];
 
     }
-    
-
-
-
-
 
 }

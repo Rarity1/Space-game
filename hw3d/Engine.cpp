@@ -28,7 +28,7 @@ void Engine::iLoad() {
         float p = i * 2;
         pGfx.lModels->initResource(std::to_string(i), 1, 1, 200, 0.3, DirectX::XMFLOAT3{12 + p,0,138});
     }
-    for (auto i = 0; i < 5; i++) {
+    for (auto i = 0; i < 20; i++) {
         float p = i * 2;
         pGfx.lModels->initResource(std::to_string(i), 2, 1, 200, 0.3, DirectX::XMFLOAT3{ 12 + p,0,138 });
     }
@@ -381,6 +381,7 @@ void Engine::UControls() {
             OnKeyDown(ss->GetCode());
         }
     }
+
 }
 
 

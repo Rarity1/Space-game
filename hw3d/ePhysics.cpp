@@ -25,12 +25,24 @@ Physics::Physics(EngineTime& Clock, std::vector<RStorage::eResource>& trackedMod
 
     context = cl::Context{ device };
     std::ifstream phys("OpenCL\\ePhysics.cl");
+    std::ifstream sphr("OpenCL\\SphrKern.cl");
+
     _ASSERT(phys ? true : false);
-    std::string str(std::istreambuf_iterator<char>{phys}, {});
-    sources.push_back({str.c_str(), str.length()});
-    
-    program = cl::Program{ context, sources };
-    _ASSERT(program.build({ device }) == CL_SUCCESS);
+    _ASSERT(sphr ? true : false);
+
+    std::string p(std::istreambuf_iterator<char>{phys}, {});
+    std::string s(std::istreambuf_iterator<char>{sphr}, {});
+
+    int error = CL_SUCCESS;
+    Sphere = cl::Program(context, s);
+    FullColl = cl::Program(context, p);
+
+
+    _ASSERT(Sphere.build({ device }) == CL_SUCCESS);
+    _ASSERT(FullColl.build({ device }) == CL_SUCCESS);
+
+
+
     queue = cl::CommandQueue{ context, device };
     clGetDeviceInfo(device.get(), CL_DEVICE_LOCAL_MEM_SIZE, sizeof(cl_ulong), &clLocalMemSize, 0);
     
@@ -156,10 +168,8 @@ void Physics::CalProportionalSpeed(DirectX::XMFLOAT4& VelDir1, DirectX::XMFLOAT4
 
 
 //Moved most memory access to stack but execution time for high index count still attrocious 
-Physics::WORKINDI Physics::ProcCollide(RStorage::eResource& obj, RStorage::eResource& obj2, cl::CommandQueue& tQueue, DirectX::XMFLOAT3& objpos, DirectX::XMFLOAT3& obj2pos, DirectX::XMFLOAT4& dir, float& dist) {
-
+Physics::WORKINDI Physics::ProcCollide(RStorage::eResource& obj, RStorage::eResource& obj2,  DirectX::XMFLOAT3& objpos, DirectX::XMFLOAT3& obj2pos, DirectX::XMFLOAT4& dir, float& dist) {
     WORKINDI Result;
-
     using namespace DirectX;
     XMFLOAT3 pos2;
     XMStoreFloat3(&pos2, XMLoadFloat4(&dir) * dist);
@@ -187,94 +197,148 @@ Physics::WORKINDI Physics::ProcCollide(RStorage::eResource& obj, RStorage::eReso
         }
     }
 
-
-
-    
-
-
-    //std::future<std::vector<int>> Indices = std::async(std::launch::async, [&WData, &objbdata, &obj2bdata, &objudat, &obj2udat, &pos2] {
+    if (WData.size() == 0) return Result;
 
     std::vector<int> Indices;
     std::mutex iLock;
 
-    std::vector<std::future<std::vector<int>>> IndVect(WData.size());
+    std::vector<std::vector<int>> IndVect(WData.size());
+    cl::CommandQueue Queue1 = cl::CommandQueue{ context, devices.front() };
+    cl::CommandQueue Queue2 = cl::CommandQueue{ context, devices.front() };
+
+
+    std::vector<SPHR> CollSp1(WData.size());
+    std::vector<SPHR> CollSp2(WData.size());
+    cl::Buffer sphBuffer1(context, CL_MEM_READ_ONLY, sizeof(SPHR) * CollSp1.size());
+    cl::Buffer sphBuffer2(context, CL_MEM_READ_ONLY, sizeof(SPHR) * CollSp2.size());
+
+
+    int indexCount1 = 0;
+    int indexCount2 = 0;
+    std::vector<int> b1ind;
+    std::vector<int> b2ind;
+    std::vector<UINT> offset1(WData.size());
+    std::vector<UINT> offset2(WData.size());
     for (auto i = 0; i < WData.size(); i++) {
-        IndVect[i] = std::async(std::launch::async, [&WData, i, &objbdata, &obj2bdata, &objudat, &obj2udat, &pos2] {
-            auto& objnMap = objudat->NormalMap;
-            auto& obj2nMap = obj2udat->NormalMap;
-            auto& objvertices = objudat->MappedVertices;
-            auto& obj2vertices = obj2udat->MappedVertices;
-            using namespace DirectX;
-            std::vector<int> Indices;
-            auto& wDat = WData[i];
-            auto& Bone1 = objbdata[wDat.bIndex[0]];
-            auto& Bone2 = obj2bdata[wDat.bIndex[1]];
+        using namespace DirectX;
+        std::vector<int> Indices;
+        auto& wDat = WData[i];
+        auto& Bone1 = objbdata[wDat.bIndex[0]];
+        auto& Bone2 = obj2bdata[wDat.bIndex[1]];
+        auto tempbSphere = Bone1.sphere;
+        XMStoreFloat3(&tempbSphere.Center, XMLoadFloat3(&tempbSphere.Center) - XMLoadFloat3(&pos2));
 
-            XMFLOAT3 b2relPos;
-            XMStoreFloat3(&b2relPos, XMLoadFloat3(&pos2) + XMLoadFloat3(&Bone2.sphere.Center));
+        auto tempbSphere2 = Bone2.sphere;
+        XMStoreFloat3(&tempbSphere2.Center, XMLoadFloat3(&tempbSphere2.Center) + XMLoadFloat3(&pos2));
+        
+        CollSp2[i] = SPHR{tempbSphere.Center, tempbSphere.Radius};
 
-            int wWorkCount = 0;
-            int tWorkCount = 0;
-
-            auto cBoneDir = fDirection(Bone1.sphere.Center, b2relPos);
+        CollSp1[i] = SPHR{tempbSphere2.Center, tempbSphere2.Radius };
 
 
-            //std::future<std::vector<int>> WorkIndi1 = std::async(std::launch::async, [&Bone1, &objvertices, &objnMap, &b2relPos, &cBoneDir] {
-            std::vector<int > WorkIndi1;
-            for (auto a = 0; a < Bone1.Indices.size(); a++) {
-                auto index = Bone1.Indices[a];
-                auto& Tri = objvertices[objnMap[index]];
-                XMFLOAT3 Norm;
-                XMStoreFloat3(&Norm, XMVector3Dot(XMLoadFloat3(&Tri[0].normal), XMLoadFloat3(&b2relPos)));
-                if (Norm.x >= 0) {
-                    auto& tempbSphere = Bone1.sphere;
-                    //Why does this take so long? How Do I make it faster?
-                    //if (tempbSphere.Intersects(XMLoadFloat3(&Tri[0].position) + XMLoadFloat4(&cBoneDir), XMLoadFloat3(&Tri[1].position) + XMLoadFloat4(&cBoneDir), XMLoadFloat3(&Tri[2].position) + XMLoadFloat4(&cBoneDir))) {
-                        WorkIndi1.emplace_back(index);
-                    //}
-
-                }
-            }
-            //return WorkIndi1;});
-
-
-
-            //std::future<std::vector<int>> WorkIndi2 = std::async(std::launch::async, [&Bone2, &obj2vertices, &obj2nMap, &b2relPos, &cBoneDir] {
-                std::vector<int> WorkIndi2;
-                for (auto a = 0; a < Bone2.Indices.size(); a++) {
-                    auto index = Bone2.Indices[a];
-                    auto& Tri = obj2vertices[obj2nMap[index]];
-                    XMFLOAT3 Norm;
-                    XMStoreFloat3(&Norm, XMVector3Dot(XMLoadFloat3(&Tri[0].normal), -XMLoadFloat3(&b2relPos)));
-                    if (Norm.x >= 0) {
-                        auto& tempbSphere = Bone2.sphere;
-
-                        //if (tempbSphere.Intersects(XMLoadFloat3(&Tri[0].position) - XMLoadFloat4(&cBoneDir), XMLoadFloat3(&Tri[1].position) - XMLoadFloat4(&cBoneDir), XMLoadFloat3(&Tri[2].position) - XMLoadFloat4(&cBoneDir))) {
-                            WorkIndi2.emplace_back(index);
-                        //}
-
-                    }
-                }
-               // return WorkIndi2;});
-
-            std::vector<int> temp = WorkIndi1;
-            wDat.wWorkCount = temp.size();
-            temp.append_range(WorkIndi2);
-            wDat.tWorkCount = temp.size() - wDat.wWorkCount;
-            return temp;
-        });
-
+        offset1[i] = indexCount1;
+        indexCount1 += Bone1.Indices.size();
+        b1ind.append_range(Bone1.Indices);
+        offset2[i] = indexCount2;
+        indexCount2 += Bone2.Indices.size();
+        b2ind.append_range(Bone2.Indices);
     }
+    cl::Buffer workBuffer1(context, CL_MEM_READ_ONLY, indexCount1 * sizeof(int));
+    cl::Buffer workBuffer2(context, CL_MEM_READ_ONLY, indexCount2 * sizeof(int));
+
+    cl::Buffer retbuffer1(context, CL_MEM_READ_WRITE, sizeof(int) * indexCount1);
+    cl::Buffer retbuffer2(context, CL_MEM_READ_WRITE, sizeof(int) * indexCount2);
+
+    Queue1.enqueueWriteBuffer(sphBuffer1, CL_FALSE, 0, sizeof(SPHR) * CollSp1.size(), CollSp1.data());
+
+    Queue2.enqueueWriteBuffer(sphBuffer2, CL_FALSE, 0, sizeof(SPHR) * CollSp2.size(), CollSp2.data());
+
+    std::vector<int> retdat1(indexCount1, 0);
+    std::vector<int> retdat2(indexCount2, 0);
+
+    cl::Kernel kerncpy1(Sphere, "sphColl");
+    cl::Kernel kerncpy2(Sphere, "sphColl");
+    Queue1.enqueueWriteBuffer(workBuffer1, CL_FALSE, 0, indexCount1 * sizeof(int), b1ind.data());
+    Queue1.enqueueWriteBuffer(retbuffer1, CL_FALSE, 0, retdat1.size() * sizeof(int), retdat1.data());
+    Queue2.enqueueWriteBuffer(workBuffer2, CL_FALSE, 0, indexCount2 * sizeof(int), b2ind.data());
+    Queue2.enqueueWriteBuffer(retbuffer2, CL_FALSE, 0, retdat2.size() * sizeof(int), retdat2.data());
+
+    
+    kerncpy1.setArg(0, sphBuffer1);
+    kerncpy1.setArg(1, workBuffer1);
+    kerncpy1.setArg(2, obj.model->clBuff);
+    kerncpy1.setArg(3, obj.model->clIndexMap);
+    kerncpy1.setArg(4, obj.model->clIndexBuff);
+    kerncpy1.setArg(5, retbuffer1);
+
+    kerncpy2.setArg(0, sphBuffer2);
+    kerncpy2.setArg(1, workBuffer2);
+    kerncpy2.setArg(2, obj2.model->clBuff);
+    kerncpy2.setArg(3, obj2.model->clIndexMap);
+    kerncpy2.setArg(4, obj2.model->clIndexBuff);
+    kerncpy2.setArg(5, retbuffer2);
+
+    Queue1.finish();
+
+    for (UINT i = 0; i < WData.size(); i++) {
+        size_t wsize1[2] = { objbdata[WData[i].bIndex[0]].Indices.size(), 1};
+        size_t offsize[2] = {offset1[i], i};
+
+        size_t wsize2[2] = { obj2bdata[WData[i].bIndex[1]].Indices.size(), 1 };
+        size_t offsize2[2] = { offset2[i], i };
+
+        _ASSERT(clEnqueueNDRangeKernel(Queue1.get(), kerncpy1.get(), 2, offsize, wsize1, nullptr, 0, NULL, NULL) == CL_SUCCESS);
+        _ASSERT(clEnqueueNDRangeKernel(Queue2.get(), kerncpy2.get(), 2, offsize2, wsize2, nullptr, 0, NULL, NULL) == CL_SUCCESS);
+    }
+    _ASSERT(Queue1.enqueueReadBuffer(retbuffer1, CL_TRUE, 0, sizeof(int) * retdat1.size(), retdat1.data()) == CL_SUCCESS);
+    _ASSERT(Queue2.enqueueReadBuffer(retbuffer2, CL_TRUE, 0, sizeof(int)* retdat2.size(), retdat2.data()) == CL_SUCCESS);
+
+    Queue1.finish();
+    Queue2.finish();
+
+
+    /*
+        
+                //Why does this take so long? How Do I make it faster?
+                if (tempbSphere2.Intersects(XMLoadFloat3(&Tri[0].position), XMLoadFloat3(&Tri[1].position), XMLoadFloat3(&Tri[2].position))) {
+                    WorkIndi1.push_back(index);
+                }
+
+                if (tempbSphere.Intersects(XMLoadFloat3(&Tri[0].position), XMLoadFloat3(&Tri[1].position), XMLoadFloat3(&Tri[2].position))) {
+                    WorkIndi2.push_back(index);
+                }
+
+        */
+    for (auto i = 0; i < WData.size(); i++) {
+        std::vector<int > WorkIndi1;
+        int indisize1 = objbdata[WData[i].bIndex[0]].Indices.size();
+        WorkIndi1.reserve(indisize1);
+        for (auto w1 = offset1[i]; w1 < offset1[i] + indisize1; w1++) {
+            if (retdat1[w1] != 0) {
+                WorkIndi1.push_back(b1ind[w1]);
+            }
+        }
+
+        std::vector<int> WorkIndi2;
+        int indisize2 = obj2bdata[WData[i].bIndex[1]].Indices.size();
+        WorkIndi2.reserve(indisize2);
+        for (auto w2 = offset2[i]; w2 < offset2[i] + indisize2; w2++) {
+            if (retdat2[w2] != 0) {
+                WorkIndi2.push_back(b2ind[w2]);
+            }
+        }
+        
+        IndVect[i].append_range(WorkIndi1);
+        WData[i].wWorkCount = IndVect[i].size();
+        IndVect[i].append_range(WorkIndi2);
+        WData[i].tWorkCount = IndVect[i].size() - WData[i].wWorkCount;
+    }
+
 
     for (auto i = 0; i < IndVect.size(); i++) {
         WData[i].tOffset = Indices.size();
-        Indices.append_range(IndVect[i].get());
+        Indices.append_range(IndVect[i]);
     }
-    //return Indices;});
-
-
-
-
     
     Result.Indices = Indices;
     std::for_each(WData.begin(), WData.end(), [&Result](auto& e) {
@@ -304,6 +368,7 @@ void Physics::pSpecCollison() {
             std::vector<collstruct> wCollModels;
             {
                 std::vector<collstruct> LCollModels;
+                LCollModels.reserve(trackedModels.size());
 
 
                 for (auto m = 0; m < std::size(trackedModels); m++) {
@@ -330,12 +395,15 @@ void Physics::pSpecCollison() {
                             }
                         }
                     });
+                    CollModels.reserve(lCheck.size());
                     for (auto i = 0; i < lCheck.size(); i++) {
                         if (lCheck[i]) {
                             CollModels.emplace_back(LCollModels[i]);
                             wCollModels.emplace_back(LCollModels[i]);
                         }
                     }
+                    CollModels.shrink_to_fit();
+
                 }
                 else {
                     CollModels.append_range(LCollModels);
@@ -348,8 +416,6 @@ void Physics::pSpecCollison() {
 
             if(devices.size() < 1) return;
 
-            std::vector<cl::CommandQueue> Queues(wCollModels.size(), cl::CommandQueue{ context, devices.front() });
-
             std::vector<std::thread> tThreads(wCollModels.size());
             for (auto i = 0; i < wCollModels.size(); i++) {
                 auto& obj2 = *wCollModels[i].obj2;
@@ -360,8 +426,8 @@ void Physics::pSpecCollison() {
                 obj2.mPos.posMtx.unlock();
                 auto dir = fDirection(Pos1, Pos2);
                 auto dist = fDistance(Pos1, Pos2);
-                auto& tQueue = Queues[i];
-                WORKINDI WorkIndi = ProcCollide(obj, obj2, tQueue, Pos1, Pos2, dir, dist);
+                auto tQueue = cl::CommandQueue{ context, devices.front() };
+                WORKINDI WorkIndi = ProcCollide(obj, obj2, Pos1, Pos2, dir, dist);
                 if (WorkIndi.WData.size() != 0) {
                     cl::Buffer WorkBuffer(context, CL_MEM_READ_ONLY, sizeof(WORKDATA) * WorkIndi.WData.size());
                     cl::Buffer IndexBuffer(context, CL_MEM_READ_ONLY, WorkIndi.Indices.size() * sizeof(int));
@@ -370,7 +436,7 @@ void Physics::pSpecCollison() {
                     std::vector<RETURNDATA> retdat;
                     auto& WData = WorkIndi.WData;
                     auto& Indices = WorkIndi.Indices;
-                    cl::Kernel collide(program, "coll");
+                    cl::Kernel collide(FullColl, "coll");
                     int wSize = std::size(WData);
                     retdat.resize(wSize);
 
@@ -446,11 +512,8 @@ void Physics::pSpecCollison() {
                     }
                 }
             }
-            Queues.resize(0);
         }));
-        
     }
-
     THREADS::tEndWork(pThreads);
 
 }
@@ -459,6 +522,7 @@ void Physics::pSpecReset() {
     //Do stuff here to free memory when Collision calculations are over.
     cmMtx.lock();
     CollModels.resize(0);
+    CollModels.shrink_to_fit();
     cmMtx.unlock();
 }
 

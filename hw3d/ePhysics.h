@@ -191,8 +191,8 @@ private:
 
 	std::vector<cl::Device> devices;
 	cl::Context context;
-	cl::Program::Sources sources;
-	cl::Program program;
+	cl::Program FullColl;
+	cl::Program Sphere;
 	cl::CommandQueue queue;
 	std::mutex QueueMTX;
 	struct RETURNDATA {
@@ -226,9 +226,14 @@ private:
 		std::vector<WORKDATA> WData;
 		std::vector<int> Indices;
 	};
-	 WORKINDI ProcCollide(RStorage::eResource& obj, RStorage::eResource& obj2, cl::CommandQueue& tQueue, DirectX::XMFLOAT3& objpos, DirectX::XMFLOAT3& obj2pos, DirectX::XMFLOAT4& dir, float& dist);
+	 WORKINDI ProcCollide(RStorage::eResource& obj, RStorage::eResource& obj2, DirectX::XMFLOAT3& objpos, DirectX::XMFLOAT3& obj2pos, DirectX::XMFLOAT4& dir, float& dist);
 	std::thread lastPhyxThread;
 	std::mutex phyxBusy;
 	std::atomic<bool> Updated;
+	struct SPHR {
+		DirectX::XMFLOAT3 Center;
+		double Radius;
+	};
+
 
 };

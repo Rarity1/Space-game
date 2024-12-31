@@ -1,7 +1,6 @@
 #pragma once
-#include <exception>
-#include <string>
-#include <source_location>
+#include "CWin.h"
+
 
 class Exceptions : public std::exception
 {
@@ -18,3 +17,4 @@ private:
 protected:
 	mutable std::string whatBuffer;
 };
+
