@@ -238,6 +238,7 @@ XCOPY "$(SolutionDir)OpenCL\" "$(TargetDir)OpenCL\" /E /Y</Command>
     <ClCompile Include="Keyboard.cpp" />
     <ClCompile Include="Mouse.cpp" />
     <ClCompile Include="RStorage.cpp" />
+    <ClCompile Include="Threads.cpp" />
     <ClCompile Include="Window.cpp" />
     <ClCompile Include="WinMain.cpp" />
     <ClCompile Include="X3DInt.cpp" />
@@ -256,6 +257,7 @@ XCOPY "$(SolutionDir)OpenCL\" "$(TargetDir)OpenCL\" /E /Y</Command>
     <ClInclude Include="Mouse.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="RStorage.h" />
+    <ClInclude Include="Threads.h" />
     <ClInclude Include="Window.h" />
     <ClInclude Include="X3DInt.h" />
   </ItemGroup>
@@ -277,7 +279,13 @@ XCOPY "$(SolutionDir)OpenCL\" "$(TargetDir)OpenCL\" /E /Y</Command>
       <DeploymentContent Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</DeploymentContent>
       <DeploymentContent Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</DeploymentContent>
     </CopyFileToFolders>
-    <None Include="..\OpenCL\SphrKern.cl" />
+    <CopyFileToFolders Include="..\OpenCL\SphrKern.cl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
+      <DeploymentContent Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</DeploymentContent>
+      <FileType>Document</FileType>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</ExcludedFromBuild>
+      <DeploymentContent Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</DeploymentContent>
+    </CopyFileToFolders>
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>

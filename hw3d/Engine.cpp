@@ -8,12 +8,12 @@ Engine::Engine(Graphics& gfx, Keyboard& kbd, EngineTime& clock):
     Clock(clock)
 {
     phyx = std::make_unique<Physics>(Clock, trackedModels, updaterate);
+    threads = std::make_unique<THREADS>((int)std::thread::hardware_concurrency());
     pGfx.LoadPipeline();
 }
 
 
 void Engine::iLoad() {
-    eventQueue.resize(updaterate);
     //Move everything between this into a function in Graphics
     pGfx.umodel.lock();
 
@@ -24,12 +24,12 @@ void Engine::iLoad() {
     //wrld is 1:50000
 
     //stress it out nerd
-    for (auto i = 0; i < 20; i++) {
+    for (auto i = 0; i < 5; i++) {
         float p = i * 2;
         pGfx.lModels->initResource(std::to_string(i), 1, 1, 200, 0.3, DirectX::XMFLOAT3{12 + p,0,138});
     }
-    for (auto i = 0; i < 20; i++) {
-        float p = i * 2;
+    for (auto i = 0; i < 2; i++) {
+        float p = i * 5;
         pGfx.lModels->initResource(std::to_string(i), 2, 1, 200, 0.3, DirectX::XMFLOAT3{ 12 + p,0,138 });
     }
     //trackedModels[0].mworld = &trackedModels[2];
@@ -127,72 +127,25 @@ void Engine::mAniUpdate(){
 
 int Engine::eventBusSync()
 {
-    std::thread th([this] {
-        if (evBusLock.try_lock()) {
-            QueueTLock.lock();
-            std::for_each(QueueThreads.begin(), QueueThreads.end(), [](auto& thread) {
-                thread.join();
-            });
-            QueueThreads.resize(0);
-
-
-            QueueLock.lock();
-            for (auto& e : eventQueue) {
-                if (e != nullptr) {
-                    e->evnt();
-                    delete e;
-                    e = nullptr;
-                }
-            }
-            queueCount = 0;
-            QueueLock.unlock();
-            QueueTLock.unlock();
-            evBusLock.unlock();
-        }
-    });
-
-    if (oldBusThread.get_id()._Get_underlying_id() != 0) {
-        oldBusThread.join();
+    for (auto& q : QueueThreads) {
+        _ASSERT(q.wRef.uWid != 0);
+        threads.get()->gEndWork(q.wRef);
     }
-    oldBusThread = move(th);
-
+    QueueThreads.resize(0);
     return 0;
 }
 
 void Engine::queueCommand(std::function<void()> Function, int Priority)
 {
-    std::thread th([this, Function, Priority] {
-        bool queued = false;
-        int x = Priority;
-        if (x >= updaterate) {
-            x = 0;
-        }
-        while (!queued) {
-            if (queueCount < updaterate) {
-                QueueLock.lock();
-                if (eventQueue[x] == nullptr) {
-                    eventQueue[x] = new Event(Function);
-                    queued = true;
-                    queueCount++;
-                }
-                else {
-                    x++;
-                }
-                QueueLock.unlock();
-            }
-            else return;
-        }
-    });
-    QueueTLock.lock();
-    QueueThreads.emplace_back(move(th));
-    QueueTLock.unlock();
-
+    QueueThreads.emplace_back(Event(threads.get()->gPushWork(Function)));
 }
 
 void Engine::enQueueEngineCommands()
 {
-    queueCommand(std::function<void()>([this] {this->cPlayermodel(); }), 0);
-    queueCommand(std::function<void()>([this] {phyx->Update(); }), 20);
+    //queueCommand(std::function<void()>([this] {this->cPlayermodel(); }), 0);
+    this->cPlayermodel();
+    //queueCommand(std::function<void()>([this] {phyx->Update(); }), 20);
+    phyx->Update();
 }
 
 void Engine::enQueueExternCommands()
@@ -387,13 +340,8 @@ void Engine::UControls() {
 
 
 Engine::~Engine() {
-    if (oldBusThread.get_id()._Get_underlying_id() != 0) {
-        oldBusThread.join();
-    }
-    for (auto& e : eventQueue) {
+    //_ASSERT(eWref.uWid != 0);
+    //threads.get()->gEndWork(eWref);
 
-        if (e != nullptr)
-            delete e;
-    }
     eRun.store(false);
 }

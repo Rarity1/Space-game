@@ -35,13 +35,13 @@ typedef struct UPVERTNORM
 }
 UPVERTNORM;
 
-typedef struct SPHERE
-{
-    XMFLOAT3 Center;
-    double Radius;
-}
-SPHERE;
 
+typedef struct SPH
+{
+    XMFLOAT3 Center[2];
+    double Radius[2];
+}
+SPH;
 
 XMFLOAT3 MulXMFLOAT3(XMFLOAT3 a, float b)
 {
@@ -123,12 +123,33 @@ XMFLOAT3 XMVector3Cross(XMFLOAT3 a, XMFLOAT3 b)
 }
 
 
-void kernel sphColl(global const SPHERE* Sphere, global const int* workIndex, global const UPVERTNORM* Model, global const int* IndexMap, global const INTINDEX* IndexBuff, global int* RetData){
+void kernel sphColl(global const SPH* Sphere, global const int* workIndex, global const UPVERTNORM* Model, global const int* IndexMap, global const INTINDEX* IndexBuff, global const XMFLOAT3* boneDir, global int* RetData){
     int sd = get_global_id(0);
     int off = get_global_id(1);
+    int sph = get_global_id(2);
 
-    if ( XMVector3Dot(Model[workIndex[sd]].Norm, Sphere[off].Center) >= 0.0)
-    {
-        RetData[sd] = 69;
-    }
+INTINDEX Indices;
+Indices = IndexBuff[IndexMap[workIndex[sd]]];
+
+switch (sph)
+{
+    case 0:
+        {
+            
+            if (XMVector3Dot(MulXMFLOAT3(Model[Indices.Index[0]].Norm, -1), boneDir[off]) >= 0)
+            {
+                RetData[sd] = 1;
+            }
+            break;
+        }
+        case 1:
+        {
+            if (XMVector3Dot(Model[Indices.Index[0]].Norm, boneDir[off]) >= 0)
+            {
+                RetData[sd] = 1;
+            }
+            break;
+        }
+}
+
 }

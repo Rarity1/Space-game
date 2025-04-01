@@ -44,24 +44,22 @@ Physics::Physics(EngineTime& Clock, std::vector<RStorage::eResource>& trackedMod
 
 
     queue = cl::CommandQueue{ context, device };
+    thrds = std::make_unique<THREADS>(coreCount);
     clGetDeviceInfo(device.get(), CL_DEVICE_LOCAL_MEM_SIZE, sizeof(cl_ulong), &clLocalMemSize, 0);
-    
-    pThreads = std::vector<THREADS>(coreCount);
+
 }
 
 
 void Physics::Update() {
-    std::thread th([this] {
-        pSpecReset();
-        ticker.incCount();
-        //std::for_each(trackedModels.begin(), trackedModels.end(), [this](auto& m) {cGravity(&m); });
-        pSpecCollison();
-        mMove(trackedModels);
-    });
-    if (lastPhyxThread.get_id()._Get_underlying_id() != 0) {
-        lastPhyxThread.join();
-    }
-    lastPhyxThread = move(th);
+    thrds.get()->gEndWork(lastWref);
+    lastWref = thrds.get()->gPushWork(std::function<void()>{[this]() {        
+    pSpecReset();
+    ticker.incCount();
+    //std::for_each(trackedModels.begin(), trackedModels.end(), [this](auto& m) {cGravity(&m); });
+    pSpecCollison();
+    mMove(trackedModels);
+    }});
+
 }
 
 
@@ -168,20 +166,22 @@ void Physics::CalProportionalSpeed(DirectX::XMFLOAT4& VelDir1, DirectX::XMFLOAT4
 
 
 //Moved most memory access to stack but execution time for high index count still attrocious 
-Physics::WORKINDI Physics::ProcCollide(RStorage::eResource& obj, RStorage::eResource& obj2,  DirectX::XMFLOAT3& objpos, DirectX::XMFLOAT3& obj2pos, DirectX::XMFLOAT4& dir, float& dist) {
+Physics::WORKINDI Physics::ProcCollide(RStorage::eResource& obj, RStorage::eResource& obj2,  DirectX::XMFLOAT3& objpos, DirectX::XMFLOAT3& obj2pos, DirectX::XMFLOAT4& dir, float& dist, cl::CommandQueue& Queue) {
     WORKINDI Result;
     using namespace DirectX;
     XMFLOAT3 pos2;
     XMStoreFloat3(&pos2, XMLoadFloat4(&dir) * dist);
 
-    auto& objudat = obj.model->uData;
-    auto& obj2udat = obj2.model->uData;
-    std::vector<WORKDATA> WData;
-
+    auto objudat = obj.model->uData;
+    auto obj2udat = obj2.model->uData;
     auto& objbdata = objudat->bdata;
     auto& obj2bdata = obj2udat->bdata;
+    auto& MappedVert1 = objudat->MappedVertices;
+    auto& NormalMap1 = objudat->NormalMap;
+    auto& MappedVert2 = obj2udat->MappedVertices;
+    auto& NormalMap2 = obj2udat->NormalMap;
 
-
+    std::vector<std::vector<int>> WData;
 
     //This can be split up for better performance with large amounts of bones
     for (auto& b2 : obj2bdata) {
@@ -190,7 +190,7 @@ Physics::WORKINDI Physics::ProcCollide(RStorage::eResource& obj, RStorage::eReso
             XMStoreFloat3(&sph2.Center, XMLoadFloat3(&b2.sphere.Center) + XMLoadFloat3(&pos2));
             if (b.sphere.Intersects(sph2)) {
                 if (std::size(b.Indices) > 0 && std::size(b2.Indices) > 0) {
-                    WData.emplace_back(WORKDATA{ .bIndex = {b.bIndex, b2.bIndex}, .Position = pos2 });
+                    WData.emplace_back(std::vector<int>{b.bIndex, b2.bIndex});
                 }
             }
 
@@ -199,165 +199,194 @@ Physics::WORKINDI Physics::ProcCollide(RStorage::eResource& obj, RStorage::eReso
 
     if (WData.size() == 0) return Result;
 
-    std::vector<int> Indices;
+
     std::mutex iLock;
 
-    std::vector<std::vector<int>> IndVect(WData.size());
-    cl::CommandQueue Queue1 = cl::CommandQueue{ context, devices.front() };
-    cl::CommandQueue Queue2 = cl::CommandQueue{ context, devices.front() };
+    std::vector<SPHR> CollSp(WData.size());
 
 
-    std::vector<SPHR> CollSp1(WData.size());
-    std::vector<SPHR> CollSp2(WData.size());
-    cl::Buffer sphBuffer1(context, CL_MEM_READ_ONLY, sizeof(SPHR) * CollSp1.size());
-    cl::Buffer sphBuffer2(context, CL_MEM_READ_ONLY, sizeof(SPHR) * CollSp2.size());
 
-
+    
     int indexCount1 = 0;
     int indexCount2 = 0;
     std::vector<int> b1ind;
     std::vector<int> b2ind;
     std::vector<UINT> offset1(WData.size());
     std::vector<UINT> offset2(WData.size());
+    std::vector<std::vector<int>> ISize(WData.size(), std::vector<int>(2));
+    std::vector<int> objCheck1(objudat->idata.size(), 0);
+    std::vector<int> objCheck2(obj2udat->idata.size(), 0);
+
+    std::vector<XMFLOAT3> dirVect(CollSp.size());
+
     for (auto i = 0; i < WData.size(); i++) {
         using namespace DirectX;
-        std::vector<int> Indices;
         auto& wDat = WData[i];
-        auto& Bone1 = objbdata[wDat.bIndex[0]];
-        auto& Bone2 = obj2bdata[wDat.bIndex[1]];
-        auto tempbSphere = Bone1.sphere;
-        XMStoreFloat3(&tempbSphere.Center, XMLoadFloat3(&tempbSphere.Center) - XMLoadFloat3(&pos2));
-
-        auto tempbSphere2 = Bone2.sphere;
-        XMStoreFloat3(&tempbSphere2.Center, XMLoadFloat3(&tempbSphere2.Center) + XMLoadFloat3(&pos2));
+        auto& Bone1 = objbdata[wDat[0]];
+        auto& Bone2 = obj2bdata[wDat[1]];
+        auto& tempbSphere = Bone1.sphere;
+        auto& tempbSphere2 = Bone2.sphere;
+        XMStoreFloat3(&CollSp[i].Center[0], XMLoadFloat3(&tempbSphere.Center) - XMLoadFloat3(&pos2));
+        XMStoreFloat3(&CollSp[i].Center[1], XMLoadFloat3(&tempbSphere2.Center) + XMLoadFloat3(&pos2));
+        CollSp[i].Radius[0] = tempbSphere.Radius;
+        CollSp[i].Radius[1] = tempbSphere2.Radius;
         
-        CollSp2[i] = SPHR{tempbSphere.Center, tempbSphere.Radius};
-
-        CollSp1[i] = SPHR{tempbSphere2.Center, tempbSphere2.Radius };
-
 
         offset1[i] = indexCount1;
-        indexCount1 += Bone1.Indices.size();
-        b1ind.append_range(Bone1.Indices);
+        std::vector<int> bt1;
+        bt1.reserve(Bone1.Indices.size());
+        XMFLOAT4 bdirection = fDirection(tempbSphere.Center, CollSp[i].Center[1]);
+        XMFLOAT3 Norm;
+        XMStoreFloat3(&dirVect[i], XMLoadFloat4(&bdirection));
+        for (auto a = 0; a < Bone1.Indices.size(); a++) {
+            if (objCheck1[Bone1.Indices[a]] == 0) {
+                //XMStoreFloat3(&Norm, XMVector3Dot(XMLoadFloat4(&bdirection), XMLoadFloat3(&MappedVert1[NormalMap1[Bone1.Indices[a]]][0].normal)));
+                //if (Norm.x >= 0) {
+                    bt1.push_back(Bone1.Indices[a]);
+                    objCheck1[Bone1.Indices[a]] = 1;
+                //}
+            }
+        }
+        
+
+        ISize[i][0] = bt1.size();
+        indexCount1 += bt1.size();
+        b1ind.append_range(bt1);
+
         offset2[i] = indexCount2;
-        indexCount2 += Bone2.Indices.size();
-        b2ind.append_range(Bone2.Indices);
+        std::vector<int> bt2;
+        bt2.reserve(Bone2.Indices.size());
+        XMFLOAT4 ibdirection = fDirection(tempbSphere2.Center, CollSp[i].Center[0]);
+        for (auto b = 0; b < Bone2.Indices.size(); b++) {
+            if (objCheck2[Bone2.Indices[b]] == 0) {
+                //XMStoreFloat3(&Norm, XMVector3Dot(XMLoadFloat4(&ibdirection), XMLoadFloat3(&MappedVert2[NormalMap2[Bone2.Indices[b]]][0].normal)));
+                //if (Norm.x >= 0) {
+                    bt2.push_back(Bone2.Indices[b]);
+                    objCheck2[Bone2.Indices[b]] = 1;
+                //}
+            }
+
+        }
+        ISize[i][1] = bt2.size();
+        indexCount2 += bt2.size();
+        b2ind.append_range(bt2);
     }
+    std::vector<int> retdat1(indexCount1, 0);
+    std::vector<int> retdat2(indexCount2, 0);
+    
+
+    cl::Buffer sphBuffer(context, CL_MEM_READ_ONLY, sizeof(SPHR) * CollSp.size());
+
     cl::Buffer workBuffer1(context, CL_MEM_READ_ONLY, indexCount1 * sizeof(int));
     cl::Buffer workBuffer2(context, CL_MEM_READ_ONLY, indexCount2 * sizeof(int));
 
     cl::Buffer retbuffer1(context, CL_MEM_READ_WRITE, sizeof(int) * indexCount1);
     cl::Buffer retbuffer2(context, CL_MEM_READ_WRITE, sizeof(int) * indexCount2);
 
-    Queue1.enqueueWriteBuffer(sphBuffer1, CL_FALSE, 0, sizeof(SPHR) * CollSp1.size(), CollSp1.data());
+    cl::Buffer dirBuffer(context, CL_MEM_READ_ONLY, sizeof(DirectX::XMFLOAT3) * CollSp.size());
 
-    Queue2.enqueueWriteBuffer(sphBuffer2, CL_FALSE, 0, sizeof(SPHR) * CollSp2.size(), CollSp2.data());
 
-    std::vector<int> retdat1(indexCount1, 0);
-    std::vector<int> retdat2(indexCount2, 0);
+    Queue.enqueueWriteBuffer(sphBuffer, CL_TRUE, 0, sizeof(SPHR) * CollSp.size(), CollSp.data());
+    Queue.enqueueWriteBuffer(dirBuffer, CL_TRUE, 0, sizeof(DirectX::XMFLOAT3) * dirVect.size(), dirVect.data());
+
+
 
     cl::Kernel kerncpy1(Sphere, "sphColl");
     cl::Kernel kerncpy2(Sphere, "sphColl");
-    Queue1.enqueueWriteBuffer(workBuffer1, CL_FALSE, 0, indexCount1 * sizeof(int), b1ind.data());
-    Queue1.enqueueWriteBuffer(retbuffer1, CL_FALSE, 0, retdat1.size() * sizeof(int), retdat1.data());
-    Queue2.enqueueWriteBuffer(workBuffer2, CL_FALSE, 0, indexCount2 * sizeof(int), b2ind.data());
-    Queue2.enqueueWriteBuffer(retbuffer2, CL_FALSE, 0, retdat2.size() * sizeof(int), retdat2.data());
+    Queue.enqueueWriteBuffer(workBuffer1, CL_TRUE, 0, indexCount1 * sizeof(int), b1ind.data());
+    Queue.enqueueWriteBuffer(retbuffer1, CL_TRUE, 0, retdat1.size() * sizeof(int), retdat1.data());
+    Queue.enqueueWriteBuffer(workBuffer2, CL_TRUE, 0, indexCount2 * sizeof(int), b2ind.data());
+    Queue.enqueueWriteBuffer(retbuffer2, CL_TRUE, 0, retdat2.size() * sizeof(int), retdat2.data());
 
     
-    kerncpy1.setArg(0, sphBuffer1);
+    kerncpy1.setArg(0, sphBuffer);
     kerncpy1.setArg(1, workBuffer1);
     kerncpy1.setArg(2, obj.model->clBuff);
     kerncpy1.setArg(3, obj.model->clIndexMap);
     kerncpy1.setArg(4, obj.model->clIndexBuff);
-    kerncpy1.setArg(5, retbuffer1);
+    kerncpy1.setArg(5, dirBuffer);
+    kerncpy1.setArg(6, retbuffer1);
 
-    kerncpy2.setArg(0, sphBuffer2);
+    kerncpy2.setArg(0, sphBuffer);
     kerncpy2.setArg(1, workBuffer2);
     kerncpy2.setArg(2, obj2.model->clBuff);
     kerncpy2.setArg(3, obj2.model->clIndexMap);
     kerncpy2.setArg(4, obj2.model->clIndexBuff);
-    kerncpy2.setArg(5, retbuffer2);
+    kerncpy2.setArg(5, dirBuffer);
+    kerncpy2.setArg(6, retbuffer2);
 
-    Queue1.finish();
+    Queue.flush();
 
+
+    //Do this to the other opencl. It works nicely and reduces memory usage
     for (UINT i = 0; i < WData.size(); i++) {
-        size_t wsize1[2] = { objbdata[WData[i].bIndex[0]].Indices.size(), 1};
-        size_t offsize[2] = {offset1[i], i};
+        size_t wsize1[3] = { ISize[i][0], 1, 1};
+        size_t offsize[3] = {offset1[i], i, 1};
 
-        size_t wsize2[2] = { obj2bdata[WData[i].bIndex[1]].Indices.size(), 1 };
-        size_t offsize2[2] = { offset2[i], i };
+        size_t wsize2[3] = { ISize[i][1], 1, 1};
+        size_t offsize2[3] = { offset2[i], i , 0};
 
-        _ASSERT(clEnqueueNDRangeKernel(Queue1.get(), kerncpy1.get(), 2, offsize, wsize1, nullptr, 0, NULL, NULL) == CL_SUCCESS);
-        _ASSERT(clEnqueueNDRangeKernel(Queue2.get(), kerncpy2.get(), 2, offsize2, wsize2, nullptr, 0, NULL, NULL) == CL_SUCCESS);
+        _ASSERT(clEnqueueNDRangeKernel(Queue.get(), kerncpy1.get(), 3, offsize, wsize1, nullptr, 0, NULL, NULL) == CL_SUCCESS);
+        _ASSERT(clEnqueueNDRangeKernel(Queue.get(), kerncpy2.get(), 3, offsize2, wsize2, nullptr, 0, NULL, NULL) == CL_SUCCESS);
     }
-    _ASSERT(Queue1.enqueueReadBuffer(retbuffer1, CL_TRUE, 0, sizeof(int) * retdat1.size(), retdat1.data()) == CL_SUCCESS);
-    _ASSERT(Queue2.enqueueReadBuffer(retbuffer2, CL_TRUE, 0, sizeof(int)* retdat2.size(), retdat2.data()) == CL_SUCCESS);
+    _ASSERT(Queue.enqueueReadBuffer(retbuffer1, CL_TRUE, 0, sizeof(int) * retdat1.size(), retdat1.data()) == CL_SUCCESS);
+    _ASSERT(Queue.enqueueReadBuffer(retbuffer2, CL_TRUE, 0, sizeof(int)* retdat2.size(), retdat2.data()) == CL_SUCCESS);
 
-    Queue1.finish();
-    Queue2.finish();
-
-
-    /*
         
                 //Why does this take so long? How Do I make it faster?
-                if (tempbSphere2.Intersects(XMLoadFloat3(&Tri[0].position), XMLoadFloat3(&Tri[1].position), XMLoadFloat3(&Tri[2].position))) {
+               /*
+               if (tempbSphere2.Intersects(XMLoadFloat3(&Tri[0].position), XMLoadFloat3(&Tri[1].position), XMLoadFloat3(&Tri[2].position))) {
                     WorkIndi1.push_back(index);
                 }
 
                 if (tempbSphere.Intersects(XMLoadFloat3(&Tri[0].position), XMLoadFloat3(&Tri[1].position), XMLoadFloat3(&Tri[2].position))) {
                     WorkIndi2.push_back(index);
                 }
-
-        */
-    for (auto i = 0; i < WData.size(); i++) {
-        std::vector<int > WorkIndi1;
-        int indisize1 = objbdata[WData[i].bIndex[0]].Indices.size();
-        WorkIndi1.reserve(indisize1);
-        for (auto w1 = offset1[i]; w1 < offset1[i] + indisize1; w1++) {
-            if (retdat1[w1] != 0) {
-                WorkIndi1.push_back(b1ind[w1]);
-            }
-        }
-
-        std::vector<int> WorkIndi2;
-        int indisize2 = obj2bdata[WData[i].bIndex[1]].Indices.size();
-        WorkIndi2.reserve(indisize2);
-        for (auto w2 = offset2[i]; w2 < offset2[i] + indisize2; w2++) {
-            if (retdat2[w2] != 0) {
-                WorkIndi2.push_back(b2ind[w2]);
-            }
-        }
+     */ 
         
-        IndVect[i].append_range(WorkIndi1);
-        WData[i].wWorkCount = IndVect[i].size();
-        IndVect[i].append_range(WorkIndi2);
-        WData[i].tWorkCount = IndVect[i].size() - WData[i].wWorkCount;
-    }
-
-
-    for (auto i = 0; i < IndVect.size(); i++) {
-        WData[i].tOffset = Indices.size();
-        Indices.append_range(IndVect[i]);
-    }
+    std::vector<int> objind(objudat->MappedVertices.size(), 0);
+    std::vector<int> obj2ind(obj2udat->MappedVertices.size(), 0);
+    std::vector<int > WorkIndi1;
+    std::vector<int> WorkIndi2;
+    WorkIndi1.reserve(objudat->idata.size());
     
-    Result.Indices = Indices;
-    std::for_each(WData.begin(), WData.end(), [&Result](auto& e) {
-        if (e.wWorkCount != 0 && e.tWorkCount != 0) {
-            Result.WData.emplace_back(e);
+    WorkIndi2.reserve(obj2udat->idata.size());
+
+
+    for (auto i = 0; i < WData.size(); i++) {
+        int indisize1 = ISize[i][0];
+        for (auto w1 = offset1[i]; w1 < offset1[i] + indisize1; w1++) {
+            if (retdat1[w1] != 0 && objind[objudat->NormalMap[b1ind[w1]]] == 0) {
+                WorkIndi1.push_back(objudat->NormalMap[b1ind[w1]]);
+                objind[objudat->NormalMap[b1ind[w1]]] = 1;
+            }
         }
-    });
-    
+        int indisize2 = ISize[i][1];
+        for (auto w2 = offset2[i]; w2 < offset2[i] + indisize2; w2++) {
+            if (retdat2[w2] != 0 && obj2ind[obj2udat->NormalMap[b2ind[w2]]] == 0) {
+                WorkIndi2.push_back(obj2udat->NormalMap[b2ind[w2]]);
+                obj2ind[obj2udat->NormalMap[b2ind[w2]]] = 1;
+            }
+        }
+    }
+
+    Result.Position = pos2;
+    Result.Indices.append_range(WorkIndi1);
+    Result.wWorkCount = WorkIndi1.size();
+    Result.Indices.append_range(WorkIndi2);
+    Result.tWorkCount = WorkIndi2.size();
     return Result;
 }
 
 
 void Physics::pSpecCollison() {
 
+    std::vector<THREADS::WRef> refs(trackedModels.size());
     //Create looping thread pool before this ever starts then queue this work onto each work thread
-    for (auto i = 0; i < trackedModels.size(); i++) {
-        pThreads[i % coreCount].tPushWork(std::function<void()>([this, i] {
+    for (auto h = 0; h < trackedModels.size(); h++) {
+       // refs[h] = thrds.get()->gPushWork(std::function<void()>{[this, h]() {
             using namespace DirectX;
-            auto& obj = trackedModels[i];
+            auto& obj = trackedModels[h];
             XMFLOAT3 Pos1;
             obj.mPos.posMtx.lock();
             XMStoreFloat3(&Pos1, XMLoadFloat3(obj.mPos.position));
@@ -379,7 +408,7 @@ void Physics::pSpecCollison() {
                         auto sph2 = trackedModels[m].model->uData->Sphere;
                         trackedModels[m].mPos.posMtx.unlock();
                         auto tdist = fDirection(Pos1, Pos2);
-                        XMStoreFloat3(&sph2.Center, XMLoadFloat4(&tdist)*fDistance(Pos1, Pos2));
+                        XMStoreFloat3(&sph2.Center, XMLoadFloat4(&tdist) * fDistance(Pos1, Pos2));
                         if (sph2.Intersects(sph1)) {
                             LCollModels.emplace_back(collstruct(&obj, &trackedModels[m]));
                         }
@@ -414,9 +443,14 @@ void Physics::pSpecCollison() {
             }
 
 
-            if(devices.size() < 1) return;
+            if (devices.size() < 1) return;
+
+            //We need more queues. Found limit maybe?
+            auto tQueue = cl::CommandQueue{ context, devices.front() };
 
             std::vector<std::thread> tThreads(wCollModels.size());
+            std::vector<cl::Buffer> rbuffers(wCollModels.size());
+            std::vector < std::vector<int>> wSizes(wCollModels.size(), std::vector<int>(2));
             for (auto i = 0; i < wCollModels.size(); i++) {
                 auto& obj2 = *wCollModels[i].obj2;
                 XMFLOAT3 Pos2;
@@ -426,52 +460,65 @@ void Physics::pSpecCollison() {
                 obj2.mPos.posMtx.unlock();
                 auto dir = fDirection(Pos1, Pos2);
                 auto dist = fDistance(Pos1, Pos2);
-                auto tQueue = cl::CommandQueue{ context, devices.front() };
-                WORKINDI WorkIndi = ProcCollide(obj, obj2, Pos1, Pos2, dir, dist);
-                if (WorkIndi.WData.size() != 0) {
-                    cl::Buffer WorkBuffer(context, CL_MEM_READ_ONLY, sizeof(WORKDATA) * WorkIndi.WData.size());
+                WORKINDI WorkIndi = ProcCollide(obj, obj2, Pos1, Pos2, dir, dist, tQueue);
+                if (WorkIndi.wWorkCount != 0 && WorkIndi.tWorkCount != 0) {
+                    wSizes[i][0] = WorkIndi.wWorkCount;
+                    wSizes[i][1] = WorkIndi.tWorkCount;
+                    cl::Buffer PositionBuffer(context, CL_MEM_READ_ONLY, sizeof(XMFLOAT3));
                     cl::Buffer IndexBuffer(context, CL_MEM_READ_ONLY, WorkIndi.Indices.size() * sizeof(int));
-                    cl::Buffer retbuffer(context, CL_MEM_READ_WRITE, sizeof(RETURNDATA) * WorkIndi.WData.size());
-
-                    std::vector<RETURNDATA> retdat;
-                    auto& WData = WorkIndi.WData;
                     auto& Indices = WorkIndi.Indices;
                     cl::Kernel collide(FullColl, "coll");
-                    int wSize = std::size(WData);
-                    retdat.resize(wSize);
+                    std::vector<RETURNDATA> retdat(wSizes[i][0]);
 
-                    tQueue.enqueueWriteBuffer(WorkBuffer, CL_FALSE, 0, wSize * sizeof(WORKDATA), WData.data());
+                    rbuffers[i] = cl::Buffer(context, CL_MEM_READ_WRITE, sizeof(RETURNDATA) * retdat.size());
+                    tQueue.enqueueWriteBuffer(PositionBuffer, CL_FALSE, 0, sizeof(XMFLOAT3), &WorkIndi.Position);
                     tQueue.enqueueWriteBuffer(IndexBuffer, CL_FALSE, 0, std::size(Indices) * sizeof(int), Indices.data());
-                    tQueue.enqueueWriteBuffer(retbuffer, CL_FALSE, 0, wSize * sizeof(RETURNDATA), retdat.data());
+                    tQueue.enqueueWriteBuffer(rbuffers[i], CL_FALSE, 0, sizeof(RETURNDATA) * retdat.size(), retdat.data());
+
 
                     collide.setArg(0, obj.model->clBuff);
                     collide.setArg(1, obj2.model->clBuff);
-                    collide.setArg(2, obj.model->clBoneBuff);
-                    collide.setArg(3, obj2.model->clBoneBuff);
-                    collide.setArg(4, obj.model->clIndexBuff);
-                    collide.setArg(5, obj2.model->clIndexBuff);
-                    collide.setArg(6, obj.model->clIndexMap);
-                    collide.setArg(7, obj2.model->clIndexMap);
-                    collide.setArg(8, WorkBuffer);
-                    collide.setArg(9, IndexBuffer);
-                    collide.setArg(10, retbuffer);
+                    collide.setArg(2, obj.model->clIndexBuff);
+                    collide.setArg(3, obj2.model->clIndexBuff);
+                    //collide.setArg(4, obj.model->clIndexMap);
+                    //collide.setArg(5, obj2.model->clIndexMap);
+                    collide.setArg(4, PositionBuffer);
+                    collide.setArg(5, IndexBuffer);
+                    collide.setArg(6, rbuffers[i]);
+
+                    size_t wsize[2] = { WorkIndi.wWorkCount, WorkIndi.tWorkCount };
+                    size_t offsize[2] = { 0, WorkIndi.wWorkCount };
+                    int errore = 0;
                     tQueue.flush();
 
-                    for (auto a = 0; a < wSize; a++) {
-                        _ASSERT(tQueue.enqueueNDRangeKernel(collide, cl::NDRange(a, 0, 0), cl::NDRange(1, WData[a].wWorkCount, WData[a].tWorkCount), cl::NullRange) == CL_SUCCESS);
-                        //tQueue.enqueueNDRangeKernel(collide, cl::NDRange(a, 0, 0), cl::NDRange(0, WData[a].wWorkCount, WData[a].tWorkCount), cl::NullRange);
+
+
+                    errore = clEnqueueNDRangeKernel(tQueue.get(), collide.get(), 2, offsize, wsize, nullptr, 0, NULL, NULL);
+                    _ASSERT(errore == CL_SUCCESS);
+
+
+                }
+            }
+            tQueue.flush();
+
+            for (auto i = 0; i < wCollModels.size(); i++) {
+                if (wSizes[i][0] != 0 && wSizes[i][1] != 0) {
+                    auto& obj2 = *wCollModels[i].obj2;
+
+                    XMFLOAT3 Pos2;
+                    obj2.mPos.posMtx.lock();
+                    XMStoreFloat3(&Pos2, XMLoadFloat3(obj2.mPos.position));
+                    auto sph2 = obj2.model->uData->Sphere;
+                    obj2.mPos.posMtx.unlock();
+
+                    std::vector<RETURNDATA> retdat(wSizes[i][0]);
+                    int errore = 0;
+                    {
+                        auto& retbuffer = rbuffers[i];
+
+                        errore = tQueue.enqueueReadBuffer(retbuffer, CL_TRUE, 0, sizeof(RETURNDATA) * retdat.size(), retdat.data());
+                        _ASSERT(errore == CL_SUCCESS);
                     }
-                    tQueue.finish();
-
-
-
-                    /*
-                    for (auto r = 0; r < wSize; r++) {
-                        //_ASSERT(tQueue.enqueueReadBuffer(retbuffer, CL_FALSE, sizeof(RETURNDATA) * r, sizeof(RETURNDATA), &retdat[r]) == CL_SUCCESS);
-                        //tQueue.enqueueReadBuffer(retbuffer, CL_FALSE, sizeof(RETURNDATA) * r, sizeof(RETURNDATA), &retdat[r]);
-                    }
-                    */
-                    tQueue.enqueueReadBuffer(retbuffer, CL_FALSE, 0, sizeof(RETURNDATA) * wSize, retdat.data());
 
                     XMFLOAT4 MoveD1{ 0,0,0,0 };
                     XMFLOAT4 MoveD2{ 0,0,0,0 };
@@ -512,10 +559,13 @@ void Physics::pSpecCollison() {
                     }
                 }
             }
-        }));
+        //}});
+        
     }
-    THREADS::tEndWork(pThreads);
-
+    for (auto& t : refs) {
+        //_ASSERT(t.uWid != 0);
+        //thrds.get()->gEndWork(t);
+    }
 }
 
 void Physics::pSpecReset() {
@@ -579,6 +629,4 @@ Physics::~Physics() {
     if (lastPhyxThread.get_id()._Get_underlying_id() != 0) {
         lastPhyxThread.join();
     }
-;
-
 }

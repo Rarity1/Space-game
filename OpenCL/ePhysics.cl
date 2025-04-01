@@ -60,9 +60,6 @@ typedef struct WORKDATA
 {
     int bIndex[2];
     XMFLOAT3 Position;
-    int wWorkCount;
-    int tWorkCount;
-    int Offset;
 }
 WORKDATA;
 
@@ -548,10 +545,10 @@ CLOSEFORM CloseCheck(float TDistance[3], XMFLOAT3 WAPoint, XMFLOAT3 WBPoint, XMF
 }
 
 
-CLOSEFORM TooClose(MODEL Tri1, MODEL Tri2, XMFLOAT3 Bone1, XMFLOAT3 TBone, XMFLOAT3 TPos)
+CLOSEFORM TooClose(MODEL Tri1, MODEL Tri2, XMFLOAT3 TPos)
 {
     CLOSEFORM Result;
-    Result.dist = 0.0;
+    Result.dist = 0.1;
     Result.coll = true;
 
 
@@ -692,44 +689,38 @@ CLOSEFORM TooClose(MODEL Tri1, MODEL Tri2, XMFLOAT3 Bone1, XMFLOAT3 TBone, XMFLO
         Result.coll = false;
     }
 
-
     return Result;
 }
 
 
-void kernel coll(global const UPVERTNORM* WModel, global const UPVERTNORM* TModel, global const XMFLOAT3* WBone, global const XMFLOAT3* TBone, global const INTINDEX* WbIndexBuff, global const INTINDEX* TbIndexBuff, global const int* WbIndexMap, global const int* TbIndexMap, global const WORKDATA* WData, global const int* WorkingIndices, global RETURNDATA* retdat){
-int sd = get_global_id(0);
-int Wind = get_global_id(1);
-int Tind = get_global_id(2);
+void kernel coll(global const UPVERTNORM* WModel, global const UPVERTNORM* TModel, global const INTINDEX* WbIndexBuff, global const INTINDEX* TbIndexBuff, global const XMFLOAT3* TPos, global const int* WorkingIndices, global RETURNDATA* retdat){
+int Wind = get_global_id(0);
+int Tind = get_global_id(1);
+int rd = Wind;
 
+if (!retdat[rd].coll)
+{
+    MODEL Work = { { 0, 0, 0 }, { WModel[WbIndexBuff[WorkingIndices[Wind]].Index[0]], WModel[WbIndexBuff[WorkingIndices[Wind]].Index[1]], WModel[WbIndexBuff[WorkingIndices[Wind]].Index[2]] } };
 
+    MODEL TWork = { { 0, 0, 0 }, { TModel[TbIndexBuff[WorkingIndices[Tind]].Index[0]], TModel[TbIndexBuff[WorkingIndices[Tind]].Index[1]], TModel[TbIndexBuff[WorkingIndices[Tind]].Index[2]] } };
 
-    XMFLOAT3 TPos = WData[sd].Position;
+    CLOSEFORM Result = TooClose(Work, TWork, TPos[0]);
 
-    int wOffset = WData[sd].Offset;
-    int tOffset = wOffset + WData[sd].wWorkCount;
-
-    MODEL Work = { { 0, 0, 0 }, { WModel[WbIndexBuff[WbIndexMap[WorkingIndices[wOffset + Wind]]].Index[0]], WModel[WbIndexBuff[WbIndexMap[WorkingIndices[wOffset + Wind]]].Index[1]], WModel[WbIndexBuff[WbIndexMap[WorkingIndices[wOffset + Wind]]].Index[2]] } };
-
-    MODEL TWork = { { 0, 0, 0 }, { TModel[TbIndexBuff[TbIndexMap[WorkingIndices[tOffset + Tind]]].Index[0]], TModel[TbIndexBuff[TbIndexMap[WorkingIndices[tOffset + Tind]]].Index[1]], TModel[TbIndexBuff[TbIndexMap[WorkingIndices[tOffset + Tind]]].Index[2]] } };
-    
-    CLOSEFORM Result = TooClose(Work, TWork, WBone[WData[sd].bIndex[0]], TBone[WData[sd].bIndex[1]], TPos);
-
-    if (Result.dist != 0)
+    if (Result.coll)
     {
-        retdat[sd].index1[0] = WbIndexBuff[WbIndexMap[WorkingIndices[wOffset + Wind]]].Index[0];
-        retdat[sd].index1[1] = WbIndexBuff[WbIndexMap[WorkingIndices[wOffset + Wind]]].Index[1];
-        retdat[sd].index1[2] = WbIndexBuff[WbIndexMap[WorkingIndices[wOffset + Wind]]].Index[2];
-        retdat[sd].index2[0] = TbIndexBuff[TbIndexMap[WorkingIndices[tOffset + Tind]]].Index[0];
-        retdat[sd].index2[1] = TbIndexBuff[TbIndexMap[WorkingIndices[tOffset + Tind]]].Index[1];
-        retdat[sd].index2[2] = TbIndexBuff[TbIndexMap[WorkingIndices[tOffset + Tind]]].Index[2];
+        retdat[rd].index1[0] = WbIndexBuff[WorkingIndices[Wind]].Index[0];
+        retdat[rd].index1[1] = WbIndexBuff[WorkingIndices[Wind]].Index[1];
+        retdat[rd].index1[2] = WbIndexBuff[WorkingIndices[Wind]].Index[2];
+        retdat[rd].index2[0] = TbIndexBuff[WorkingIndices[Tind]].Index[0];
+        retdat[rd].index2[1] = TbIndexBuff[WorkingIndices[Tind]].Index[1];
+        retdat[rd].index2[2] = TbIndexBuff[WorkingIndices[Tind]].Index[2];
 
-        retdat[sd].coll = Result.coll;
-        retdat[sd].dist[0] = Result.dist;
-        retdat[sd].dist[1] = 0;
-        retdat[sd].dir[0] = Result.norm[0];
-        retdat[sd].dir[1] = Result.norm[1];
+        retdat[rd].coll = Result.coll;
+        retdat[rd].dist[0] = Result.dist;
+        retdat[rd].dir[0] = Result.norm[0];
+        retdat[rd].dir[1] = Result.norm[1];
 
     }
+}
 
 }

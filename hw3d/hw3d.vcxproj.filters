@@ -72,6 +72,9 @@
     <ClCompile Include="Exceptions.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="Threads.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="CWin.h">
@@ -119,6 +122,9 @@
     <ClInclude Include="Exceptions.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Threads.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="hw3d.rc">
@@ -132,9 +138,6 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
-    <None Include="..\OpenCL\SphrKern.cl">
-      <Filter>Resource Files\OCL</Filter>
-    </None>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="PixelShader.hlsl">
@@ -146,6 +149,9 @@
   </ItemGroup>
   <ItemGroup>
     <CopyFileToFolders Include="..\OpenCL\ePhysics.cl">
+      <Filter>Resource Files\OCL</Filter>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="..\OpenCL\SphrKern.cl">
       <Filter>Resource Files\OCL</Filter>
     </CopyFileToFolders>
   </ItemGroup>

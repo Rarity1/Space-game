@@ -1,6 +1,7 @@
 #pragma once
 #include "ePhysics.h"
 #include "EngineTime.h"
+#include "Threads.h"
 class Engine {
 public:
 	Engine(Graphics& gfx, Keyboard& kbd, EngineTime& clock);
@@ -12,7 +13,7 @@ public:
 	EngineTime& Clock;
 	std::vector<RStorage::eResource>& trackedModels;
 	std::unique_ptr<Physics> phyx;
-
+	std::unique_ptr<THREADS> threads;
 
 	struct KeysPressed
 	{
@@ -66,32 +67,12 @@ public:
 	KeysPressed m_keysPressed;
 	
 	struct Event {
-		Event(std::function<void()> Fnct, int prio = -1):
-		Function(Fnct),
-		priority(new int(prio))
-		{
-		}
-		Event(const Event& e) :
-			Function(e.Function),
-			priority(new int(*e.priority))
-		{
-		};
-		~Event() {
-			delete priority;
-		};
-		bool operator==(const Event& r) const
-		{
-			return (*priority == *r.priority && Function.target_type() == r.Function.target_type());
-		}
-		virtual void evnt() {
-			Function();
-		};
-	private:
-		int* priority;
-		std::function<void()> Function;
+		//int priority;
+		THREADS::WRef wRef;
 	};
 	virtual void enQueueExternCommands();
 private:
+	THREADS::WRef eWref;
 	std::thread EngThread;
 	std::atomic<bool> eRun;
 	struct Movement {
@@ -127,9 +108,8 @@ private:
 	Keyboard& kbd;
 	std::mutex usingThread;
 	double lastD = 0.0;
-	std::vector<Event*> eventQueue;
 	std::atomic<short int> queueCount;
 	std::mutex QueueLock;
-	std::vector<std::thread> QueueThreads;
+	std::vector<Event> QueueThreads;
 	std::mutex QueueTLock;
 };
