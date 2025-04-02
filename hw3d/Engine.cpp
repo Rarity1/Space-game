@@ -24,11 +24,11 @@ void Engine::iLoad() {
     //wrld is 1:50000
 
     //stress it out nerd
-    for (auto i = 0; i < 5; i++) {
+    for (auto i = 0; i < 10; i++) {
         float p = i * 2;
         pGfx.lModels->initResource(std::to_string(i), 1, 1, 200, 0.3, DirectX::XMFLOAT3{12 + p,0,138});
     }
-    for (auto i = 0; i < 2; i++) {
+    for (auto i = 0; i < 10; i++) {
         float p = i * 5;
         pGfx.lModels->initResource(std::to_string(i), 2, 1, 200, 0.3, DirectX::XMFLOAT3{ 12 + p,0,138 });
     }

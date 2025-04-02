@@ -51,14 +51,14 @@ Physics::Physics(EngineTime& Clock, std::vector<RStorage::eResource>& trackedMod
 
 
 void Physics::Update() {
-    thrds.get()->gEndWork(lastWref);
-    lastWref = thrds.get()->gPushWork(std::function<void()>{[this]() {        
+    //thrds.get()->gEndWork(lastWref);
+    //lastWref = thrds.get()->gPushWork(std::function<void()>{[this]() {        
     pSpecReset();
     ticker.incCount();
     //std::for_each(trackedModels.begin(), trackedModels.end(), [this](auto& m) {cGravity(&m); });
     pSpecCollison();
     mMove(trackedModels);
-    }});
+    //}});
 
 }
 
@@ -315,7 +315,7 @@ Physics::WORKINDI Physics::ProcCollide(RStorage::eResource& obj, RStorage::eReso
     kerncpy2.setArg(5, dirBuffer);
     kerncpy2.setArg(6, retbuffer2);
 
-    Queue.flush();
+    Queue.finish();
 
 
     //Do this to the other opencl. It works nicely and reduces memory usage
@@ -383,8 +383,9 @@ void Physics::pSpecCollison() {
 
     std::vector<THREADS::WRef> refs(trackedModels.size());
     //Create looping thread pool before this ever starts then queue this work onto each work thread
+    _ASSERT(devices.size() >= 1);
     for (auto h = 0; h < trackedModels.size(); h++) {
-       // refs[h] = thrds.get()->gPushWork(std::function<void()>{[this, h]() {
+        refs[h] = thrds.get()->gPushWork(std::function<void()>{[this, h]() {
             using namespace DirectX;
             auto& obj = trackedModels[h];
             XMFLOAT3 Pos1;
@@ -443,7 +444,6 @@ void Physics::pSpecCollison() {
             }
 
 
-            if (devices.size() < 1) return;
 
             //We need more queues. Found limit maybe?
             auto tQueue = cl::CommandQueue{ context, devices.front() };
@@ -489,7 +489,7 @@ void Physics::pSpecCollison() {
                     size_t wsize[2] = { WorkIndi.wWorkCount, WorkIndi.tWorkCount };
                     size_t offsize[2] = { 0, WorkIndi.wWorkCount };
                     int errore = 0;
-                    tQueue.flush();
+                    tQueue.finish();
 
 
 
@@ -499,7 +499,7 @@ void Physics::pSpecCollison() {
 
                 }
             }
-            tQueue.flush();
+            tQueue.finish();
 
             for (auto i = 0; i < wCollModels.size(); i++) {
                 if (wSizes[i][0] != 0 && wSizes[i][1] != 0) {
@@ -559,12 +559,12 @@ void Physics::pSpecCollison() {
                     }
                 }
             }
-        //}});
+        }});
         
     }
     for (auto& t : refs) {
         //_ASSERT(t.uWid != 0);
-        //thrds.get()->gEndWork(t);
+        thrds.get()->gEndWork(t);
     }
 }
 
@@ -626,7 +626,5 @@ void Physics::mMove(std::vector<RStorage::eResource>& trackedModels) {
 }
 
 Physics::~Physics() {
-    if (lastPhyxThread.get_id()._Get_underlying_id() != 0) {
-        lastPhyxThread.join();
-    }
+    thrds.get()->gEndWork(lastWref);
 }

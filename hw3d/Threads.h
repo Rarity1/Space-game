@@ -5,23 +5,24 @@
 //Rewrite using futures
 class THREADS {
 private:
+	struct lWork {
+		std::atomic<bool> Worked;
+		std::mutex uWorkMTX;
+	};
 	struct THREAD {
 		THREAD();
 		~THREAD();
-		unsigned int tPushWork(std::function<void()>& f);
-		void tEndWork();
+		unsigned int tPushWork(std::function<void()>& f, std::unordered_map<unsigned int, lWork>& lWorked);
 		void exeWork();
-		void queueCheck();
-		void checkWork(unsigned int uWid);
-		void recurCheck();
+		void checkWork(unsigned int uWid, std::unordered_map<unsigned int, lWork>& lWorked);
+		std::atomic<unsigned int> lWaiting = 0;
 
 		struct werk {
-			std::atomic<bool>* wCheck;
+			lWork* lWork;
 			std::function<void()> Function;
 		};
-
+		std::atomic<unsigned short> wCount;
 		std::atomic<unsigned short> Counter;
-		std::unordered_map<unsigned int, werk> tWork;
 	private:
 		std::unique_ptr<EngineTime> eTime;
 
@@ -39,9 +40,11 @@ private:
 		//Local work Queue
 		std::vector<unsigned int> Queue;
 		std::mutex wCountMTX;
+		std::unordered_map<unsigned int, werk> tWork;
 	};
 	std::vector<THREAD*> Threads;
-	std::unordered_map<unsigned int, std::atomic<bool>> lWorked;
+
+	std::unordered_map<unsigned int, lWork> lWorked;
 
 public:
 	THREADS(int cCount);

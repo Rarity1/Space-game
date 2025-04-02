@@ -91,7 +91,6 @@ private:
 		std::vector<int> Indices;
 	};
 	 WORKINDI ProcCollide(RStorage::eResource& obj, RStorage::eResource& obj2, DirectX::XMFLOAT3& objpos, DirectX::XMFLOAT3& obj2pos, DirectX::XMFLOAT4& dir, float& dist, cl::CommandQueue& Queue);
-	std::thread lastPhyxThread;
 	std::mutex phyxBusy;
 	std::atomic<bool> Updated;
 	struct SPHR {
