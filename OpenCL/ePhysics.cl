@@ -79,7 +79,7 @@ typedef struct CLOSEFORM
 {
     bool coll;
     XMFLOAT3 norm[2];
-    float dist;
+    float dist[2];
 }
 CLOSEFORM;
 
@@ -496,7 +496,6 @@ CINTERVAL ComputeInterval(float VV0, float VV1, float VV2, float Dist0, float Di
 CLOSEFORM CloseCheck(float TDistance[3], XMFLOAT3 WAPoint, XMFLOAT3 WBPoint, XMFLOAT3 WCPoint, XMFLOAT3 TAPoint, XMFLOAT3 TBPoint, XMFLOAT3 TCPoint, XMFLOAT3 Bone1, XMFLOAT3 TPos, XMFLOAT3 Bone2, float bdist, XMFLOAT3 bdir, XMFLOAT3 WNorm, XMFLOAT3 TNorm)
 {
     CLOSEFORM Result;
-    Result.dist = 0.0;
     Result.coll = true;
 
     float WDistance[3];
@@ -527,7 +526,7 @@ CLOSEFORM CloseCheck(float TDistance[3], XMFLOAT3 WAPoint, XMFLOAT3 WBPoint, XMF
         //Make sure triangles are actually ontop of each other
         if (CoplanCheck(Bonedir, WNewPointA, WNewPointB, WNewPointC, TNewPointA, TNewPointB, TNewPointC))
         {
-            Result.dist = 0.1;
+            Result.dist[0] = 0.1;
 
         }
         else
@@ -548,8 +547,9 @@ CLOSEFORM CloseCheck(float TDistance[3], XMFLOAT3 WAPoint, XMFLOAT3 WBPoint, XMF
 CLOSEFORM TooClose(MODEL Tri1, MODEL Tri2, XMFLOAT3 TPos)
 {
     CLOSEFORM Result;
-    Result.dist = 0.1;
-    Result.coll = true;
+    Result.dist[0] = 0;
+    Result.dist[1] = 0;
+    Result.coll = false;
 
 
     XMFLOAT3 WAPoint = Tri1.vects[0].Vert;
@@ -625,6 +625,13 @@ CLOSEFORM TooClose(MODEL Tri1, MODEL Tri2, XMFLOAT3 TPos)
         if (cval0.CoPlan)
         {
             Result.coll = CoplanCheck(WNorm, WAPoint, WBPoint, WCPoint, TAPoint, TBPoint, TCPoint);
+            if (Result.coll)
+            {
+                Result.dist[0] = 0.1;
+                Result.dist[1] = 0.1;
+            }
+
+            return Result;
         }
         else
         {
@@ -651,7 +658,6 @@ CLOSEFORM TooClose(MODEL Tri1, MODEL Tri2, XMFLOAT3 TPos)
             test0[1] = i1;
             test1[0] = u;
             test1[1] = u1;
-
             if (test0[0] > test0[1])
             {
                 float temp;
@@ -670,23 +676,19 @@ CLOSEFORM TooClose(MODEL Tri1, MODEL Tri2, XMFLOAT3 TPos)
 
             if (test0[1] < test1[0] || test1[1] < test0[0]) {
                 Result.coll = false;
-            }
-            else
-            {
-                Result.dist = 0.1;
                 return Result;
             }
+
+            Result.coll = true;
+            Result.dist[0] = 0.1;
+            Result.dist[1] = 0.1;
+
         }
     }
     else if(TDistance[0] < 0 && TDistance[1] < 0 && TDistance[2] < 0)
     {
 
         //Result = CloseCheck(TDistance, WAPoint, WBPoint, WCPoint, TAPoint, TBPoint, TCPoint, Bone1, TPos, Bone2, bdist, bdir, WNorm, TNorm);
-        Result.coll = false;
-    }
-    else
-    {
-        Result.coll = false;
     }
 
     return Result;
@@ -716,7 +718,8 @@ if (!retdat[rd].coll)
         retdat[rd].index2[2] = TbIndexBuff[WorkingIndices[Tind]].Index[2];
 
         retdat[rd].coll = Result.coll;
-        retdat[rd].dist[0] = Result.dist;
+        retdat[rd].dist[0] = Result.dist[0];
+        retdat[rd].dist[1] = Result.dist[1];
         retdat[rd].dir[0] = Result.norm[0];
         retdat[rd].dir[1] = Result.norm[1];
 

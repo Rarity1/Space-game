@@ -4,7 +4,7 @@ Engine::Engine(Graphics& gfx, Keyboard& kbd, EngineTime& clock):
 	pGfx(gfx),
     cWorld(0,0,0,0),
     kbd(kbd),
-    trackedModels(gfx.lModels->initializedModels),
+    trackedModels(gfx.lModels->trackedObjects),
     Clock(clock)
 {
     phyx = std::make_unique<Physics>(Clock, trackedModels, updaterate);
@@ -18,30 +18,29 @@ void Engine::iLoad() {
     pGfx.umodel.lock();
 
     //begin model tracking. load a gd default world mf
-    pGfx.lModels->initResource("untitled", 2, 1, 200.0, 0.01, DirectX::XMFLOAT3{ 0,0,138 });
-    pGfx.lModels->initResource("cube", 1, 1, 200.0, 0.01, DirectX::XMFLOAT3{ 10,0,138 });
-    pGfx.lModels->initResource("wrld", 4, 1, 8570000000.0 , 0.3, DirectX::XMFLOAT3{ 0,0,0 });
+    pGfx.lModels->initObject("untitled", 2, 1, 200.0, 0.01, DirectX::XMFLOAT3{ 0,0,138 });
+    pGfx.lModels->initObject("cube", 1, 1, 200.0, 0.01, DirectX::XMFLOAT3{ 10,0,138 });
+    pGfx.lModels->initObject("wrld", 4, 1, 8570000000.0 , 0.3, DirectX::XMFLOAT3{ 0,0,0 });
     //wrld is 1:50000
 
     //stress it out nerd
     for (auto i = 0; i < 10; i++) {
-        float p = i * 2;
-        pGfx.lModels->initResource(std::to_string(i), 1, 1, 200, 0.3, DirectX::XMFLOAT3{12 + p,0,138});
+        float p = i * 1;
+        pGfx.lModels->initObject("cube", 1, 1, 200, 0.3, DirectX::XMFLOAT3{12 + p,0,138});
     }
     for (auto i = 0; i < 10; i++) {
-        float p = i * 5;
-        pGfx.lModels->initResource(std::to_string(i), 2, 1, 200, 0.3, DirectX::XMFLOAT3{ 12 + p,0,138 });
+        float p = i * 1;
+        pGfx.lModels->initObject("cube", 2, 1, 200, 0.3, DirectX::XMFLOAT3{ 12 + p,0,138 });
     }
     //trackedModels[0].mworld = &trackedModels[2];
     //trackedModels[1].mworld = &trackedModels[2];
     //trackedModels[3]->mworld = trackedModels[2];
 
-
+    //Make a better way of setting player model. 
     plModel = &trackedModels[0];
     
-    //end model tracking.
-    //If all models arent unique this is a waste of space
-    pGfx.LoadResources(std::size(trackedModels));
+    //end model tracking. begin resource upload.
+    pGfx.LoadResources();
     pGfx.umodel.unlock();
 
     if (engInit) {
@@ -127,25 +126,37 @@ void Engine::mAniUpdate(){
 
 int Engine::eventBusSync()
 {
-    for (auto& q : QueueThreads) {
-        _ASSERT(q.wRef.uWid != 0);
-        threads.get()->gEndWork(q.wRef);
-    }
-    QueueThreads.resize(0);
+    threads.get()->gEndWork(eWref);
     return 0;
 }
 
+//Max priority is 65535
 void Engine::queueCommand(std::function<void()> Function, int Priority)
 {
-    QueueThreads.emplace_back(Event(threads.get()->gPushWork(Function)));
+    if (QueueThreads[Priority].inUse) {
+        queueCommand(Function, Priority+1);
+    }
+    else {
+        QueueThreads[Priority] = Event(Priority, Function, true);
+    }
+
+
 }
 
 void Engine::enQueueEngineCommands()
 {
-    //queueCommand(std::function<void()>([this] {this->cPlayermodel(); }), 0);
-    this->cPlayermodel();
-    //queueCommand(std::function<void()>([this] {phyx->Update(); }), 20);
-    phyx->Update();
+    queueCommand(std::function<void()>([this] {this->cPlayermodel(); }), 0);
+    //this->cPlayermodel();
+    queueCommand(std::function<void()>([this] {phyx->Update(); }), 20);
+    //phyx->Update();
+    std::vector<std::function<void()>> wFs;
+
+    for (auto& q : QueueThreads) {
+        wFs.emplace_back(q.second.wFunc);
+        q.second.inUse = false;
+    }
+
+    eWref = threads.get()->gPushWork(wFs);
 }
 
 void Engine::enQueueExternCommands()

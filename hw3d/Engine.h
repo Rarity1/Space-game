@@ -67,8 +67,9 @@ public:
 	KeysPressed m_keysPressed;
 	
 	struct Event {
-		//int priority;
-		THREADS::WRef wRef;
+		unsigned short wPriority;
+		std::function<void()> wFunc;
+		bool inUse = false;
 	};
 	virtual void enQueueExternCommands();
 private:
@@ -99,7 +100,6 @@ private:
 	//Fires all queued events/functions in order by priority
 	int eventBusSync();
 	std::mutex evBusLock;
-	std::thread oldBusThread;
 	Graphics& pGfx;
 	RStorage::eResource* plModel;
 	DirectX::XMFLOAT4 cWorld;
@@ -110,6 +110,6 @@ private:
 	double lastD = 0.0;
 	std::atomic<short int> queueCount;
 	std::mutex QueueLock;
-	std::vector<Event> QueueThreads;
+	std::map<unsigned int, Event> QueueThreads;
 	std::mutex QueueTLock;
 };

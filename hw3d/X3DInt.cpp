@@ -152,17 +152,17 @@ ReadX3D::ReadX3D(std::string path) :
 			}
 			int tempor;
 			std::istringstream reet(vcount->value());
+			auto cindJoin = 0;
 			while (reet >> tempor) {
-				countofv.emplace_back(tempor);
-			}
-			weights.resize(std::size(countofv));
-			auto tempc = 0;
-			for (auto i = 0; i < std::size(countofv); i++) {
-				for (auto j = 0; j < countofv[i]; j++) {
-					weights[i].bIndex.emplace_back(join[tempc]);
-					weights[i].weight.emplace_back(skeenweigh[tempc]);
-					tempc++;
+				auto& workw = weights.emplace_back(boneweight({}, {}));
+				
+				
+				for (auto j = 0; j < tempor; j++) {
+					workw.bIndex.emplace_back(join[cindJoin]);
+					workw.weight.emplace_back(skeenweigh[cindJoin]);
+					cindJoin++;
 				}
+				
 			}
 		}
 
@@ -215,15 +215,17 @@ ReadX3D::ReadX3D(std::string path) :
 		}
 
 	}
+
+	
 	std::vector<Vertex> tempdata(std::size(idata));
 	std::vector<boneweight> tempweights(std::size(idata));
 	for (auto i = 0; i < std::size(idata); i++) {
-		if (std::size(weights) > 0) {
-			tempweights[i] = (weights[idata[i].index]);
+		if (weights.size() > 0) {
+			tempweights[i] = weights[idata[i].index];
 
 		}
 		else {
-			tempweights[i] = (boneweight{ {0}, {1.0} });
+			tempweights[i] = boneweight{ {0}, {1.0} };
 		}
 		tempdata[i] = Vertdata[idata[i].index];
 		tempdata[i].tc = tempcoord[idata[i].texcoord];
@@ -231,6 +233,9 @@ ReadX3D::ReadX3D(std::string path) :
 	}
 	Vertdata = tempdata;
 	weights = tempweights;
+	
+
+
 
 
 	if (std::size(bdata) == 0) {
@@ -260,48 +265,50 @@ ReadX3D::ReadX3D(std::string path) :
 		b.smallsphere = b.sphere;
 	}
 
-	int modctr = 0;
-	int sctr = 0;
-	NormalMap.resize(idata.size(), 0);
-	std::map<int, std::array<int, 3>> TriData;
-	for (auto i = 0; i < std::size(idata); i++) {
-		NormalMap[i] = sctr;
-		auto& vect = TriData[sctr];
-		vect[modctr] = i;
-		modctr++;
-		sctr += modctr == 3 ? 1 : 0;
-		modctr = modctr == 3 ? 0 : modctr;
+
+	MappedVertices.resize(idata.size() / 3);
+
+	auto mctr = 0;
+	for (auto i = 0; i < idata.size(); i++) {
+		auto& vect = MappedVertices[mctr];
+		idata[i].index = mctr;
+		vect[i % 3] = Vertdata[i];
+		mctr = i > 0 && (i+1) % 3 == 0 ? mctr + 1 : mctr;
 	}
 
-	MappedVertices.resize(TriData.size());
-	for (auto x = 0; x < TriData.size(); x++) {
-		MappedVertices[x] = std::array<Vertex, 3>{ Vertdata[TriData[x][0]], Vertdata[TriData[x][1]], Vertdata[TriData[x][2]] };
-	}
 
 	float collradius = 0;
-	DirectX::XMFLOAT3 Zero{ 0,0,0 };
-	for (auto& i : idata) {
-		auto temp = fDistance(Vertdata[i.index].position, Zero);
-		collradius = temp > collradius ? temp : collradius;
+
+	{
+		DirectX::XMFLOAT3 Zero{ 0,0,0 };
+		DirectX::XMFLOAT3 tVert;
+		for (auto i = 0; i < idata.size(); i++) {
+			XMStoreFloat3(&tVert, XMLoadFloat3(&Vertdata[i].position));
+			auto temp = fDistance(tVert, Zero);
+			collradius = temp > collradius ? temp : collradius;
+		}
+
 	}
-
-
+	
+	DirectX::XMFLOAT3 tVert;
 	for (auto& b : bdata) {
+		using namespace DirectX;
 		float dist = 0;
 		float fdist = 0;
 		float ldist = 0;
 		float tdist = 0;
 		for (auto& i : b.Indices) {
-			fdist = fDistance(b.sphere.Center, Vertdata[i].position);
+			XMStoreFloat3(&tVert, XMLoadFloat3(&Vertdata[i].position));
+			fdist = fDistance(b.sphere.Center, tVert);
 			dist = fdist > dist ? fdist : dist;
 
-			std::array<ReadX3D::Vertex, 3>& Verts = MappedVertices[NormalMap[i]];
+			std::array<ReadX3D::Vertex, 3>& Verts = MappedVertices[idata[i].index];
 			//Ptr to vector of ptrs requires array index ????
-			DirectX::XMFLOAT3 zero = Verts[0].position;
-			DirectX::XMFLOAT3 one = Verts[1].position;
-			DirectX::XMFLOAT3 two = Verts[2].position;
+			DirectX::XMFLOAT3 face;
 
-			DirectX::XMFLOAT3 face = { (zero.x + one.x + two.x) / 3,(zero.y + one.y + two.y) / 3 ,(zero.z + one.z + two.z) / 3 };
+			XMStoreFloat3(&face, (XMLoadFloat3(&Verts[0].position) + XMLoadFloat3(&Verts[1].position) + XMLoadFloat3(&Verts[2].position))/3);
+
+			
 
 			tdist = fDistance(b.sphere.Center, face);
 
@@ -321,7 +328,7 @@ ReadX3D::ReadX3D(std::string path) :
 
 int ReadX3D::FindIndex(int Index)
 {
-	return NormalMap[Index];
+	return Index;
 }
 
 

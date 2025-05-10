@@ -5,24 +5,23 @@
 //Rewrite using futures
 class THREADS {
 private:
-	struct lWork {
-		std::atomic<bool> Worked;
+	struct werk {
+		bool Worked = true;
+		std::function<void()> Function;
 		std::mutex uWorkMTX;
 	};
 	struct THREAD {
 		THREAD();
 		~THREAD();
-		unsigned int tPushWork(std::function<void()>& f, std::unordered_map<unsigned int, lWork>& lWorked);
-		void exeWork();
-		void checkWork(unsigned int uWid, std::unordered_map<unsigned int, lWork>& lWorked);
-		std::atomic<unsigned int> lWaiting = 0;
+		uint8_t tPushWork(std::function<void()>& f);
 
-		struct werk {
-			lWork* lWork;
-			std::function<void()> Function;
-		};
-		std::atomic<unsigned short> wCount;
-		std::atomic<unsigned short> Counter;
+		void exeWork();
+
+		std::atomic<unsigned int> lWaiting = 0;
+		void checkWork(unsigned int uWid);
+		std::mutex wCountMTX;
+		std::vector<uint8_t> Queue;
+		std::atomic<uint8_t> wCount = 0;
 	private:
 		std::unique_ptr<EngineTime> eTime;
 
@@ -35,26 +34,32 @@ private:
 		std::mutex wMutex;
 		std::mutex aMutex;
 		std::mutex bMutex;
+		uint8_t Counter = 0;
+		std::mutex cMut;
 
 
 		//Local work Queue
-		std::vector<unsigned int> Queue;
-		std::mutex wCountMTX;
-		std::unordered_map<unsigned int, werk> tWork;
+		std::array<werk, 256> tWork;
+		//std::mutex tWorkMTX;
+
 	};
-	std::vector<THREAD*> Threads;
+	std::array<THREAD*, 256> Threads;
+	UINT tCount = 0;
+	std::mutex lWorkMTX;
+	static void recurBatch(std::vector<std::function<void()>> f, unsigned int i = 0);
 
-	std::unordered_map<unsigned int, lWork> lWorked;
-
+	//Global work map
+	//std::array<werk[256], 256> lWorked;
 public:
 	THREADS(int cCount);
 	~THREADS();
 
 	struct WRef {
-		unsigned int uWid;
+		uint8_t uWid;
 		THREADS::THREAD* Worker;
 	};
-	WRef gPushWork(std::function<void()> f);
+	WRef gPushWork(std::function<void()>& f);
+	WRef gPushWork(std::vector<std::function<void()>> f);
 	void gEndWork(WRef wref);
 
 };

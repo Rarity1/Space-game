@@ -38,7 +38,7 @@
   </PropertyGroup>
   <PropertyGroup Label="Globals" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <Microsoft_Direct3D_D3D12_SkipLibraryCopy>false</Microsoft_Direct3D_D3D12_SkipLibraryCopy>
-    <Microsoft_Direct3D_D3D12_SkipDebugLayerCopy>true</Microsoft_Direct3D_D3D12_SkipDebugLayerCopy>
+    <Microsoft_Direct3D_D3D12_SkipDebugLayerCopy>false</Microsoft_Direct3D_D3D12_SkipDebugLayerCopy>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
@@ -165,7 +165,7 @@ XCOPY "$(SolutionDir)OpenCL\" "$(TargetDir)OpenCL\" /E /Y</Command>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
-      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <FavorSizeOrSpeed>Neither</FavorSizeOrSpeed>
       <FloatingPointModel>Fast</FloatingPointModel>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
       <LanguageStandard>stdcpplatest</LanguageStandard>
@@ -173,6 +173,7 @@ XCOPY "$(SolutionDir)OpenCL\" "$(TargetDir)OpenCL\" /E /Y</Command>
       <CompileAsWinRT>false</CompileAsWinRT>
       <OmitFramePointers>false</OmitFramePointers>
       <EnablePREfast>true</EnablePREfast>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -201,7 +202,7 @@ XCOPY "$(SolutionDir)OpenCL\" "$(TargetDir)OpenCL\" /E /Y</Command>
       <ConformanceMode>true</ConformanceMode>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
-      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
       <FloatingPointModel>Fast</FloatingPointModel>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <AdditionalIncludeDirectories>C:\Users\rarit\Documents\GitHub\vcpkg\installed\x64-windows\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>

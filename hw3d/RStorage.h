@@ -25,17 +25,15 @@ public:
 		UINT umID;
 		ReadX3D* uData;
 		std::string name;
-		ID3D12Resource* vbuffer = nullptr;
-		ID3D12Resource* ibuffer = nullptr;
-		ID3D12Resource* tbuffer = nullptr;
-		ID3D12Resource* uvbuffer = nullptr;
-		ID3D12Resource* uibuffer = nullptr;
+		Microsoft::WRL::ComPtr < ID3D12Resource> vbuffer;
+		Microsoft::WRL::ComPtr < ID3D12Resource> ibuffer;
+		Microsoft::WRL::ComPtr < ID3D12Resource> uvbuffer;
+		Microsoft::WRL::ComPtr < ID3D12Resource> uibuffer;
 		cl::Buffer clBoneBuff;
 		cl::Buffer clBuff;
 		cl::Buffer clIndexBuff;
 		cl::Buffer clIndexMap;
 		std::atomic<bool> buffersWritten;
-		DirectX::XMMATRIX cmatrix;
 		std::atomic<bool> animate = false;
 	};
 
@@ -79,6 +77,8 @@ public:
 			curTexture = old.curTexture;
 			clPositionBuff = old.clPositionBuff;
 			pDir = old.pDir;
+			tbuffer = old.tbuffer;
+			cmatrix = old.cmatrix;
 		}
 		eResource& operator=(const eResource& old) {
 			if (this == &old)
@@ -97,6 +97,7 @@ public:
 			pDir = old.pDir;
 			model = old.model;
 			mPos.position = old.mPos.position;
+			cmatrix = old.cmatrix;
 		}
 		bool operator==(const eResource& comparison) {
 			if (this != &comparison) return false;
@@ -111,7 +112,12 @@ public:
 			return true;
 		}
 		std::string name = "";
+
+		//Model loaded into memory when this isnt nullptr
 		RStorage::bmResource* model;
+		
+
+		//All of this data could probably be stored better. Maybe a struct?
 		float scale = 1;
 		float mass = 1;
 		float friction = 0;
@@ -120,9 +126,11 @@ public:
 		float speed = 0;
 		DirectX::XMFLOAT4 grav{ 0,0,0,0 };
 		float gravpull = 0;
+
+		//Only important for gravity/ loading reasons. Dont impliment until necessary
 		eResource* mworld = nullptr;
-		std::filesystem::path curTexture;
-		cl::Buffer clPositionBuff;
+
+		
 		std::vector<DirectX::XMFLOAT4> pDir;
 		void CollisionUp(DirectX::XMFLOAT4 Dir, float Dist = 1);
 		void CollReset();
@@ -134,11 +142,21 @@ public:
 		std::mutex& PhysicsUpdate;
 		std::atomic<bool>& Filled;
 
+		//Instanced texture path and buffer.
+		std::filesystem::path curTexture;
+		Microsoft::WRL::ComPtr <ID3D12Resource> tbuffer;
+		//View Matrix
+		DirectX::XMMATRIX cmatrix;
+
+		//Instanced buffer specific to object for physics calculations
+		cl::Buffer clPositionBuff;
 	};
 
-	std::vector<RStorage::eResource> initializedModels;
+	std::vector<RStorage::eResource> trackedObjects;
+	std::unordered_map<void *, RStorage::bmResource*> loadedModels;
+
 	RStorage::bmResource* lModel(UINT umID) noexcept;
- 	RStorage::eResource* initResource(std::string name, int filebModelIndex = 0, float mScale = 1.0, float mMass = 0.0, float mFriction = 0.01, DirectX::XMFLOAT3 initPos = {0,0,0}, DirectX::XMFLOAT3 initRot = {0,0,0}, DirectX::XMFLOAT3 initVelDir = {0,0,0}, float initSpeed = 0);
+ 	RStorage::eResource* initObject(std::string textureName, int filebModelIndex = 0, float mScale = 1.0, float mMass = 0.0, float mFriction = 0.01, DirectX::XMFLOAT3 initPos = {0,0,0}, DirectX::XMFLOAT3 initRot = {0,0,0}, DirectX::XMFLOAT3 initVelDir = {0,0,0}, float initSpeed = 0);
 	void CreateBuffers(std::vector<eResource>& bm, Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList, Microsoft::WRL::ComPtr<ID3D12Device> pDevice, Microsoft::WRL::ComPtr<ID3D12CommandAllocator> commandAllocator, Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue,  UINT buffercount);
 	void UpdBuffer(eResource& bm, Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList, Microsoft::WRL::ComPtr<ID3D12Device> pDevice, Microsoft::WRL::ComPtr<ID3D12CommandAllocator> commandAllocator, Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue);
 	ReadX3D* CheckLoaded(int umID);
@@ -147,17 +165,7 @@ public:
 private:
 	std::vector<unmappedData*> Models;
 	std::vector<std::filesystem::path> Textures;
-	struct DDS_HEADER {
-		uint32_t dwSize;
-		uint32_t dwFlags;
-		uint32_t dwHeight;
-		uint32_t dwWidth;
-		uint32_t dwPitchOrLinearSize;
-		uint32_t dwDepth;
-		uint32_t dwMipMapCount;
-		uint32_t dwReserved1[11];
-		// ... other members are not shown for brevity
-	};
+
 
 
 	GErrors::CheckerToken chk;

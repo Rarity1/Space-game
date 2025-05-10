@@ -32,7 +32,7 @@ void operator>>(GErrors::HrGrabber g, GErrors::CheckerToken)
 	}
 };
 
-GErrors::HrGrabber::HrGrabber(unsigned int hr, std::source_location)  noexcept
+GErrors::HrGrabber::HrGrabber(unsigned int hr, std::source_location loc)  noexcept
 	:
 	hr(hr),
 	loc(loc)

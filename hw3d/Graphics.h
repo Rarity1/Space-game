@@ -23,7 +23,7 @@ public:
 	
 	void UpdateModel(RStorage::eResource* bm);
 	void RenderFrame();
-	void LoadResources(int numLoadedSrv);
+	void LoadResources();
 	void LoadPipeline();
 	void UpdateLocalTransform(RStorage::eResource& bm);
 	pCamera curCamera;
@@ -71,20 +71,22 @@ private:
 	Microsoft::WRL::ComPtr<IDStorageQueue> storageQueue;
 	Microsoft::WRL::ComPtr<IDXGIFactory4> dxgiFactory;
 	Microsoft::WRL::ComPtr<IDXGISwapChain4> swapChain;
+	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> pSamplerDescriptorHeap;
+	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> pCbvSrvDescriptorHeap;
 	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> rtvDescriptorHeap;
 	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> dsvDescriptorHeap;
-	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> samplerDescriptorHeap;
-	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> srvDescriptorHeap;
+	Microsoft::WRL::ComPtr<ID3D12Resource> depthBuffer;
+	std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> renderTargets;
+
+
 	Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue;
 	
 	Microsoft::WRL::ComPtr<ID3D12CommandAllocator> commandAllocator;
 	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList;
 
 	Microsoft::WRL::ComPtr<ID3D12Fence> fence;
-	Microsoft::WRL::ComPtr<ID3D12Resource> renderTargets[bufferCount];
 	std::vector<FrameResource *> backBuffers;
 	FrameResource* cbackBuffer;
-	Microsoft::WRL::ComPtr<ID3D12Resource> depthBuffer;
 	std::vector<D3D12_VERTEX_BUFFER_VIEW*> vbvarr;
 	std::vector<D3D12_INDEX_BUFFER_VIEW*> ibvarr;
 	
@@ -96,9 +98,7 @@ private:
 	UINT modelSubCount;
 
 	HANDLE fenceEvent;
-	UINT rtvDescriptorSize;
-	UINT srvDescriptorSize;
-	UINT samplerDescriptorSize;
+
 	EngineTime timer;
 	Keyboard* kbd;
 };

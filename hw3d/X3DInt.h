@@ -11,14 +11,13 @@ public:
 	};
 	struct Vertex
 	{
+		DirectX::XMFLOAT3 normal;
 		DirectX::XMFLOAT3 position;
 		DirectX::XMFLOAT2 tc;
-		DirectX::XMFLOAT3 normal;
 	};
 	//Dont use wayyyy to slow
 	int FindIndex(int Index);
 	//Use this to get normal map on stack
-	std::vector<int> NormalMap;
 	struct vFaceData {
 		WORD index;
 		WORD normal;
@@ -55,6 +54,7 @@ public:
 	std::vector<boneweight> weights;
 	DirectX::BoundingSphere Sphere;
 	std::vector<std::array<Vertex, 3>> MappedVertices;
+	//std::vector<Vertex> iVerts;
 
 private:
 	static float fDistance(DirectX::XMFLOAT3& pos1, DirectX::XMFLOAT3& pos2);

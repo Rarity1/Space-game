@@ -30,6 +30,8 @@ public:
 	tpsCounter ticker;
 private:
 	std::unique_ptr<THREADS> thrds;
+	std::unique_ptr<THREADS> childthrds;
+
 	THREADS::WRef lastWref;
 	unsigned int coreCount = 0;
 	static float fDistance(DirectX::XMFLOAT3& pos1, DirectX::XMFLOAT3& pos2);
@@ -90,7 +92,7 @@ private:
 		DirectX::XMFLOAT3 Position{ 0,0,0 };
 		std::vector<int> Indices;
 	};
-	 WORKINDI ProcCollide(RStorage::eResource& obj, RStorage::eResource& obj2, DirectX::XMFLOAT3& objpos, DirectX::XMFLOAT3& obj2pos, DirectX::XMFLOAT4& dir, float& dist, cl::CommandQueue& Queue);
+	 WORKINDI ProcCollide(RStorage::eResource& obj, RStorage::eResource& obj2, DirectX::XMFLOAT3& objpos, DirectX::XMFLOAT3& obj2pos, DirectX::XMFLOAT4& dir, float& dist);
 	std::mutex phyxBusy;
 	std::atomic<bool> Updated;
 	struct SPHR {

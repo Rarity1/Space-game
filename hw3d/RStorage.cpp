@@ -100,20 +100,22 @@ void RStorage::CreateBuffers(std::vector<eResource>& m, Microsoft::WRL::ComPtr<I
 				bm.model->uibuffer->Map(0, nullptr, reinterpret_cast<void**>(&mappedIndexData)) >> chk;
 
 
-				auto temporaryVertex = bm.model->uData->MappedVertices;
-				auto temporaryIndex = bm.model->uData->idata;
-				auto map = bm.model->uData->NormalMap;
+				//auto &temporaryVertex = bm.model->uData->MappedVertices;
+				auto &temporaryIndex = bm.model->uData->idata;
+				auto& map = bm.model->uData->MappedVertices;
 				//For some reason models only render correctly if the indices are inverted?
-				for (auto i = 0; i < std::size(temporaryIndex); i++) {
-					memcpy(&mappedVertexData[i], &temporaryVertex[map[i]][i % 3], sizeof(ReadX3D::Vertex));
-					int index = std::size(temporaryIndex) - 1 - i;
+				for (int i = 0; i < std::size(temporaryIndex); i++) {
+					WORD index = std::size(temporaryIndex) - 1 - i;
+					memcpy(&mappedVertexData[i], &map[temporaryIndex[i].index][i%3], sizeof(ReadX3D::Vertex));
 					memcpy(&mappedIndexData[i], &index, sizeof(WORD));
 				}
 			}
 			bm.model->uvbuffer->Unmap(0, nullptr);
 			bm.model->uibuffer->Unmap(0, nullptr);
 			
-			CreateDDSTextureFromFile(pDevice.Get(), upload, bm.curTexture.wstring().c_str(), &bm.model->tbuffer);
+
+			//BC7 Textures dont work in release mode ??? wrld texture doesnt work in release mode ??????
+			CreateDDSTextureFromFile(pDevice.Get(), upload, bm.curTexture.wstring().c_str(), bm.tbuffer.GetAddressOf())>>chk;
 			UpdBuffer(bm, commandList, pDevice, commandAllocator, commandQueue);
 		}
 		
@@ -127,27 +129,27 @@ void RStorage::CreateBuffers(std::vector<eResource>& m, Microsoft::WRL::ComPtr<I
 void RStorage::UpdBuffer(eResource& bm, Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList, Microsoft::WRL::ComPtr<ID3D12Device> pDevice, Microsoft::WRL::ComPtr<ID3D12CommandAllocator> commandAllocator, Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue) {
 	{
 		const auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-			bm.model->vbuffer,
+			bm.model->vbuffer.Get(),
 			D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, D3D12_RESOURCE_STATE_COPY_DEST);
 		commandList->ResourceBarrier(1, &barrier);
 	}
 	{
 		const auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-			bm.model->ibuffer,
+			bm.model->ibuffer.Get(),
 			D3D12_RESOURCE_STATE_INDEX_BUFFER, D3D12_RESOURCE_STATE_COPY_DEST);
 		commandList->ResourceBarrier(1, &barrier);
 	}
-	commandList->CopyResource(bm.model->vbuffer, bm.model->uvbuffer);
-	commandList->CopyResource(bm.model->ibuffer, bm.model->uibuffer);
+	commandList->CopyResource(bm.model->vbuffer.Get(), bm.model->uvbuffer.Get());
+	commandList->CopyResource(bm.model->ibuffer.Get(), bm.model->uibuffer.Get());
 	{
 		const auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-			bm.model->vbuffer,
+			bm.model->vbuffer.Get(),
 			D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
 		commandList->ResourceBarrier(1, &barrier);
 	}
 	{
 		const auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-			bm.model->ibuffer,
+			bm.model->ibuffer.Get(),
 			D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_INDEX_BUFFER);
 		commandList->ResourceBarrier(1, &barrier);
 	}
@@ -171,16 +173,20 @@ void RStorage::UpdBuffer(eResource& bm, Microsoft::WRL::ComPtr<ID3D12GraphicsCom
 
 
 
+ //Seperate this into initializing objects and initializing resources. Positions and other data is unreleated to model and texture data. Something can be known about without being loaded into memory.0
+RStorage::eResource* RStorage::initObject(std::string textureName, int filebModelIndex, float mScale, float mMass, float mFriction, DirectX::XMFLOAT3 initPos, DirectX::XMFLOAT3 initRot, DirectX::XMFLOAT3 initVelDir, float initSpeed) {
 
-RStorage::eResource* RStorage::initResource(std::string name, int filebModelIndex, float mScale, float mMass, float mFriction, DirectX::XMFLOAT3 initPos, DirectX::XMFLOAT3 initRot, DirectX::XMFLOAT3 initVelDir, float initSpeed) {
 
-	auto& tmodelAddress = initializedModels.emplace_back(RStorage::eResource(name, RStorage::lModel(filebModelIndex), mScale, mMass, mFriction, initPos, initRot, initVelDir, initSpeed));
-	for (auto& text : this->Textures) {
-		if (text.filename().string().substr(0, text.filename().string().find(text.extension().string())) == tmodelAddress.model->name) {
-			tmodelAddress.curTexture = text;
-		}
-	}
-	return &tmodelAddress;
+	auto& result = trackedObjects.emplace_back(RStorage::eResource(textureName,
+			//Move this elsewhere.
+			RStorage::lModel(filebModelIndex),
+			mScale, mMass, mFriction, initPos, initRot, initVelDir, initSpeed));
+
+	auto curtex = std::find_if(Textures.begin(), Textures.end(), [textureName](auto e) {
+		return e.filename().string().substr(0, e.filename().string().find(e.extension().string())) == textureName; });
+	result.curTexture = curtex != Textures.end() ? *curtex : L"reee";
+
+	return &result;
 }
 
 ReadX3D* RStorage::CheckLoaded(int umID) {
@@ -195,12 +201,12 @@ ReadX3D* RStorage::CheckLoaded(int umID) {
 
 RStorage::unmappedData* RStorage::findUm(UINT umID)
 {
-	for (auto& u : this->Models) {
-		if (u->umID == umID) {
-			return u;
-		}
-	}
-	return nullptr;
+	auto test = [umID](const RStorage::unmappedData* UDat) {
+		return UDat->umID == umID;
+	};
+	auto result = std::find_if(Models.begin(), Models.end(), test);
+
+	return result != Models.end() ? *result : nullptr;
 }
 
 
@@ -231,7 +237,7 @@ RStorage::~RStorage()
 			delete m->lModel;
 		delete m;
 	}
-	initializedModels.clear();
+	trackedObjects.clear();
 }
 
 void RStorage::eResource::CollisionUp(DirectX::XMFLOAT4 Dir, float Dist)
