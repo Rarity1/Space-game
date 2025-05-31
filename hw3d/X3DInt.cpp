@@ -170,7 +170,11 @@ ReadX3D::ReadX3D(std::string path) :
 
 	GetAllChildBones(&ndata, &ndata.aChildren);
 	ndata.name = "Armature";
-	std::vector<Vertex> Vertdata;
+	{
+
+
+	}
+	std::vector<Vertex> loadedVdata;
 	for (auto i = 0; i < std::size(bdata); i++) {
 		bdata[i].node = ndata.aChildren[i];
 		bdata[i].node->bIndex = bdata[i].bIndex;
@@ -179,7 +183,7 @@ ReadX3D::ReadX3D(std::string path) :
 		std::stringstream ssvertex(positions->value());
 		float x, y, z;
 		while (ssvertex >> x >> y >> z) {
-			Vertdata.emplace_back(Vertex{ .position{x, y, z} });
+			loadedVdata.emplace_back(Vertex{ .position{x, y, z} });
 		}
 
 	}
@@ -205,6 +209,7 @@ ReadX3D::ReadX3D(std::string path) :
 	}
 
 
+	std::vector<vFaceData> idata;
 
 	{
 		std::stringstream ssindex(parray->value());
@@ -215,94 +220,96 @@ ReadX3D::ReadX3D(std::string path) :
 		}
 
 	}
+	sIndex.resize(idata.size());
+	mIndex.resize(idata.size());
+	std::iota(sIndex.begin(), sIndex.end(), 0);
+	std::reverse(sIndex.begin(), sIndex.end());
 
-	
-	std::vector<Vertex> tempdata(std::size(idata));
+	std::vector<Vertex> mVdata(std::size(idata));
 	std::vector<boneweight> tempweights(std::size(idata));
-	for (auto i = 0; i < std::size(idata); i++) {
+	for (uint32_t s = 0; s < sIndex.size();s++) {
+		uint32_t i = sIndex[s];
 		if (weights.size() > 0) {
-			tempweights[i] = weights[idata[i].index];
+			tempweights[s] = weights[idata[i].index];
 
 		}
 		else {
-			tempweights[i] = boneweight{ {0}, {1.0} };
+			tempweights[s] = boneweight{ {0}, {1.0} };
 		}
-		tempdata[i] = Vertdata[idata[i].index];
-		tempdata[i].tc = tempcoord[idata[i].texcoord];
-		tempdata[i].normal = normals[idata[i].normal];
+		mIndex[s] = idata[i].index;
+		mVdata[i] = loadedVdata[idata[i].index];
+		mVdata[i].tc = tempcoord[idata[i].texcoord];
+		mVdata[i].normal = normals[idata[i].normal];
 	}
-	Vertdata = tempdata;
 	weights = tempweights;
+
+
+	//Triangle Mapped Vertices. Data is stored equal to non mapped.
+	MappedVertices.resize(mVdata.size() / 3);
+
+	memcpy(MappedVertices.data(), mVdata.data(), sizeof(Vertex)* mVdata.size());
+
 	
 
 
-
-
 	if (std::size(bdata) == 0) {
-		bdata.emplace_back(Bone{ "placeholder", 0 });
-		for (auto i = 0; i < idata.size(); i++) {
-			bdata[0].Indices.emplace_back(i);
+		auto& working = bdata.emplace_back(Bone{ "placeholder", 0 });
+		working.Indices = sIndex;
+	}
+	else {
+		for (auto i = 0; i < sIndex.size(); i++) {
+			for (uint32_t j : weights[i].bIndex) {
+				bdata[j].Indices.emplace_back(i);
+			}
 		}
 	}
 
-	for (auto i = 0; i < std::size(weights); i++) {
-		for (auto& j : weights[i].bIndex) {
-			bdata[j].Indices.emplace_back(i);
+
+
+
+	{
+
+		DirectX::XMFLOAT3 Zero{ 0,0,0 };
+		DirectX::XMFLOAT3 tVert;
+		for (auto i = 0; i < mVdata.size(); i++) {
+			XMStoreFloat3(&tVert, XMLoadFloat3(&mVdata[i].position));
+			auto temp = fDistance(tVert, Zero);
+			Sphere.Radius = temp > Sphere.Radius ? temp : Sphere.Radius;
 		}
+		Sphere.Center = { 0,0,0 };
+
+
 	}
 
 
+
+	//We have to reverse the Vertex data for physics as the rendering data is inverted. 
+	std::reverse(mVdata.begin(), mVdata.end());
+
+	DirectX::XMFLOAT3 tVert;
 	for (auto& b : bdata) {
+
 		DirectX::XMFLOAT3 pos{ 0,0,0 };
 		using namespace DirectX;
-		std::for_each(b.Indices.begin(), b.Indices.end(), [this, &pos, &Vertdata](auto& x) {
-			XMStoreFloat3(&pos, XMLoadFloat3(&Vertdata[x].position) + XMLoadFloat3(&pos));
+		std::for_each(b.Indices.begin(), b.Indices.end(), [this, &pos, &mVdata](auto& x) {
+			XMStoreFloat3(&pos, XMLoadFloat3(&mVdata[x].position) + XMLoadFloat3(&pos));
 		});
 		auto isize = b.Indices.size();
 		if (isize > 0) {
 			XMStoreFloat3(&b.sphere.Center, XMLoadFloat3(&pos) / isize);
 		}
 		b.smallsphere = b.sphere;
-	}
 
-
-	MappedVertices.resize(idata.size() / 3);
-
-	auto mctr = 0;
-	for (auto i = 0; i < idata.size(); i++) {
-		auto& vect = MappedVertices[mctr];
-		idata[i].index = mctr;
-		vect[i % 3] = Vertdata[i];
-		mctr = i > 0 && (i+1) % 3 == 0 ? mctr + 1 : mctr;
-	}
-
-
-	float collradius = 0;
-
-	{
-		DirectX::XMFLOAT3 Zero{ 0,0,0 };
-		DirectX::XMFLOAT3 tVert;
-		for (auto i = 0; i < idata.size(); i++) {
-			XMStoreFloat3(&tVert, XMLoadFloat3(&Vertdata[i].position));
-			auto temp = fDistance(tVert, Zero);
-			collradius = temp > collradius ? temp : collradius;
-		}
-
-	}
-	
-	DirectX::XMFLOAT3 tVert;
-	for (auto& b : bdata) {
-		using namespace DirectX;
 		float dist = 0;
 		float fdist = 0;
 		float ldist = 0;
 		float tdist = 0;
 		for (auto& i : b.Indices) {
-			XMStoreFloat3(&tVert, XMLoadFloat3(&Vertdata[i].position));
+			XMStoreFloat3(&tVert, XMLoadFloat3(&mVdata[i].position));
 			fdist = fDistance(b.sphere.Center, tVert);
 			dist = fdist > dist ? fdist : dist;
 
-			std::array<ReadX3D::Vertex, 3>& Verts = MappedVertices[idata[i].index];
+			std::array<ReadX3D::Vertex, 3>& Verts = MappedVertices[mIndex[i]];
 			//Ptr to vector of ptrs requires array index ????
 			DirectX::XMFLOAT3 face;
 
@@ -319,8 +326,6 @@ ReadX3D::ReadX3D(std::string path) :
 		b.sphere.Radius = dist;
 		b.smallsphere.Radius = ldist;
 	}
-	Sphere.Radius = collradius;
-	Sphere.Center = { 0,0,0 };
 }
 
 

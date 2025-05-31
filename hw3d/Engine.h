@@ -11,7 +11,7 @@ public:
 	void Update(double delta);
 	bool engInit = true;
 	EngineTime& Clock;
-	std::vector<RStorage::eResource>& trackedModels;
+	std::vector<RStorage::eResource>& trackedObjects;
 	std::unique_ptr<Physics> phyx;
 	std::unique_ptr<THREADS> threads;
 
@@ -19,13 +19,13 @@ public:
 	{
 
 		enum KEYS {
-			W = 57,
-			A = 41,
-			S = 53,
-			D = 44,
-			K = 48,
-			Q = 51,
-			E = 45,
+			W,
+			A,
+			S,
+			D,
+			K,
+			Q,
+			E,
 			left,
 			right,
 			up,
@@ -74,7 +74,6 @@ public:
 	virtual void enQueueExternCommands();
 private:
 	THREADS::WRef eWref;
-	std::thread EngThread;
 	std::atomic<bool> eRun;
 	struct Movement {
 		float forward = 0.0;
@@ -87,7 +86,6 @@ private:
 	void enQueueEngineCommands();
 	double cspin = 0;
 	void UCampos();
-	void SetModelPosition(RStorage::eResource* model);
 	DirectX::XMFLOAT3 rWorld(DirectX::XMFLOAT3 pos1);
 	DirectX::XMFLOAT3 dWorld(DirectX::XMFLOAT3 pos1);
 	DirectX::XMFLOAT3 cnWorld(DirectX::XMFLOAT3 pos1);
@@ -96,6 +94,8 @@ private:
 	void mAniUpdate();
 	void UControls();
 	void cPlayermodel();
+	//sync view matrix with physics coords
+	void sPGraphics(RStorage::eResource& model);
 	void RotateCam(float Pitch = 0, float Yaw = 0, float Roll = 0);
 	//Fires all queued events/functions in order by priority
 	int eventBusSync();

@@ -258,6 +258,7 @@ XCOPY "$(SolutionDir)OpenCL\" "$(TargetDir)OpenCL\" /E /Y</Command>
     <ClInclude Include="Mouse.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="RStorage.h" />
+    <ClInclude Include="text.h" />
     <ClInclude Include="Threads.h" />
     <ClInclude Include="Window.h" />
     <ClInclude Include="X3DInt.h" />

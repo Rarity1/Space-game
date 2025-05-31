@@ -17,7 +17,7 @@ private:
 
 		void exeWork();
 
-		std::atomic<unsigned int> lWaiting = 0;
+		std::atomic<uint8_t> lWaiting = 0;
 		void checkWork(unsigned int uWid);
 		std::mutex wCountMTX;
 		std::vector<uint8_t> Queue;

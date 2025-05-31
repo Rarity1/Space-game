@@ -4,10 +4,10 @@ Engine::Engine(Graphics& gfx, Keyboard& kbd, EngineTime& clock):
 	pGfx(gfx),
     cWorld(0,0,0,0),
     kbd(kbd),
-    trackedModels(gfx.lModels->trackedObjects),
+    trackedObjects(*gfx.lModels->trackedObjects),
     Clock(clock)
 {
-    phyx = std::make_unique<Physics>(Clock, trackedModels, updaterate);
+    phyx = std::make_unique<Physics>(Clock, trackedObjects, updaterate);
     threads = std::make_unique<THREADS>((int)std::thread::hardware_concurrency());
     pGfx.LoadPipeline();
 }
@@ -23,21 +23,22 @@ void Engine::iLoad() {
     pGfx.lModels->initObject("wrld", 4, 1, 8570000000.0 , 0.3, DirectX::XMFLOAT3{ 0,0,0 });
     //wrld is 1:50000
 
-    //stress it out nerd
-    for (auto i = 0; i < 10; i++) {
+    for (auto i = 0; i < 15; i++) {
         float p = i * 1;
-        pGfx.lModels->initObject("cube", 1, 1, 200, 0.3, DirectX::XMFLOAT3{12 + p,0,138});
+        pGfx.lModels->initObject("untitled", 2, 1, 200, 0.3, DirectX::XMFLOAT3{ 12 + p,0,138 });
     }
-    for (auto i = 0; i < 10; i++) {
+
+    for (auto i = 0; i < 15; i++) {
         float p = i * 1;
-        pGfx.lModels->initObject("cube", 2, 1, 200, 0.3, DirectX::XMFLOAT3{ 12 + p,0,138 });
+       pGfx.lModels->initObject("untitled", 1, 1, 200, 0.3, DirectX::XMFLOAT3{ 12 + p,0,138 });
     }
+
     //trackedModels[0].mworld = &trackedModels[2];
     //trackedModels[1].mworld = &trackedModels[2];
     //trackedModels[3]->mworld = trackedModels[2];
 
     //Make a better way of setting player model. 
-    plModel = &trackedModels[0];
+    plModel = &trackedObjects[0];
     
     //end model tracking. begin resource upload.
     pGfx.LoadResources();
@@ -47,7 +48,7 @@ void Engine::iLoad() {
         engInit = false;
     }
     eRun.store(true);
-    for (auto& m : trackedModels) {
+    for (auto& m : trackedObjects) {
         pGfx.UpdateModel(&m);
     }
     phyx->trackM();
@@ -64,7 +65,7 @@ void Engine::Update(double delta)
         eventBusSync();
         lastD = 0.0;
     }
-    //mAniUpdate();
+    mAniUpdate();
 }
 
 
@@ -113,11 +114,20 @@ void Engine::Update(double delta)
  }
 
 void Engine::mAniUpdate(){
+    using namespace DirectX;
     pGfx.umodel.lock();
-    for (auto& m : trackedModels) {
-        //Update if doing animation
-            //pGfx.UpdateModel(m->model);
+    if (m_keysPressed.FindBuffered(KeysPressed::K)) {
+
+        XMFLOAT4 up(1,0,0, 0);
+        auto temp = DirectX::XMQuaternionRotationAxis(XMVector4Normalize(XMLoadFloat4(&up)), 10 * Clock.Current());
+        auto left = DirectX::XMQuaternionMultiply(temp, XMLoadFloat4(&trackedObjects[1].mPos.rotation));
+
+
+        XMStoreFloat4(&trackedObjects[1].mPos.rotation, left);
+
+
     }
+
     pGfx.umodel.unlock();
 }
 
@@ -149,6 +159,8 @@ void Engine::enQueueEngineCommands()
     //this->cPlayermodel();
     queueCommand(std::function<void()>([this] {phyx->Update(); }), 20);
     //phyx->Update();
+    queueCommand(std::function<void()>([this] { std::for_each(trackedObjects.begin(), trackedObjects.end(), [this](auto& e) { sPGraphics(e); }); }), 21);
+
     std::vector<std::function<void()>> wFs;
 
     for (auto& q : QueueThreads) {
@@ -200,6 +212,26 @@ void Engine::UCampos() {
         pGfx.curCamera.posMtx = &plModel->mPos.posMtx;
         plModel->mPos.posMtx.unlock();
     }
+}
+
+void Engine::sPGraphics(RStorage::eResource& model)
+{
+    pGfx.umodel.lock();
+
+
+    using namespace DirectX;
+    model.mPos.posMtx.lock();
+    model.mPos.lastposition = *model.mPos.position;
+    auto pDir = model.CollDir();
+    XMStoreFloat3(model.mPos.position, XMLoadFloat3(model.mPos.position) + XMLoadFloat4(&pDir));
+    model.CollReset();
+    XMStoreFloat3(model.mPos.position, XMLoadFloat3(model.mPos.position) + XMLoadFloat4(&model.velDir) * (model.speed));
+    model.mPos.posMtx.unlock();
+
+
+    XMStoreFloat4x4(&model.cmatrix, XMMatrixRotationQuaternion(XMLoadFloat4(&model.mPos.rotation)) * XMMatrixTranslation(model.mPos.position->x, model.mPos.position->y, model.mPos.position->z));
+    pGfx.umodel.unlock();
+
 }
 
 void Engine::RotateCam(float Pitch, float Yaw, float Roll) {
@@ -330,10 +362,6 @@ void Engine::OnKeyUp(unsigned char key)
     }
 }
 
-
-void Engine::SetModelPosition(RStorage::eResource* model) {
-
-}
 
 void Engine::UControls() {
     while (auto ss = kbd.ReadKey()) {

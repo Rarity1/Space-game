@@ -11,9 +11,8 @@ Graphics::Graphics(HWND& hWnd, int height, int width)
 	scissorRect(0, 0, static_cast<LONG>(width), static_cast<LONG>(height)),
 	CurBackBuffer(0),
 	cframeIndex(0),
-	cbackBuffer(nullptr),
 	lModels(std::make_unique<RStorage>()),
-	modelVect(lModels->trackedObjects)
+	trackedObjects(*lModels->trackedObjects)
 {
 	renderTargets.resize(bufferCount);
 }
@@ -21,7 +20,7 @@ Graphics::Graphics(HWND& hWnd, int height, int width)
 
 void Graphics::LoadPipeline() {
 	UINT dxgiFactoryFlags = 0;
-//#if defined(_DEBUG)
+#if defined(_DEBUG)
 	Microsoft::WRL::ComPtr<ID3D12Debug> debugController0;
 	Microsoft::WRL::ComPtr<ID3D12Debug1> debugController1;
 	D3D12GetDebugInterface(IID_PPV_ARGS(&debugController0)) >> chk;
@@ -29,7 +28,7 @@ void Graphics::LoadPipeline() {
 	debugController0->EnableDebugLayer();
 	debugController1->SetEnableGPUBasedValidation(true);
 	dxgiFactoryFlags |= DXGI_CREATE_FACTORY_DEBUG;
-//#endif
+#endif
 
 	
 	//DStorageGetFactory(IID_PPV_ARGS(&pStorage)) >> chk;
@@ -217,8 +216,7 @@ void Graphics::LoadPipeline() {
 		pipelineStateStream.PS = CD3DX12_SHADER_BYTECODE(pixelShaderBlob.Get());
 		pipelineStateStream.DSVFormat = DXGI_FORMAT_D32_FLOAT;
 		pipelineStateStream.RTVFormats = {
-			//BC7 format?
-				.RTFormats{ DXGI_FORMAT_BC3_UNORM },
+				.RTFormats{ DXGI_FORMAT_R8G8B8A8_UNORM },
 				.NumRenderTargets = 1,
 		};
 		const D3D12_PIPELINE_STATE_STREAM_DESC pipelineStateStreamDesc = {
@@ -252,12 +250,12 @@ void Graphics::LoadResources()
 	{
 		D3D12_DESCRIPTOR_HEAP_DESC dsc = {};
 		dsc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-		dsc.NumDescriptors = (bufferCount * modelVect.size() * 2);
+		dsc.NumDescriptors = (bufferCount * trackedObjects.size() * 2);
 		dsc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 		pDevice->CreateDescriptorHeap(&dsc, IID_PPV_ARGS(&pCbvSrvDescriptorHeap)) >> chk;
 	}
 
-	lModels->CreateBuffers(modelVect, commandList, pDevice, commandAllocator, commandQueue, bufferCount);
+	lModels->CreateBuffers(trackedObjects, commandList, pDevice, commandAllocator, commandQueue, bufferCount);
 
 	{
 		ID3D12CommandList* const commandLists[] = { commandList.Get() };
@@ -303,7 +301,7 @@ void Graphics::UpdateModel(RStorage::eResource* bm) {
 		//XMStoreFloat4x4(&b.finalTransform, XMLoadFloat4x4(&b.matrix) * XMLoadFloat4x4(&b.node->LocalTransform) * GlobITrans);
 	}
 	//auto& vdata = bm->model->uData->Vertdata;
-	auto& idata = bm->model->uData->idata;
+	//auto& idata = bm->model->uData->idata;
 	ReadX3D::Vertex* mappedVertexData = nullptr;
 	bm->model->uvbuffer->Map(0, nullptr, reinterpret_cast<void**>(&mappedVertexData)) >> chk;
 	//Fix animations
@@ -355,13 +353,8 @@ int Graphics::bIndex(std::vector<int> w, int bInd) {
 }
 
 void Graphics::CreateFrameResources() {
-	for (auto& f : backBuffers)
-	{
-		delete f;
-	}
-	backBuffers.resize(bufferCount);
+	backBuffers.resize(0);
 	// Initialize each frame resource.
-
 	//std::vector<ID3D12CommandList*> commandLists;
 	//commandLists.emplace_back(commandList.Get());
 
@@ -377,13 +370,11 @@ void Graphics::CreateFrameResources() {
 	for (UINT i = 0; i < bufferCount; i++)
 	{
 
-		FrameResource::fResources tResource{ i, {width, height}, pDevice, swapChain, commandQueue, commandList, pipelineState, pCbvSrvDescriptorHeap, pSamplerDescriptorHeap, rtvDescriptorHeap, dsvDescriptorHeap, &renderTargets, rootSignature, &modelVect};
-
-		FrameResource* pFrameResource = new FrameResource(tResource);
-
+		FrameResource::fResources tResource{ i, {width, height}, pDevice, swapChain, commandQueue, commandList, pipelineState, pCbvSrvDescriptorHeap, pSamplerDescriptorHeap, rtvDescriptorHeap, dsvDescriptorHeap, &renderTargets, rootSignature};
+		auto& pFrameResource = backBuffers.emplace_back(std::make_unique<FrameResource>(tResource, trackedObjects));
 
 
-		for (auto m = 0; m < modelVect.size(); m++) {
+		for (auto m = 0; m < trackedObjects.size(); m++) {
 			// Describe and create a constant buffer view (CBV).
 			D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
 			cbvDesc.BufferLocation = pFrameResource->openbuffers[m]->GetGPUVirtualAddress();
@@ -394,32 +385,20 @@ void Graphics::CreateFrameResources() {
 			D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
 			srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 			//Remember to change to bc7 textures when gimp gets support
-			srvDesc.Format = DXGI_FORMAT_BC3_UNORM;
+			srvDesc.Format = DXGI_FORMAT_UNKNOWN;
 			srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
 			srvDesc.Texture2D.MipLevels = -1;
-			pDevice->CreateShaderResourceView(modelVect[m].tbuffer.Get(), &srvDesc, cbvSrvHandle);
+			pDevice->CreateShaderResourceView(trackedObjects[m].tbuffer.Get(), &srvDesc, cbvSrvHandle);
 			cbvSrvHandle.Offset(pCbvSrvDescriptorHeapSize);
 		}
 
 		//pFrameResource->InitBundle(pDevice.Get(), pipelineState.Get(), i, srvDescriptorHeap.Get(), srvDescriptorSize, samplerDescriptorHeap.Get(), samplerDescriptorSize, rootSignature.Get(), modelVect);
-
-		backBuffers[i] = (pFrameResource);
 
 	}
 
 
 }
 
-void Graphics::PopCommandList(FrameResource* backBuffer) {
-	
-	//Bundle execution?
-
-	//commandList->ExecuteBundle(backBuffer->bundle.Get());
-	backBuffer->PopulateCommandList(cframeIndex);
-
-
-	
-}
 
 Graphics::~Graphics() {
 	if (pDevice != nullptr) {
@@ -434,11 +413,7 @@ Graphics::~Graphics() {
 		}
 		CloseHandle(fenceEvent);
 
-		for (auto& f : backBuffers)
-		{
-			delete f;
-		}
-
+		backBuffers.resize(0);
 		pDevice.Reset();
 	}
 
@@ -448,10 +423,11 @@ Graphics::~Graphics() {
 
 
 void Graphics::RenderFrame() {
-	umodel.lock();
+
+
 	const UINT64 lastCompletedFence = fence->GetCompletedValue();
 	CurBackBuffer = (CurBackBuffer + 1) % bufferCount;
-	cbackBuffer = backBuffers[CurBackBuffer];
+	auto& cbackBuffer = backBuffers[CurBackBuffer];
 	if (cbackBuffer->fenceValue != 0 && cbackBuffer->fenceValue > lastCompletedFence) {
 		fenceValue++;
 		fence->SetEventOnCompletion(cbackBuffer->fenceValue, fenceEvent);
@@ -460,11 +436,13 @@ void Graphics::RenderFrame() {
 	curCamera.posMtx->lock();
 	curCamera.cmatrix = DirectX::XMMatrixLookToRH(XMLoadFloat3(curCamera.position), XMLoadFloat4(&curCamera.rotation), XMLoadFloat4(&curCamera.upDirection));
 	curCamera.posMtx->unlock();
+
+	umodel.lock();
 	cbackBuffer->UpdateConstantBuffers(curCamera.cmatrix,
-		DirectX::XMMatrixPerspectiveFovRH(1.333f, float(width) / float(height), 0.1f, 100000.0f), modelVect);
+		DirectX::XMMatrixPerspectiveFovRH(1.333f, float(width) / float(height), 0.1f, 100000.0f));
 	umodel.unlock();
 
-	PopCommandList(cbackBuffer);
+	cbackBuffer->PopulateCommandList(cframeIndex);;
 	
 	ID3D12CommandList* commandLists[] = { cbackBuffer->pCommandList.Get() };
 	commandQueue->ExecuteCommandLists(_countof(commandLists), commandLists);

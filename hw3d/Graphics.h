@@ -28,9 +28,9 @@ public:
 	void UpdateLocalTransform(RStorage::eResource& bm);
 	pCamera curCamera;
 	std::vector<std::string> loadbuff;
-	//std::vector<RStorage::bmResource*> modelVect;
 	std::mutex umodel;
 	std::unique_ptr<RStorage> lModels;
+	std::vector<RStorage::eResource>& trackedObjects;
 
 private:
 
@@ -40,7 +40,6 @@ private:
 	float timesincestart;
 	void CreateFrameResources();
 	void RecurLTrans(ReadX3D::Node* n, ReadX3D::Node* P);
-	void PopCommandList(FrameResource* backBuffer);
 	int bIndex(std::vector<int> w, int bInd);
 	GErrors::CheckerToken chk;
 	UINT width;
@@ -49,8 +48,7 @@ private:
 	
 
 	static const bool UseBundles = true;
-	std::vector<FrameResource*> frameResources;
-	std::vector<RStorage::eResource>& modelVect;
+	std::vector<std::unique_ptr<FrameResource>> frameResources;
 	struct PipelineStateStream
 	{
 		CD3DX12_PIPELINE_STATE_STREAM_ROOT_SIGNATURE RootSignature;
@@ -85,8 +83,7 @@ private:
 	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList;
 
 	Microsoft::WRL::ComPtr<ID3D12Fence> fence;
-	std::vector<FrameResource *> backBuffers;
-	FrameResource* cbackBuffer;
+	std::vector<std::unique_ptr<FrameResource>> backBuffers;
 	std::vector<D3D12_VERTEX_BUFFER_VIEW*> vbvarr;
 	std::vector<D3D12_INDEX_BUFFER_VIEW*> ibvarr;
 	

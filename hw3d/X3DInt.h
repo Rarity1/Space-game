@@ -42,20 +42,19 @@ public:
 		//Inverse bind pose matrix
 		DirectX::XMFLOAT4X4 matrix;
 		DirectX::XMFLOAT4X4 finalTransform;
-		std::vector<int> Indices;
+		std::vector<uint32_t> Indices;
 		Node* node;
 		DirectX::BoundingSphere sphere;
 		DirectX::BoundingSphere smallsphere;
 	};
-	std::vector<vFaceData> idata;
 	std::vector<int> WeightCIndex;
 	std::vector<Bone> bdata;
 	Node ndata;
 	std::vector<boneweight> weights;
 	DirectX::BoundingSphere Sphere;
 	std::vector<std::array<Vertex, 3>> MappedVertices;
-	//std::vector<Vertex> iVerts;
-
+	std::vector<uint32_t> sIndex{};
+	std::vector<uint32_t> mIndex{};
 private:
 	static float fDistance(DirectX::XMFLOAT3& pos1, DirectX::XMFLOAT3& pos2);
 	static DirectX::XMFLOAT4 fDirection(DirectX::XMFLOAT3& pos1, DirectX::XMFLOAT3& pos2);

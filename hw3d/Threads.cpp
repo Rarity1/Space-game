@@ -88,7 +88,7 @@ THREADS::THREAD::~THREAD()
 uint8_t THREADS::THREAD::tPushWork(std::function<void()> &f) {
 
 	cMut.lock();
-	unsigned int result = Counter;
+	uint8_t result = Counter;
 	Counter++;
 	cMut.unlock();
 
@@ -120,31 +120,31 @@ void THREADS::recurBatch(std::vector<std::function<void()>> f, unsigned int i)
 //Fix random freezes
 void THREADS::THREAD::exeWork() {
 	uint8_t cWorkCount = 0;
+	std::array<uint8_t, 256> localQ;
 	while (tRunning) {
 		//auto time = std::chrono::duration <int, std::nano>(2000000);
 		std::unique_lock<std::mutex> lock(wCountMTX);
 		//cVariable.wait_for(lock, time, [this] {return Queue.size() > 0 || lWaiting.load() > 0;});
 		cVariable.wait(lock, [this] {
-			return Queue.size() > 0 || lWaiting.load() > 0 || !tRunning.load();
+			return Queue.size() > 0 || !tRunning.load();
 		});
 		cWorkCount = Queue.size();
-		auto localQ = Queue;
+		memcpy(&localQ, Queue.data(), sizeof(uint8_t)*Queue.size());
 		wCount.store(cWorkCount);
 		Queue.resize(0);
 		lock.unlock();
 
-
-		for (uint8_t i : localQ) {
-			tWork[i].uWorkMTX.lock();
-			tWork[i].Function();
-			tWork[i].Worked = true;
-			tWork[i].uWorkMTX.unlock();
+		for (uint8_t i = 0; i < cWorkCount; i++) {
+			tWork[localQ[i]].Function();
 		}
+		for (uint8_t i = 0; i < cWorkCount; i++) {
+			tWork[localQ[i]].uWorkMTX.lock();
+			tWork[localQ[i]].Worked = true;
+			tWork[localQ[i]].uWorkMTX.unlock();
+		}
+
 		wCount.store(wCount.load() - cWorkCount);
-
-
 		aVariable.notify_all();
-		
 	}
 }
 

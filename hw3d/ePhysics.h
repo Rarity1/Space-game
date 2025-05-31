@@ -5,7 +5,7 @@
 
 class Physics {
 public:
-	Physics(EngineTime& timer, std::vector<RStorage::eResource>& trackedModels, const int& UpdateRate);
+	Physics(EngineTime& timer, std::vector<RStorage::eResource>& trackedObjects, const int& UpdateRate);
 	~Physics();
 	void Update();
 	//Call if loaded models/tracked models changes
@@ -31,6 +31,7 @@ public:
 private:
 	std::unique_ptr<THREADS> thrds;
 	std::unique_ptr<THREADS> childthrds;
+	std::unique_ptr<THREADS> subchildthrds;
 
 	THREADS::WRef lastWref;
 	unsigned int coreCount = 0;
@@ -48,7 +49,7 @@ private:
 
 	std::vector<collstruct> CollModels;
 	std::mutex cmMtx;
-	std::vector<RStorage::eResource>& trackedModels;
+	std::vector<RStorage::eResource>& trackedObjects;
 	EngineTime& timer;
 	const int& urate;
 	float GConst = 0;
@@ -58,7 +59,6 @@ private:
 	void pSpecCollison();
 	void pSpecReset();
 
-	static void mMove(std::vector<RStorage::eResource>& trackedModels);
 	std::vector<std::thread> collisionThreads;
 	std::vector<std::thread> distanceThreads = {};
 	std::vector<cl::Device> devices;
@@ -67,38 +67,21 @@ private:
 	cl::Program Sphere;
 	cl::CommandQueue queue;
 	std::mutex QueueMTX;
+
 	struct RETURNDATA {
-		bool coll;
-		int index1[3];
-		int index2[3];
-		DirectX::XMFLOAT3 dir[2];
-		float dist[2];
+		cl_float dist[2]{0.0,0.0};
+		cl_int index[2]{ 0,0 };
 	};
-	struct float3 {
-		float x;
-		float y;
-		float z;
-	};
-	struct UpVertNorm {
-		DirectX::XMFLOAT3 Vert;
-		DirectX::XMFLOAT3 Norm;
-	};
-	struct INTINDEX {
-		int Index[3];
-	};
+
 	struct WORKINDI {
-		int wWorkCount = 0;
-		int tWorkCount = 0;
+		cl_int wWorkCount = 0;
+		cl_int tWorkCount = 0;
 		DirectX::XMFLOAT3 Position{ 0,0,0 };
-		std::vector<int> Indices;
+		std::vector<cl_int> Indices{};
 	};
 	 WORKINDI ProcCollide(RStorage::eResource& obj, RStorage::eResource& obj2, DirectX::XMFLOAT3& objpos, DirectX::XMFLOAT3& obj2pos, DirectX::XMFLOAT4& dir, float& dist);
 	std::mutex phyxBusy;
 	std::atomic<bool> Updated;
-	struct SPHR {
-		DirectX::XMFLOAT3 Center[2];
-		double Radius[2];
-	};
 ;
 
 };

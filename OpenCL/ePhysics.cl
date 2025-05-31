@@ -41,20 +41,19 @@ typedef struct BONE
 }
 BONE;
 
-typedef struct UPVERTNORM
+typedef struct Vertex
 {
-    XMFLOAT3 Vert;
-    XMFLOAT3 Norm;
+    XMFLOAT3 normal;
+    XMFLOAT3 position;
+    XMFLOAT2 tc;
 }
-UPVERTNORM;
+Vertex;
 
-
-typedef struct MODEL
+typedef struct TRIANGLE
 {
-    int index[3];
-    UPVERTNORM vects[3];
+    Vertex Vertices[3];
 }
-MODEL;
+TRIANGLE;
 
 typedef struct WORKDATA
 {
@@ -63,31 +62,19 @@ typedef struct WORKDATA
 }
 WORKDATA;
 
-
 typedef struct RETURNDATA
 {
-    bool coll;
-    int index1[3];
-    int index2[3];
-    XMFLOAT3 dir[2];
     float dist[2];
+    int index[2];
 }
 RETURNDATA;
 
 
 typedef struct CLOSEFORM
 {
-    bool coll;
-    XMFLOAT3 norm[2];
     float dist[2];
 }
 CLOSEFORM;
-
-typedef struct INTINDEX
-{
-    int Index[3];
-}INTINDEX;
-
 XMFLOAT3 MulXMFLOAT3(XMFLOAT3 a, float b)
 {
     XMFLOAT3 result = { 0, 0, 0 };
@@ -496,11 +483,11 @@ CINTERVAL ComputeInterval(float VV0, float VV1, float VV2, float Dist0, float Di
 CLOSEFORM CloseCheck(float TDistance[3], XMFLOAT3 WAPoint, XMFLOAT3 WBPoint, XMFLOAT3 WCPoint, XMFLOAT3 TAPoint, XMFLOAT3 TBPoint, XMFLOAT3 TCPoint, XMFLOAT3 Bone1, XMFLOAT3 TPos, XMFLOAT3 Bone2, float bdist, XMFLOAT3 bdir, XMFLOAT3 WNorm, XMFLOAT3 TNorm)
 {
     CLOSEFORM Result;
-    Result.coll = true;
+    Result.dist[0] = 0;
+    Result.dist[1] = 0;
+
 
     float WDistance[3];
-    Result.norm[0] = WNorm;
-    Result.norm[1] = TNorm;
 
     float TScalar = XMVector3Dot(TNorm, TAPoint);
     WDistance[0] = XMVector3Dot(TNorm, AddXMFLOAT3(WAPoint, MulXMFLOAT3(bdir, -bdist))) - TScalar;
@@ -527,47 +514,38 @@ CLOSEFORM CloseCheck(float TDistance[3], XMFLOAT3 WAPoint, XMFLOAT3 WBPoint, XMF
         if (CoplanCheck(Bonedir, WNewPointA, WNewPointB, WNewPointC, TNewPointA, TNewPointB, TNewPointC))
         {
             Result.dist[0] = 0.1;
+            Result.dist[1] = 0.1;
 
         }
-        else
-        {
-            Result.coll = false;
-        }
+
     }
-    else
-    {
-        Result.coll = false;
-    }
+
 
 
     return Result;
 }
 
 
-CLOSEFORM TooClose(MODEL Tri1, MODEL Tri2, XMFLOAT3 TPos)
+CLOSEFORM TooClose(TRIANGLE Tri1, TRIANGLE Tri2, XMFLOAT3 TPos)
 {
     CLOSEFORM Result;
     Result.dist[0] = 0;
     Result.dist[1] = 0;
-    Result.coll = false;
 
-
-    XMFLOAT3 WAPoint = Tri1.vects[0].Vert;
-    XMFLOAT3 WBPoint = Tri1.vects[1].Vert;
-    XMFLOAT3 WCPoint = Tri1.vects[2].Vert;
-    XMFLOAT3 TAPoint = AddXMFLOAT3(Tri2.vects[0].Vert, TPos);
-    XMFLOAT3 TBPoint = AddXMFLOAT3(Tri2.vects[1].Vert, TPos);
-    XMFLOAT3 TCPoint = AddXMFLOAT3(Tri2.vects[2].Vert, TPos);
+    XMFLOAT3 WAPoint = Tri1.Vertices[0].position;
+    XMFLOAT3 WBPoint = Tri1.Vertices[1].position;
+    XMFLOAT3 WCPoint = Tri1.Vertices[2].position;
+    XMFLOAT3 TAPoint = AddXMFLOAT3(Tri2.Vertices[0].position, TPos);
+    XMFLOAT3 TBPoint = AddXMFLOAT3(Tri2.Vertices[1].position, TPos);
+    XMFLOAT3 TCPoint = AddXMFLOAT3(Tri2.Vertices[2].position, TPos);
 
 
 
     float TDistance[3];
     float WDistance[3];
 
-    XMFLOAT3 WNorm = Tri1.vects[0].Norm;
-    XMFLOAT3 TNorm = Tri2.vects[0].Norm;
-    Result.norm[0] = WNorm;
-    Result.norm[1] = TNorm;
+    XMFLOAT3 WNorm = Tri1.Vertices[0].normal;
+    XMFLOAT3 TNorm = Tri2.Vertices[0].normal;
 
     //Check all sides then set collision apropriately. Check if inside other object
     TDistance[0] = XMVector3Dot(WNorm, SubXMFLOAT3(TAPoint, WAPoint));
@@ -585,7 +563,6 @@ CLOSEFORM TooClose(MODEL Tri1, MODEL Tri2, XMFLOAT3 TPos)
 
         if (Sign(WDistance[0]) == Sign(WDistance[1]) && Sign(WDistance[0]) == Sign(WDistance[2]))
         {
-            Result.coll = false;
             return Result;
         }
 
@@ -624,8 +601,7 @@ CLOSEFORM TooClose(MODEL Tri1, MODEL Tri2, XMFLOAT3 TPos)
 
         if (cval0.CoPlan)
         {
-            Result.coll = CoplanCheck(WNorm, WAPoint, WBPoint, WCPoint, TAPoint, TBPoint, TCPoint);
-            if (Result.coll)
+            if (CoplanCheck(WNorm, WAPoint, WBPoint, WCPoint, TAPoint, TBPoint, TCPoint))
             {
                 Result.dist[0] = 0.1;
                 Result.dist[1] = 0.1;
@@ -675,17 +651,14 @@ CLOSEFORM TooClose(MODEL Tri1, MODEL Tri2, XMFLOAT3 TPos)
             }
 
             if (test0[1] < test1[0] || test1[1] < test0[0]) {
-                Result.coll = false;
                 return Result;
             }
-
-            Result.coll = true;
             Result.dist[0] = 0.1;
             Result.dist[1] = 0.1;
 
         }
     }
-    else if(TDistance[0] < 0 && TDistance[1] < 0 && TDistance[2] < 0)
+    //else if(TDistance[0] < 0 && TDistance[1] < 0 && TDistance[2] < 0)
     {
 
         //Result = CloseCheck(TDistance, WAPoint, WBPoint, WCPoint, TAPoint, TBPoint, TCPoint, Bone1, TPos, Bone2, bdist, bdir, WNorm, TNorm);
@@ -695,35 +668,22 @@ CLOSEFORM TooClose(MODEL Tri1, MODEL Tri2, XMFLOAT3 TPos)
 }
 
 
-void kernel coll(global const UPVERTNORM* WModel, global const UPVERTNORM* TModel, global const INTINDEX* WbIndexBuff, global const INTINDEX* TbIndexBuff, global const XMFLOAT3* TPos, global const int* WorkingIndices, global RETURNDATA* retdat){
+void kernel coll(global const TRIANGLE* WModel, global const TRIANGLE* TModel, global const XMFLOAT3* TPos, global const int* WorkingIndices, global RETURNDATA* retdat){
 int Wind = get_global_id(0);
 int Tind = get_global_id(1);
 int rd = Wind;
 
-if (!retdat[rd].coll)
-{
-    MODEL Work = { { 0, 0, 0 }, { WModel[WbIndexBuff[WorkingIndices[Wind]].Index[0]], WModel[WbIndexBuff[WorkingIndices[Wind]].Index[1]], WModel[WbIndexBuff[WorkingIndices[Wind]].Index[2]] } };
-
-    MODEL TWork = { { 0, 0, 0 }, { TModel[TbIndexBuff[WorkingIndices[Tind]].Index[0]], TModel[TbIndexBuff[WorkingIndices[Tind]].Index[1]], TModel[TbIndexBuff[WorkingIndices[Tind]].Index[2]] } };
-
-    CLOSEFORM Result = TooClose(Work, TWork, TPos[0]);
-
-    if (Result.coll)
+    if (!(retdat[rd].dist[0] > 0 || retdat[rd].dist[1] > 0))
     {
-        retdat[rd].index1[0] = WbIndexBuff[WorkingIndices[Wind]].Index[0];
-        retdat[rd].index1[1] = WbIndexBuff[WorkingIndices[Wind]].Index[1];
-        retdat[rd].index1[2] = WbIndexBuff[WorkingIndices[Wind]].Index[2];
-        retdat[rd].index2[0] = TbIndexBuff[WorkingIndices[Tind]].Index[0];
-        retdat[rd].index2[1] = TbIndexBuff[WorkingIndices[Tind]].Index[1];
-        retdat[rd].index2[2] = TbIndexBuff[WorkingIndices[Tind]].Index[2];
+        CLOSEFORM Result = TooClose(WModel[WorkingIndices[Wind]], TModel[WorkingIndices[Tind]], TPos[0]);
 
-        retdat[rd].coll = Result.coll;
-        retdat[rd].dist[0] = Result.dist[0];
-        retdat[rd].dist[1] = Result.dist[1];
-        retdat[rd].dir[0] = Result.norm[0];
-        retdat[rd].dir[1] = Result.norm[1];
+        if (Result.dist[0] > 0 || Result.dist[1] > 0)
+        {
+            retdat[rd].index[0] = WorkingIndices[Wind];
+            retdat[rd].index[1] = WorkingIndices[Tind];
+            retdat[rd].dist[0] = Result.dist[0];
+            retdat[rd].dist[1] = Result.dist[1];
 
+        }
     }
-}
-
 }

@@ -2,9 +2,9 @@
 
 
 
-FrameResource::FrameResource(fResources Resource) :
+FrameResource::FrameResource(fResources Resource, std::vector<RStorage::eResource>& models) :
     fenceValue(0),
-    models(*Resource.models),
+    trackedObjects(models),
     pPipelineState(Resource.pPipelineState),
     pRootSignature(Resource.pRootSignature),
     viewport(0.0f, 0.0f, static_cast<float>(Resource.sResolution[0]), static_cast<float>(Resource.sResolution[1])),
@@ -34,8 +34,8 @@ FrameResource::FrameResource(fResources Resource) :
     // resource needs a command allocator because command allocators 
     // cannot be reused until the GPU is done executing the commands 
     // associated with it.
-    openbuffers.resize(std::size(models));
-    cbvbuff.resize(std::size(models));
+    openbuffers.resize(std::size(trackedObjects));
+    cbvbuff.resize(std::size(trackedObjects));
 
     pDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&commandAllocator))>>chk;
     //pDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_BUNDLE, IID_PPV_ARGS(&bundleAllocator))>>chk;
@@ -58,16 +58,16 @@ FrameResource::FrameResource(fResources Resource) :
     
 
     CD3DX12_RANGE readRange(0, 0);
-    for (auto i = 0; i < std::size(models); i++) {
+    for (auto i = 0; i < std::size(trackedObjects); i++) {
             vertexBufferView.emplace_back(D3D12_VERTEX_BUFFER_VIEW{
-                .BufferLocation = models[i].model->vbuffer->GetGPUVirtualAddress(),
-                .SizeInBytes = (UINT)std::size(models[i].model->uData->idata) * (UINT)sizeof(ReadX3D::Vertex),
+                .BufferLocation = trackedObjects[i].model->vbuffer->GetGPUVirtualAddress(),
+                .SizeInBytes = (UINT)std::size(trackedObjects[i].model->uData->sIndex) * (UINT)sizeof(ReadX3D::Vertex),
                 .StrideInBytes = (UINT)sizeof(ReadX3D::Vertex)
                 });
             indexBufferView.emplace_back(D3D12_INDEX_BUFFER_VIEW{
-                .BufferLocation = models[i].model->ibuffer->GetGPUVirtualAddress(),
-                .SizeInBytes = (UINT)std::size(models[i].model->uData->idata) * (UINT)sizeof(WORD),
-                .Format = DXGI_FORMAT_R16_UINT
+                .BufferLocation = trackedObjects[i].model->ibuffer->GetGPUVirtualAddress(),
+                .SizeInBytes = (UINT)std::size(trackedObjects[i].model->uData->sIndex) * (UINT)sizeof(uint32_t),
+                .Format = DXGI_FORMAT_R32_UINT
                 });
 
             {
@@ -147,7 +147,7 @@ void FrameResource::PopulateCommandList(UINT frameID)
         //pCommandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
         pCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-        UINT frameResourceDescriptorOffset = (uFrID * (UINT)std::size(models) * 2);
+        UINT frameResourceDescriptorOffset = (uFrID * (UINT)std::size(trackedObjects) * 2);
         CD3DX12_GPU_DESCRIPTOR_HANDLE cbvSrvHandle(pCbvSrvDescriptorHeap->GetGPUDescriptorHandleForHeapStart(), frameResourceDescriptorOffset, pCbvSrvDescriptorHeapSize);
 
         pCommandList->SetGraphicsRootDescriptorTable(2, pSamplerDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
@@ -155,7 +155,7 @@ void FrameResource::PopulateCommandList(UINT frameID)
 
         PIXBeginEvent(pCommandList.Get(), 0, "Draw everything");
 
-        for (auto i = 0; i < std::size(models); i++) {
+        for (auto i = 0; i < std::size(trackedObjects); i++) {
 
             pCommandList->IASetIndexBuffer(&indexBufferView[i]);
             pCommandList->IASetVertexBuffers(0, 1, &vertexBufferView[i]);
@@ -164,7 +164,7 @@ void FrameResource::PopulateCommandList(UINT frameID)
             cbvSrvHandle.Offset(pCbvSrvDescriptorHeapSize);
             pCommandList->SetGraphicsRootDescriptorTable(1, cbvSrvHandle);
             cbvSrvHandle.Offset(pCbvSrvDescriptorHeapSize);
-            pCommandList->DrawIndexedInstanced(models[i].model->uData->idata.size(), 1, 0, 0, 0);
+            pCommandList->DrawIndexedInstanced(trackedObjects[i].model->uData->sIndex.size(), 1, 0, 0, 0);
         }
         PIXEndEvent(pCommandList.Get());
 
@@ -182,15 +182,14 @@ void FrameResource::PopulateCommandList(UINT frameID)
     pCommandList->Close()>>chk;
 }
 
-void FrameResource::UpdateConstantBuffers(DirectX::FXMMATRIX view, DirectX::CXMMATRIX projection, std::vector<RStorage::eResource>& Modls)
+void FrameResource::UpdateConstantBuffers(DirectX::FXMMATRIX view, DirectX::CXMMATRIX projection)
 {
-    DirectX::XMFLOAT4X4 mvp;
-    for (auto i = 0; i < std::size(Modls); i++)
+    using namespace DirectX;
+    for (auto i = 0; i < std::size(trackedObjects); i++)
     {
-        // Compute the model-view-projection matrix.
-        //XMStoreFloat4x4(&mvp,  XMMatrixTranspose(m->cmatrix * view * projection));
-        XMStoreFloat4x4(&mvp, XMMatrixTranspose(Modls[i].cmatrix * view * projection));
+
+        XMStoreFloat4x4(cbvbuff[i], XMMatrixTranspose(XMLoadFloat4x4(&trackedObjects[i].cmatrix) * view * projection));
         // Copy this matrix into the appropriate location in the upload heap subresource.
-        memcpy(cbvbuff[i], &mvp, sizeof(mvp));
+        //memcpy(cbvbuff[i], &mvp, sizeof(mvp));
     }
 }

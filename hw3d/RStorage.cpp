@@ -4,7 +4,9 @@
 
 
 
-RStorage::RStorage(){
+RStorage::RStorage():
+trackedObjects(std::make_unique<std::vector<RStorage::eResource>>())
+{
 	std::vector<std::filesystem::path> folders = {};
 	for (auto& file : std::filesystem::directory_iterator{ std::filesystem::current_path() / "models" }) {
 		if (file.path().extension() == ".dae") {
@@ -25,7 +27,7 @@ RStorage::RStorage(){
 				}
 
 			}
-			t->umID = std::stoull((std::string)UniqueID.data());
+			t->umID = std::stoul(std::string(UniqueID.data(), UniqueID.size()));
 			Models.emplace_back(t);
 		}
 	}
@@ -47,7 +49,7 @@ void RStorage::CreateBuffers(std::vector<eResource>& m, Microsoft::WRL::ComPtr<I
 	for (auto& bm : m) {
 		{
 			const CD3DX12_HEAP_PROPERTIES heapProps{ D3D12_HEAP_TYPE_DEFAULT };
-			const auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(std::size(bm.model->uData->idata) * sizeof(ReadX3D::Vertex));
+			const auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(bm.model->uData->sIndex.size() * sizeof(ReadX3D::Vertex));
 			pDevice->CreateCommittedResource(
 				&heapProps,
 				D3D12_HEAP_FLAG_NONE,
@@ -59,7 +61,7 @@ void RStorage::CreateBuffers(std::vector<eResource>& m, Microsoft::WRL::ComPtr<I
 
 		{
 			const CD3DX12_HEAP_PROPERTIES heapProps{ D3D12_HEAP_TYPE_UPLOAD };
-			const auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(std::size(bm.model->uData->idata) * sizeof(ReadX3D::Vertex));
+			const auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(bm.model->uData->sIndex.size() * sizeof(ReadX3D::Vertex));
 			pDevice->CreateCommittedResource(
 				&heapProps,
 				D3D12_HEAP_FLAG_NONE,
@@ -71,7 +73,7 @@ void RStorage::CreateBuffers(std::vector<eResource>& m, Microsoft::WRL::ComPtr<I
 
 		{
 			const CD3DX12_HEAP_PROPERTIES heapProps{ D3D12_HEAP_TYPE_DEFAULT };
-			const auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(std::size(bm.model->uData->idata) * sizeof(WORD));
+			const auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(bm.model->uData->sIndex.size() * sizeof(uint32_t));
 			pDevice->CreateCommittedResource(
 				&heapProps,
 				D3D12_HEAP_FLAG_NONE,
@@ -83,7 +85,7 @@ void RStorage::CreateBuffers(std::vector<eResource>& m, Microsoft::WRL::ComPtr<I
 
 		{
 			const CD3DX12_HEAP_PROPERTIES heapProps{ D3D12_HEAP_TYPE_UPLOAD };
-			const auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(std::size(bm.model->uData->idata) * sizeof(WORD));
+			const auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(bm.model->uData->sIndex.size() * sizeof(uint32_t));
 			pDevice->CreateCommittedResource(
 				&heapProps,
 				D3D12_HEAP_FLAG_NONE,
@@ -100,22 +102,20 @@ void RStorage::CreateBuffers(std::vector<eResource>& m, Microsoft::WRL::ComPtr<I
 				bm.model->uibuffer->Map(0, nullptr, reinterpret_cast<void**>(&mappedIndexData)) >> chk;
 
 
-				//auto &temporaryVertex = bm.model->uData->MappedVertices;
-				auto &temporaryIndex = bm.model->uData->idata;
-				auto& map = bm.model->uData->MappedVertices;
-				//For some reason models only render correctly if the indices are inverted?
-				for (int i = 0; i < std::size(temporaryIndex); i++) {
-					WORD index = std::size(temporaryIndex) - 1 - i;
-					memcpy(&mappedVertexData[i], &map[temporaryIndex[i].index][i%3], sizeof(ReadX3D::Vertex));
-					memcpy(&mappedIndexData[i], &index, sizeof(WORD));
-				}
+				memcpy(mappedVertexData, bm.model->uData->MappedVertices.data(), sizeof(ReadX3D::Vertex) * bm.model->uData->sIndex.size());
+				memcpy(mappedIndexData, bm.model->uData->sIndex.data(), sizeof(uint32_t) * bm.model->uData->sIndex.size());
+
 			}
 			bm.model->uvbuffer->Unmap(0, nullptr);
 			bm.model->uibuffer->Unmap(0, nullptr);
 			
+			if (bm.curTexture.string() != "") {
+				CreateDDSTextureFromFile(pDevice.Get(), upload, bm.curTexture.wstring().c_str(), bm.tbuffer.GetAddressOf()) >> chk;
+			}
+			else {
+				CreateDDSTextureFromMemory(pDevice.Get(), upload, missing_dds, missing_dds_size, bm.tbuffer.GetAddressOf()) >> chk;
+			}
 
-			//BC7 Textures dont work in release mode ??? wrld texture doesnt work in release mode ??????
-			CreateDDSTextureFromFile(pDevice.Get(), upload, bm.curTexture.wstring().c_str(), bm.tbuffer.GetAddressOf())>>chk;
 			UpdBuffer(bm, commandList, pDevice, commandAllocator, commandQueue);
 		}
 		
@@ -177,16 +177,14 @@ void RStorage::UpdBuffer(eResource& bm, Microsoft::WRL::ComPtr<ID3D12GraphicsCom
 RStorage::eResource* RStorage::initObject(std::string textureName, int filebModelIndex, float mScale, float mMass, float mFriction, DirectX::XMFLOAT3 initPos, DirectX::XMFLOAT3 initRot, DirectX::XMFLOAT3 initVelDir, float initSpeed) {
 
 
-	auto& result = trackedObjects.emplace_back(RStorage::eResource(textureName,
+	auto result = &trackedObjects->emplace_back(RStorage::eResource(textureName,
 			//Move this elsewhere.
 			RStorage::lModel(filebModelIndex),
 			mScale, mMass, mFriction, initPos, initRot, initVelDir, initSpeed));
-
 	auto curtex = std::find_if(Textures.begin(), Textures.end(), [textureName](auto e) {
 		return e.filename().string().substr(0, e.filename().string().find(e.extension().string())) == textureName; });
-	result.curTexture = curtex != Textures.end() ? *curtex : L"reee";
-
-	return &result;
+	result->curTexture = curtex != Textures.end() ? *curtex : L"";
+	return result;
 }
 
 ReadX3D* RStorage::CheckLoaded(int umID) {
@@ -210,26 +208,6 @@ RStorage::unmappedData* RStorage::findUm(UINT umID)
 }
 
 
-RStorage::eResource::eResource(std::string name, RStorage::bmResource* model, float mScale, float mMass, float mFriction, DirectX::XMFLOAT3 initPos, DirectX::XMFLOAT3 initRot, DirectX::XMFLOAT3 initVelDir, float initSpeed)
-	:
-	name(name),
-	model(model),
-	scale(mScale),
-	mass(mMass),
-	friction(mFriction),
-	velDir(),
-	speed(),
-	currentMtx(*new std::mutex),
-	PhysicsUpdate(*new std::mutex),
-	Filled(*new std::atomic<bool>),
-	updated(*new std::atomic<bool>),
-	Collision(*new std::atomic<bool>),
-	mPos(*new relposVect(initPos))
-{
-
-}
-
-
 RStorage::~RStorage()
 {
 	for (auto& m : Models) {
@@ -237,13 +215,12 @@ RStorage::~RStorage()
 			delete m->lModel;
 		delete m;
 	}
-	trackedObjects.clear();
+	trackedObjects->clear();
 }
 
 void RStorage::eResource::CollisionUp(DirectX::XMFLOAT4 Dir, float Dist)
 {
 	std::thread([this, Dir, Dist]() {
-		this->Filled.store(true);
 		RStorage::eResource::PhysicsUpdate.lock();
 		using namespace DirectX;
 		XMFLOAT4 TempDir{ 0,0,0,0 };
@@ -259,13 +236,12 @@ void RStorage::eResource::CollReset()
 		RStorage::eResource::PhysicsUpdate.lock();
 		RStorage::eResource::pDir.clear();
 		RStorage::eResource::PhysicsUpdate.unlock();
-		this->Filled.store(false);
 	}).detach();
 }
 
 bool RStorage::eResource::CollCheck()
 {
-	return this->Filled.load();
+	return false;
 }
 
 DirectX::XMFLOAT4 RStorage::eResource::CollDir(pChange Which, int Index)
@@ -292,16 +268,3 @@ DirectX::XMFLOAT4 RStorage::eResource::CollDir(pChange Which, int Index)
 	}
 	return Result;
 }
-
-RStorage::relposVect::relposVect(DirectX::XMFLOAT3 initPos):
-	position(new DirectX::XMFLOAT3(initPos)),
-	posMtx(*new std::mutex)
-{
-
-}
-
-RStorage::relposVect::~relposVect()
-{
-	delete position;
-}
-

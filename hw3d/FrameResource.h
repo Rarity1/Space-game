@@ -44,7 +44,6 @@ public:
         Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> dsvDescriptorHeap;
         std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>>* renderTargets;
         Microsoft::WRL::ComPtr<ID3D12RootSignature> pRootSignature;
-        std::vector<RStorage::eResource>* models;
     };
     fResources localfResource;
     std::vector<D3D12_VERTEX_BUFFER_VIEW> vertexBufferView;
@@ -56,8 +55,8 @@ public:
     std::vector<DirectX::XMFLOAT4X4*> cbvbuff;
     UINT64 fenceValue;
     std::vector<DirectX::XMFLOAT4X4> modelMatrices;
-    std::vector<RStorage::eResource>& models;
-    FrameResource(fResources Resource);
+    std::vector<RStorage::eResource>& trackedObjects;
+    FrameResource(fResources Resource, std::vector<RStorage::eResource>& models);
     ~FrameResource();
 
     void InitBundle(Microsoft::WRL::ComPtr<ID3D12Device>  pDevice, Microsoft::WRL::ComPtr < ID3D12PipelineState> pPso1,
@@ -66,5 +65,5 @@ public:
 
     void PopulateCommandList(UINT frameID);
 
-    void UpdateConstantBuffers(DirectX::FXMMATRIX view, DirectX::CXMMATRIX projection, std::vector<RStorage::eResource>& Modls);
+    void UpdateConstantBuffers(DirectX::FXMMATRIX view, DirectX::CXMMATRIX projection);
 };

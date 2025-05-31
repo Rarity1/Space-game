@@ -83,6 +83,7 @@
 #include <iostream>
 #include <cmath>
 #include <numbers>
+#include <numeric>
 #include <ranges>
 #include <memory>
 #include <map>
