@@ -1,0 +1,9 @@
+#pragma once
+#include "CWin.h"
+#include <DSMouse.h>
+#include <DSKeyboard.h>
+#include <EngineTime.h>
+#include <Graphics.h>
+#include <GraphicsErrors.h>
+#include <Engine.h>
+#include <Exceptions.h>
