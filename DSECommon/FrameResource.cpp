@@ -19,7 +19,7 @@ FrameResource::FrameResource(fResources Resource, std::vector<RStorage::eResourc
     rtvDescriptorHeap = Resource.rtvDescriptorHeap;
     dsvDescriptorHeap = Resource.dsvDescriptorHeap;
     pRootSignature = Resource.pRootSignature;
-    pCommandList = Resource.pCommandList;
+    //pCommandList = Resource.pCommandList;
     uFrID = Resource.uFrID;
 
     rtvDescriptorSize = pDevice->GetDescriptorHandleIncrementSize(
@@ -42,14 +42,14 @@ FrameResource::FrameResource(fResources Resource, std::vector<RStorage::eResourc
 
 
     //Command List
-    /*
-        pDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT,
+    pDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT,
         commandAllocator.Get(), nullptr, IID_PPV_ARGS(&pCommandList)) >> chk;
     NAME_D3D12_OBJECT(pCommandList);
     pCommandList->Close();
 
+
     
-    */
+
 
 
 
@@ -113,8 +113,8 @@ void FrameResource::PopulateCommandList(UINT frameID)
 {
 
     using namespace DirectX;
-    commandAllocator->Reset() >> chk;
-    pCommandList->Reset(commandAllocator.Get(), pPipelineState.Get()) >> chk;
+    //commandAllocator->Reset() >> chk;
+    //pCommandList->Reset(commandAllocator.Get(), pPipelineState.Get()) >> chk;
 
     pCommandList->SetGraphicsRootSignature(pRootSignature.Get());
 
@@ -179,7 +179,9 @@ void FrameResource::PopulateCommandList(UINT frameID)
         );
         pCommandList->ResourceBarrier(1, &barrier);
     }
-    pCommandList->Close()>>chk;
+    //commandAllocator->Reset() >> chk;
+    //pCommandList->Reset(commandAllocator.Get(), pPipelineState.Get()) >> chk;
+    //pCommandList->Close()>>chk;
 }
 
 void FrameResource::UpdateConstantBuffers(DirectX::FXMMATRIX view, DirectX::CXMMATRIX projection)

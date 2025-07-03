@@ -229,6 +229,8 @@ LRESULT Window::HandleMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	}
 	
 	}
+
+	ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam);
 	return DefWindowProc(hWnd, msg, wParam, lParam);
 }
 

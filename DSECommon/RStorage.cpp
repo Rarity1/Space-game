@@ -58,7 +58,7 @@ void RStorage::CreateBuffers(std::vector<eResource>& m, Microsoft::WRL::ComPtr<I
 				&heapProps,
 				D3D12_HEAP_FLAG_NONE,
 				&resourceDesc,
-				D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,
+				D3D12_RESOURCE_STATE_COMMON,
 				nullptr,
 				IID_PPV_ARGS(&bm.model->vbuffer));
 		}
@@ -82,7 +82,7 @@ void RStorage::CreateBuffers(std::vector<eResource>& m, Microsoft::WRL::ComPtr<I
 				&heapProps,
 				D3D12_HEAP_FLAG_NONE,
 				&resourceDesc,
-				D3D12_RESOURCE_STATE_INDEX_BUFFER,
+				D3D12_RESOURCE_STATE_COMMON,
 				nullptr,
 				IID_PPV_ARGS(&bm.model->ibuffer));
 		}

@@ -73,115 +73,115 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="util\CL\cl.h">
-      <Filter>Source Files\Util</Filter>
+      <Filter>Header Files\Util</Filter>
     </ClInclude>
     <ClInclude Include="util\CL\cl_d3d10.h">
-      <Filter>Source Files\Util</Filter>
+      <Filter>Header Files\Util</Filter>
     </ClInclude>
     <ClInclude Include="util\CL\cl_d3d11.h">
-      <Filter>Source Files\Util</Filter>
+      <Filter>Header Files\Util</Filter>
     </ClInclude>
     <ClInclude Include="util\CL\cl_dx9_media_sharing.h">
-      <Filter>Source Files\Util</Filter>
+      <Filter>Header Files\Util</Filter>
     </ClInclude>
     <ClInclude Include="util\CL\cl_dx9_media_sharing_intel.h">
-      <Filter>Source Files\Util</Filter>
+      <Filter>Header Files\Util</Filter>
     </ClInclude>
     <ClInclude Include="util\CL\cl_egl.h">
-      <Filter>Source Files\Util</Filter>
+      <Filter>Header Files\Util</Filter>
     </ClInclude>
     <ClInclude Include="util\CL\cl_ext.h">
-      <Filter>Source Files\Util</Filter>
+      <Filter>Header Files\Util</Filter>
     </ClInclude>
     <ClInclude Include="util\CL\cl_ext_intel.h">
-      <Filter>Source Files\Util</Filter>
+      <Filter>Header Files\Util</Filter>
     </ClInclude>
     <ClInclude Include="util\CL\cl_function_types.h">
-      <Filter>Source Files\Util</Filter>
+      <Filter>Header Files\Util</Filter>
     </ClInclude>
     <ClInclude Include="util\CL\cl_gl.h">
-      <Filter>Source Files\Util</Filter>
+      <Filter>Header Files\Util</Filter>
     </ClInclude>
     <ClInclude Include="util\CL\cl_gl_ext.h">
-      <Filter>Source Files\Util</Filter>
+      <Filter>Header Files\Util</Filter>
     </ClInclude>
     <ClInclude Include="util\CL\cl_half.h">
-      <Filter>Source Files\Util</Filter>
+      <Filter>Header Files\Util</Filter>
     </ClInclude>
     <ClInclude Include="util\CL\cl_icd.h">
-      <Filter>Source Files\Util</Filter>
+      <Filter>Header Files\Util</Filter>
     </ClInclude>
     <ClInclude Include="util\CL\cl_layer.h">
-      <Filter>Source Files\Util</Filter>
+      <Filter>Header Files\Util</Filter>
     </ClInclude>
     <ClInclude Include="util\CL\cl_platform.h">
-      <Filter>Source Files\Util</Filter>
+      <Filter>Header Files\Util</Filter>
     </ClInclude>
     <ClInclude Include="util\CL\cl_va_api_media_sharing_intel.h">
-      <Filter>Source Files\Util</Filter>
+      <Filter>Header Files\Util</Filter>
     </ClInclude>
     <ClInclude Include="util\CL\cl_version.h">
-      <Filter>Source Files\Util</Filter>
+      <Filter>Header Files\Util</Filter>
     </ClInclude>
     <ClInclude Include="util\CL\cl2.hpp">
-      <Filter>Source Files\Util</Filter>
-    </ClInclude>
-    <ClInclude Include="util\CL\opencl.h">
-      <Filter>Source Files\Util</Filter>
-    </ClInclude>
-    <ClInclude Include="util\CL\opencl.hpp">
-      <Filter>Source Files\Util</Filter>
+      <Filter>Header Files\Util</Filter>
     </ClInclude>
     <ClInclude Include="util\CL\Utils\Context.h">
-      <Filter>Source Files\Util</Filter>
+      <Filter>Header Files\Util</Filter>
     </ClInclude>
     <ClInclude Include="util\CL\Utils\Context.hpp">
-      <Filter>Source Files\Util</Filter>
+      <Filter>Header Files\Util</Filter>
     </ClInclude>
     <ClInclude Include="util\CL\Utils\Detail.hpp">
-      <Filter>Source Files\Util</Filter>
+      <Filter>Header Files\Util</Filter>
     </ClInclude>
     <ClInclude Include="util\CL\Utils\Device.hpp">
-      <Filter>Source Files\Util</Filter>
+      <Filter>Header Files\Util</Filter>
     </ClInclude>
     <ClInclude Include="util\CL\Utils\Error.h">
-      <Filter>Source Files\Util</Filter>
+      <Filter>Header Files\Util</Filter>
     </ClInclude>
     <ClInclude Include="util\CL\Utils\Error.hpp">
-      <Filter>Source Files\Util</Filter>
+      <Filter>Header Files\Util</Filter>
     </ClInclude>
     <ClInclude Include="util\CL\Utils\ErrorCodes.h">
-      <Filter>Source Files\Util</Filter>
+      <Filter>Header Files\Util</Filter>
     </ClInclude>
     <ClInclude Include="util\CL\Utils\Event.h">
-      <Filter>Source Files\Util</Filter>
+      <Filter>Header Files\Util</Filter>
     </ClInclude>
     <ClInclude Include="util\CL\Utils\Event.hpp">
-      <Filter>Source Files\Util</Filter>
+      <Filter>Header Files\Util</Filter>
     </ClInclude>
     <ClInclude Include="util\CL\Utils\File.h">
-      <Filter>Source Files\Util</Filter>
+      <Filter>Header Files\Util</Filter>
     </ClInclude>
     <ClInclude Include="util\CL\Utils\File.hpp">
-      <Filter>Source Files\Util</Filter>
+      <Filter>Header Files\Util</Filter>
     </ClInclude>
     <ClInclude Include="util\CL\Utils\InteropContext.hpp">
-      <Filter>Source Files\Util</Filter>
+      <Filter>Header Files\Util</Filter>
+    </ClInclude>
+    <ClInclude Include="util\CL\opencl.h">
+      <Filter>Header Files\Util</Filter>
+    </ClInclude>
+    <ClInclude Include="util\CL\opencl.hpp">
+      <Filter>Header Files\Util</Filter>
     </ClInclude>
     <ClInclude Include="util\CL\Utils\OpenCLUtils_Export.h">
-      <Filter>Source Files\Util</Filter>
+      <Filter>Header Files\Util</Filter>
     </ClInclude>
     <ClInclude Include="util\CL\Utils\OpenCLUtilsCpp_Export.h">
-      <Filter>Source Files\Util</Filter>
+      <Filter>Header Files\Util</Filter>
     </ClInclude>
     <ClInclude Include="util\CL\Utils\Platform.hpp">
-      <Filter>Source Files\Util</Filter>
+      <Filter>Header Files\Util</Filter>
     </ClInclude>
     <ClInclude Include="util\CL\Utils\Utils.h">
-      <Filter>Source Files\Util</Filter>
+      <Filter>Header Files\Util</Filter>
     </ClInclude>
     <ClInclude Include="util\CL\Utils\Utils.hpp">
-      <Filter>Source Files\Util</Filter>
+      <Filter>Header Files\Util</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

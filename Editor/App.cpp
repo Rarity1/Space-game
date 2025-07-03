@@ -2,12 +2,11 @@
 
 App::App()
 	:
-	wnd(1000, 750, "Game Window")
+	wnd(1280, 720, "Game Window")
 {
 };
 
 int App::Go() {
-	wnd.Eng().iLoad();
 	while (Alive.load()) {
 		//Process messages each frame
 		if (wnd.ProcessMessages() == WM_QUIT) {
@@ -20,6 +19,10 @@ int App::Go() {
 }
 
 void App::DoFrame() {
+	if (launch) {
+		wnd.Eng().iLoad();
+		launch = false;
+	}
 	auto delta = wnd.Eng().Clock.Mark();
 	wnd.Eng().Update(delta);
 	updaterate += delta;

@@ -1,7 +1,6 @@
 #pragma once
 #include "Window.h"
-#include "EngineTime.h"
-#include "Engine.h"
+#include "Editor.h"
 
 class App {
 public:
@@ -14,4 +13,5 @@ private:
 	Window wnd;
 	std::atomic<bool> ignKey;
 	double updaterate = 0;
+	bool launch = true;
 };

@@ -163,7 +163,7 @@ XCOPY "$(SolutionDir)OpenCL\" "$(TargetDir)OpenCL\" /E /Y</Command>
     <ClCompile>
       <WarningLevel>Level4</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;_WINDOWS;%(PreprocessorDefinitions);DESCDLL</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;_WINDOWS;%(PreprocessorDefinitions);DESCDLL;IMGUI_DISABLE_OBSOLETE_FUNCTIONS</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <FavorSizeOrSpeed>Neither</FavorSizeOrSpeed>
@@ -337,6 +337,11 @@ XCOPY "$(SolutionDir)OpenCL\" "$(TargetDir)OpenCL\" /E /Y</Command>
     <ClCompile Include="RStorage.cpp" />
     <ClCompile Include="Threads.cpp" />
     <ClCompile Include="X3DInt.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\ImGui\ImGui.vcxproj">
+      <Project>{ca98bd57-2889-4e73-a37d-7f3d633b383a}</Project>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

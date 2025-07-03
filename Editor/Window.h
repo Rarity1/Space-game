@@ -3,6 +3,8 @@
 
 #include <sstream>
 #include "DLLImports.h"
+#include "../ImGui/imgui.h"
+
 
 
 //Window Class
@@ -39,7 +41,7 @@ private:
 		static constexpr const char* wndClassName = "Engine Window";
 		static WindowClass wndClass;
 		HMODULE hInst;
-		
+
 	};
 public:
 	Window(int width, int height, const char* name);
@@ -50,12 +52,12 @@ public:
 	static std::optional<WPARAM> ProcessMessages();
 	Graphics& Gfx();
 	Engine& Eng();
-	
+
 private:
 	static LRESULT CALLBACK HandleMsgSetup(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 	static LRESULT CALLBACK HandleMsgThunk(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 	LRESULT HandleMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
-	
+
 public:
 	Keyboard kbd;
 	EngineTime clock;
@@ -65,9 +67,11 @@ private:
 	int height;
 	HWND hWnd;
 	std::shared_ptr<Graphics> pGfx;
+	std::shared_ptr<imguid> iGui;
 	std::unique_ptr<Engine> sEng;
 };
 
 
 #define CHWND_EXCEPT( hr ) Window::HrException((hr), __LINE__,__FILE__)
 #define CHWND_LAST_EXCEPT() Window::HrException( GetLastError(),__LINE__,__FILE__)
+

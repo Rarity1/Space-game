@@ -4,21 +4,21 @@
 
 Window::WindowClass Window::WindowClass::wndClass;
 
-Window::WindowClass::WindowClass():
+Window::WindowClass::WindowClass() :
 	hInst(GetModuleHandle(nullptr))
 {
-	WNDCLASSEX wc = { 
-		.cbSize = sizeof (wc),
-		.style= CS_HREDRAW | CS_VREDRAW,
-		.lpfnWndProc= HandleMsgSetup,
-		.cbClsExtra= 0,
-		.cbWndExtra= 0,
-		.hInstance= hInst,
+	WNDCLASSEX wc = {
+		.cbSize = sizeof(wc),
+		.style = CS_HREDRAW | CS_VREDRAW,
+		.lpfnWndProc = HandleMsgSetup,
+		.cbClsExtra = 0,
+		.cbWndExtra = 0,
+		.hInstance = hInst,
 		.hIcon = static_cast<HICON>(LoadImage(
 		hInst, MAKEINTRESOURCE(IDI_ICON1),
 		IMAGE_ICON, 32, 32, 0
 	)),
-		.hCursor= nullptr,
+		.hCursor = nullptr,
 		.hbrBackground = CreateSolidBrush(0),
 		.lpszMenuName = nullptr,
 		.lpszClassName = GetName(),
@@ -27,13 +27,13 @@ Window::WindowClass::WindowClass():
 		IMAGE_ICON, 16, 16, 0
 	))
 	};
-	
+
 	RegisterClassEx(&wc);
 }
 
 Window::WindowClass::~WindowClass()
 {
-	UnregisterClassA( wndClassName, GetInstance() );
+	UnregisterClassA(wndClassName, GetInstance());
 }
 
 const char* Window::WindowClass::GetName() noexcept
@@ -51,14 +51,14 @@ Window::Window(int width, int height, const char* name)
 	width(width),
 	height(height)
 {
-	
+
 	// calculate window size based on desired client region size
 	RECT wr = { 0, 0, (LONG)width, (LONG)height };
-	AdjustWindowRect(&wr, WS_OVERLAPPED | 
-		WS_CAPTION | 
-		WS_SYSMENU | 
-		WS_THICKFRAME | 
-		WS_MINIMIZEBOX | 
+	AdjustWindowRect(&wr, WS_OVERLAPPED |
+		WS_CAPTION |
+		WS_SYSMENU |
+		WS_THICKFRAME |
+		WS_MINIMIZEBOX |
 		WS_MAXIMIZEBOX, FALSE);
 	// create window & get hWnd
 	hWnd = CreateWindow(
@@ -69,15 +69,18 @@ Window::Window(int width, int height, const char* name)
 		WS_THICKFRAME |
 		WS_MINIMIZEBOX |
 		WS_MAXIMIZEBOX,
-		CW_USEDEFAULT, CW_USEDEFAULT,wr.right - wr.left,wr.bottom - wr.top,
+		CW_USEDEFAULT, CW_USEDEFAULT, wr.right - wr.left, wr.bottom - wr.top,
 		nullptr, nullptr, WindowClass::GetInstance(), this
 	);
+
 	// newly created windows start off as hidden
+	ShowWindow(hWnd, SW_SHOWDEFAULT);
+	UpdateWindow(hWnd);
+
+
 	pGfx = std::make_shared<Graphics>(hWnd, height, width);
 	sEng = std::make_unique<Engine>(*pGfx, kbd, clock);
-	ShowWindow(hWnd, SW_SHOWDEFAULT);
-	//Create graphics object
-	
+	iGui = pGfx->iGui;
 }
 
 Window::~Window()
@@ -94,7 +97,7 @@ void Window::SetTitle(const std::string& title)
 }
 
 std::optional<WPARAM> Window::ProcessMessages() {
-	MSG msg = tagMSG{nullptr, WM_NULL};
+	MSG msg = tagMSG{ nullptr, WM_NULL };
 	while (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {
 		//Translate Message will post auxilliary WM_CHAR messages from key msgs
 		if (msg.message == WM_QUIT) {
@@ -125,9 +128,9 @@ LRESULT CALLBACK Window::HandleMsgSetup(HWND hWnd, UINT msg, WPARAM wParam, LPAR
 		const CREATESTRUCT* const pCreate = reinterpret_cast<CREATESTRUCT*>(lParam);
 		Window* const pWnd = static_cast<Window*>(pCreate->lpCreateParams);
 		//Set the WinAPI-managed user data to store ptr to window class
-		SetWindowLongPtr( hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(pWnd) );
+		SetWindowLongPtr(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(pWnd));
 		//Set message proc to normal (non-setup) handler now that setup is finished
-		SetWindowLongPtr( hWnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(&Window::HandleMsgThunk));
+		SetWindowLongPtr(hWnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(&Window::HandleMsgThunk));
 		//Forward message to window class handler
 		return pWnd->HandleMsg(hWnd, msg, wParam, lParam);
 	}
@@ -141,7 +144,7 @@ LRESULT CALLBACK Window::HandleMsgThunk(HWND hWnd, UINT msg, WPARAM wParam, LPAR
 }
 LRESULT Window::HandleMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
-	
+
 	switch (msg) {
 	case WM_DESTROY:
 		PostQuitMessage(0);
@@ -149,8 +152,8 @@ LRESULT Window::HandleMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	case WM_KILLFOCUS:
 		kbd.ClearState();
 		break;
-	
-	
+
+
 		//Keyboard Messages
 	case WM_KEYDOWN:
 	case WM_SYSKEYDOWN:
@@ -227,8 +230,9 @@ LRESULT Window::HandleMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		break;
 		//End Mouse Messaging
 	}
-	
+
 	}
+	iGui->ImGuiProcHndl(hWnd, msg, wParam, lParam);
 	return DefWindowProc(hWnd, msg, wParam, lParam);
 }
 
@@ -257,8 +261,9 @@ std::string Window::Exception::TranslateErrorCode(HRESULT hr) noexcept
 Window::HrException::HrException(HRESULT hr, int line, const char* file) noexcept
 	:
 	Exception(line, file),
-	hr( hr )
-{}
+	hr(hr)
+{
+}
 const char* Window::HrException::what() const noexcept
 {
 	std::ostringstream oss;

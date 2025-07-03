@@ -2,11 +2,12 @@
 #include "Graphics.h"
 
 
-Graphics::Graphics(HWND& hWnd, int height, int width)
+
+Graphics::Graphics(HWND hWnd, int height, int width)
 	:
 	width(width),
 	height(height),
-	hWnd(hWnd),
+	hwnd(hWnd),
 	viewport(0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height)),
 	scissorRect(0, 0, static_cast<LONG>(width), static_cast<LONG>(height)),
 	CurBackBuffer(0),
@@ -55,6 +56,7 @@ void Graphics::LoadPipeline() {
 	pStorage->CreateQueue(&qdesc, IID_PPV_ARGS(&storageQueue)) >> chk;
 	*/
 
+
 	//Swap Chain
 	Microsoft::WRL::ComPtr<IDXGISwapChain1> TswapChain;
 	DXGI_SWAP_CHAIN_DESC1 sd = {};
@@ -67,14 +69,14 @@ void Graphics::LoadPipeline() {
 	sd.SampleDesc.Count = 1;
 	dxgiFactory->CreateSwapChainForHwnd(
 		commandQueue.Get(),
-		hWnd,
+		hwnd,
 		&sd,
 		nullptr,
 		nullptr,
 		&TswapChain
 	) >> chk;
 
-	dxgiFactory->MakeWindowAssociation(hWnd, DXGI_MWA_NO_ALT_ENTER) >> chk;
+	dxgiFactory->MakeWindowAssociation(hwnd, DXGI_MWA_NO_ALT_ENTER) >> chk;
 	TswapChain.As(&swapChain) >> chk;
 	cframeIndex = swapChain->GetCurrentBackBufferIndex();
 
@@ -240,6 +242,41 @@ void Graphics::LoadPipeline() {
 		rtvHandle.Offset(1, rtvDescriptorSize);
 	}
 ;
+
+{
+	D3D12_DESCRIPTOR_HEAP_DESC desc = {};
+	desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+	desc.NumDescriptors = 64;
+	desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+	pDevice->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&imguiSrvDescHeap)) >> chk;
+
+}
+
+	//ImGuiSetup req
+	imHAllocator = std::make_shared<DescriptorHeapAllocator>(pDevice, imguiSrvDescHeap);
+
+	pDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&imGuicommandAllocator)) >> chk;
+	pDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT,
+		imGuicommandAllocator.Get(), nullptr, IID_PPV_ARGS(&imGuicommandList)) >> chk;
+	NAME_D3D12_OBJECT(imGuicommandList);
+	//Close the command list so it can be reset at top of draw loop
+	imGuicommandList->Close() >> chk;
+	
+	ImGuiInfo.Device = pDevice.Get();
+	ImGuiInfo.CommandQueue = commandQueue.Get();
+	ImGuiInfo.NumFramesInFlight = bufferCount;
+	ImGuiInfo.RTVFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
+	ImGuiInfo.SrvDescriptorHeap = imguiSrvDescHeap.Get();
+	std::function<void(D3D12_CPU_DESCRIPTOR_HANDLE*, D3D12_GPU_DESCRIPTOR_HANDLE*)> Alloc
+		= std::bind(&DescriptorHeapAllocator::Alloc, imHAllocator, std::placeholders::_1, std::placeholders::_2);
+	std::function<void(D3D12_CPU_DESCRIPTOR_HANDLE, D3D12_GPU_DESCRIPTOR_HANDLE)> Free
+		= std::bind(&DescriptorHeapAllocator::Free, imHAllocator, std::placeholders::_1, std::placeholders::_2);
+	ImGuiInfo.SrvDescriptorAllocFn = Alloc;
+	ImGuiInfo.SrvDescriptorFreeFn = Free;
+
+
+	iGui = std::make_shared<imguid>(hwnd, &ImGuiInfo);
+
 
 }
 
@@ -424,6 +461,7 @@ Graphics::~Graphics() {
 
 void Graphics::RenderFrame() {
 
+	iGui->imStart();
 
 	const UINT64 lastCompletedFence = fence->GetCompletedValue();
 	CurBackBuffer = (CurBackBuffer + 1) % bufferCount;
@@ -442,10 +480,21 @@ void Graphics::RenderFrame() {
 		DirectX::XMMatrixPerspectiveFovRH(1.333f, float(width) / float(height), 0.1f, 100000.0f));
 	umodel.unlock();
 
+
+	cbackBuffer->commandAllocator->Reset() >> chk;
+	cbackBuffer->pCommandList->Reset(commandAllocator.Get(), cbackBuffer->pPipelineState.Get()) >> chk;
 	cbackBuffer->PopulateCommandList(cframeIndex);;
-	
-	ID3D12CommandList* commandLists[] = { cbackBuffer->pCommandList.Get() };
-	commandQueue->ExecuteCommandLists(_countof(commandLists), commandLists);
+
+	auto rtvDescriptorSize = pDevice->GetDescriptorHandleIncrementSize(
+		D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+
+	iGui->imEnd(cbackBuffer->pCommandList.Get(), cbackBuffer->commandAllocator, cframeIndex, renderTargets, rtvDescriptorHeap, rtvDescriptorSize, imguiSrvDescHeap);
+	cbackBuffer->pCommandList->Close() >> chk;
+
+
+
+	std::vector<ID3D12CommandList*> commandLists = { cbackBuffer->pCommandList.Get() };
+	commandQueue->ExecuteCommandLists(commandLists.size(), commandLists.data());
 
 
 	swapChain->Present(0, 4) >> chk;

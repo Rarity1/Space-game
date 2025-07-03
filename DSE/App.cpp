@@ -9,7 +9,7 @@ App::App()
 int App::Go() {
 	wnd.Eng().iLoad();
 	while (Alive.load()) {
-		//Process messages each frame
+		//Process messages each cycle
 		if (wnd.ProcessMessages() == WM_QUIT) {
 			Alive.store(false);
 			return 0;
@@ -18,16 +18,18 @@ int App::Go() {
 	}
 	return 0;
 }
-
+//Misnomer This is a cycle. 
 void App::DoFrame() {
 	auto delta = wnd.Eng().Clock.Mark();
 	wnd.Eng().Update(delta);
 	updaterate += delta;
+	//This is a tick
 	if (updaterate >= 1.0) {
 		wnd.SetTitle(std::to_string(wnd.Eng().phyx->ticker.cGet()));
 		wnd.Eng().phyx->ticker.reset();
 		updaterate = 0.0;
 	}
+	//Technically this is a frame
 	wnd.Gfx().RenderFrame();
 
 }

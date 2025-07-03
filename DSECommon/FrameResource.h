@@ -11,6 +11,7 @@ inline void SetName(ID3D12Object* pObject, LPCWSTR name)
 
 class FrameResource
 {
+    friend class Graphics;
 private:
     GErrors::CheckerToken chk;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> rtvDescriptorHeap;

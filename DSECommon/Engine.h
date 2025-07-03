@@ -1,5 +1,6 @@
 #pragma once
 #include "ePhysics.h"
+#include "Graphics.h"
 #include "EngineTime.h"
 #include "Threads.h"
 #include "DSKeyboard.h"

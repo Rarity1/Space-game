@@ -3,13 +3,13 @@
 #include "FrameResource.h"
 #include "RStorage.h"
 #include "EngineTime.h"
-
+#include "../ImGui/DLLGui.h"
 
 class DLL Graphics
 {
 public:
 	static const UINT bufferCount = 3;
-	Graphics(HWND& hWnd, int height, int widthm);
+	Graphics(HWND hWnd, int height, int widthm);
 	Graphics(const Graphics&) = delete;
 	Graphics& operator=(const Graphics&) = delete;
 	~Graphics();
@@ -27,13 +27,14 @@ public:
 	void LoadResources();
 	void LoadPipeline();
 	void UpdateLocalTransform(RStorage::eResource& bm);
+	std::shared_ptr<imguid> iGui;
 	pCamera curCamera;
 	std::vector<std::string> loadbuff;
 	std::mutex umodel;
 	std::unique_ptr<RStorage> lModels;
 	std::vector<RStorage::eResource>& trackedObjects;
-
 private:
+	ImGui_ImplDX12_InitInfo ImGuiInfo;
 
 	float Max(float number, float maximum);
 	float Min(float minimum, float number);
@@ -45,7 +46,7 @@ private:
 	GErrors::CheckerToken chk;
 	UINT width;
 	UINT height;
-	HWND& hWnd;
+	HWND hwnd;
 	
 
 	static const bool UseBundles = true;
@@ -98,4 +99,62 @@ private:
 	HANDLE fenceEvent;
 
 	EngineTime timer;
+
+
+
+	class DescriptorHeapAllocator
+	{
+	public:
+
+		Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> Heap;
+		D3D12_DESCRIPTOR_HEAP_TYPE HeapType;
+		D3D12_CPU_DESCRIPTOR_HANDLE HeapStartCpu;
+		D3D12_GPU_DESCRIPTOR_HANDLE HeapStartGpu;
+		UINT                        HeapHandleIncrement;
+		std::vector<int>               FreeIndices;
+
+		DescriptorHeapAllocator(Microsoft::WRL::ComPtr<ID3D12Device2>& pDevice, Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> imguiSrvDescHeap)
+		{
+			Heap = imguiSrvDescHeap;
+			D3D12_DESCRIPTOR_HEAP_DESC desc = imguiSrvDescHeap->GetDesc();
+			HeapType = desc.Type;
+			HeapStartCpu = Heap->GetCPUDescriptorHandleForHeapStart();
+			HeapStartGpu = Heap->GetGPUDescriptorHandleForHeapStart();
+			HeapHandleIncrement = pDevice->GetDescriptorHandleIncrementSize(HeapType);
+			FreeIndices.reserve((int)desc.NumDescriptors);
+			for (int n = desc.NumDescriptors; n > 0; n--)
+				FreeIndices.push_back(n - 1);
+		}
+		~DescriptorHeapAllocator() {
+			Destroy();
+		}
+
+		void Destroy()
+		{
+			Heap = nullptr;
+			FreeIndices.clear();
+		}
+		void Alloc(D3D12_CPU_DESCRIPTOR_HANDLE* out_cpu_desc_handle, D3D12_GPU_DESCRIPTOR_HANDLE* out_gpu_desc_handle)
+		{
+			_ASSERT(FreeIndices.size() > 0);
+			int idx = FreeIndices.back();
+			FreeIndices.pop_back();
+			out_cpu_desc_handle->ptr = HeapStartCpu.ptr + (idx * HeapHandleIncrement);
+			out_gpu_desc_handle->ptr = HeapStartGpu.ptr + (idx * HeapHandleIncrement);
+		}
+		void Free(D3D12_CPU_DESCRIPTOR_HANDLE out_cpu_desc_handle, D3D12_GPU_DESCRIPTOR_HANDLE out_gpu_desc_handle)
+		{
+			int cpu_idx = (int)((out_cpu_desc_handle.ptr - HeapStartCpu.ptr) / HeapHandleIncrement);
+			int gpu_idx = (int)((out_gpu_desc_handle.ptr - HeapStartGpu.ptr) / HeapHandleIncrement);
+			_ASSERT(cpu_idx == gpu_idx);
+			FreeIndices.push_back(cpu_idx);
+		}
+	};
+	std::shared_ptr<DescriptorHeapAllocator> imHAllocator;
+	
+	Microsoft::WRL::ComPtr<ID3D12CommandAllocator> imGuicommandAllocator;
+
+	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> imGuicommandList;
+
+	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> imguiSrvDescHeap;
 };
