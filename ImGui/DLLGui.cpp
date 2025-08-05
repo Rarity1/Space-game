@@ -40,7 +40,7 @@ imguid::~imguid()
 }
 
 // (Your code process and dispatch Win32 messages)
-void imguid::imStart()
+void imguid::imPrepare()
 {
 
 	bool show_demo_window = true;
@@ -48,43 +48,33 @@ void imguid::imStart()
 	ImGui_ImplDX12_NewFrame();
 	ImGui_ImplWin32_NewFrame();
 	ImGui::NewFrame();
+	
+	
+	
 	ImGui::ShowDemoWindow(&show_demo_window); // Show demo window! :)
+	
+	
 	ImGui::Render();
 }
 
-// Rendering
-void imguid::imEnd(ID3D12GraphicsCommandList* cmdLst, Microsoft::WRL::ComPtr<ID3D12CommandAllocator>& commandAllocator, UINT frameID, std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>>& renderTargets, Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& rtvDescriptorHeap, UINT rtvDescriptorSize, Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> pCbvSrvDescriptorHeap)
-{
-	ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 0.00f);
-
 // (Your code clears your framebuffer, renders your other stuff etc.)
+// Rendering
+void imguid::imPopulateCommand(ID3D12GraphicsCommandList* cmdLst)
+{
+	//ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 0.00f);
 
 
-
-	{
-		auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-			renderTargets[frameID].Get(),
-			D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
-		cmdLst->ResourceBarrier(1, &barrier);
-	}
 	// Render Dear ImGui graphics
-	const float clear_color_with_alpha[4] = { clear_color.x * clear_color.w, clear_color.y * clear_color.w, clear_color.z * clear_color.w, clear_color.w };
+	//const float clear_color_with_alpha[4] = { clear_color.x * clear_color.w, clear_color.y * clear_color.w, clear_color.z * clear_color.w, clear_color.w };
 
-	CD3DX12_CPU_DESCRIPTOR_HANDLE rtv(rtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart(), frameID, rtvDescriptorSize);
+	//CD3DX12_CPU_DESCRIPTOR_HANDLE rtv(rtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart(), frameID, rtvDescriptorSize);
 	//cmdLst->ClearRenderTargetView(rtv, clear_color_with_alpha, 0, nullptr);
-	cmdLst->OMSetRenderTargets(1, &rtv, FALSE, nullptr);
+	//cmdLst->OMSetRenderTargets(1, &rtv, FALSE, nullptr);
 
-	cmdLst->SetDescriptorHeaps(1, pCbvSrvDescriptorHeap.GetAddressOf());
+	//cmdLst->SetDescriptorHeaps(1, pCbvSrvDescriptorHeap.GetAddressOf());
 
 	ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), cmdLst);
 
-	{
-		auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-			renderTargets[frameID].Get(),
-			D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT
-		);
-		cmdLst->ResourceBarrier(1, &barrier);
-	}
 
 	// (Your code calls swapchain's Present() function)
 }

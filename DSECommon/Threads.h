@@ -6,61 +6,68 @@
 //Rewrite using futures
 class DLL THREADS {
 private:
+
+
 	struct werk {
-		bool Worked = true;
-		std::function<void()> Function;
+		//The ID of the thread this work is a grandchild of. Should be 0 unless this is a subchild of current Threads instance.
+		//std::vector<UINT> orderedParents;
 		std::mutex uWorkMTX;
+		std::function<void()> Function;
+		bool Worked = true;
 	};
 	struct THREAD {
+		friend class THREADS;
 		THREAD();
 		~THREAD();
-		uint8_t tPushWork(std::function<void()>& f);
 
-		void exeWork();
-
-		std::atomic<uint8_t> lWaiting = 0;
-		void checkWork(unsigned int uWid);
-		std::mutex wCountMTX;
-		std::vector<uint8_t> Queue;
-		std::atomic<uint8_t> wCount = 0;
+		//std::mutex wCountMTX;
+		//std::atomic<uint8_t> wCount = 0;
 	private:
-		std::unique_ptr<EngineTime> eTime;
 
+		inline uint8_t tPushWork(std::function<void()>& f);
+		void exeWork();
+		void checkWork(unsigned int uWid);
+		std::thread::id tThreadID;
+		std::atomic<uint8_t> lWaiting;
+		std::unique_ptr<EngineTime> eTime;
+		std::unique_lock<std::mutex> workLock;
 		std::atomic<bool> tRunning = true;
 		std::thread thread;
 		std::condition_variable cVariable;
 		std::condition_variable aVariable;
 		std::condition_variable bVariable;
-
-		std::mutex wMutex;
-		std::mutex aMutex;
-		std::mutex bMutex;
-		uint8_t Counter = 0;
+		std::array<uint8_t, 256> localQ;
+		std::mutex tBusy;
+		uint8_t wIndex = 0;
+		uint8_t Counter;
 		std::mutex cMut;
+		//uWid.
+		std::vector<uint8_t> Queue;
+		std::atomic<uint8_t> qSize = 0;
+		uint8_t lWorkCount = 0;
 
-
-		//Local work Queue
+		//Local work storage
 		std::array<werk, 256> tWork;
-		//std::mutex tWorkMTX;
 
 	};
+
 	std::array<THREAD*, 256> Threads;
 	UINT tCount = 0;
 	std::mutex lWorkMTX;
-	static void recurBatch(std::vector<std::function<void()>> f, unsigned int i = 0);
+	static void recurBatch(std::vector<std::function<void()>>& f, std::vector<std::function<void()>>::iterator& i);
 
-	//Global work map
-	//std::array<werk[256], 256> lWorked;
 public:
+	struct WRef {
+		uint8_t uWid = 0;
+		THREADS::THREAD* Worker = nullptr;
+	};
 	THREADS(int cCount);
 	~THREADS();
+	std::thread::id mParent;
+	std::unordered_map<std::thread::id, THREAD*> threadIDMap;
 
-	struct WRef {
-		uint8_t uWid;
-		THREADS::THREAD* Worker;
-	};
-	WRef gPushWork(std::function<void()>& f);
-	WRef gPushWork(std::vector<std::function<void()>> f);
+	inline WRef gPushWork(std::function<void()> f);
+	WRef gPushWork(std::vector<std::function<void()>>& f);
 	void gEndWork(WRef wref);
-
+	void gEndWork(std::vector<WRef>& wref);
 };

@@ -4,6 +4,7 @@
 #include "EngineTime.h"
 #include "Threads.h"
 #include "DSKeyboard.h"
+#include "ObjectTracking.h"
 
 class DLL Engine {
 public:
@@ -11,13 +12,13 @@ public:
 	~Engine();
 	const int updaterate = 60;
 	void iLoad();
-	void Update(double delta);
+	bool Update();
 	bool engInit = true;
+	double engineTimeTaken = 0;
 	EngineTime& Clock;
-	std::vector<RStorage::eResource>& trackedObjects;
 	std::unique_ptr<Physics> phyx;
-	std::unique_ptr<THREADS> threads;
-
+	std::unique_ptr<THREADS> tMain;
+	std::unique_ptr<Tracker> tracker;
 	struct KeysPressed
 	{
 		//Rename to actions
@@ -74,10 +75,10 @@ public:
 	struct Event {
 		unsigned short wPriority;
 		std::function<void()> wFunc;
-		bool inUse = false;
 	};
 	virtual void enQueueExternCommands();
 private:
+	std::list<Object>* cTrackedInstance;
 	THREADS::WRef eWref;
 	std::atomic<bool> eRun;
 	struct Movement {
@@ -85,9 +86,11 @@ private:
 		float backward = 0.0;
 		float left = 0.0;
 		float right = 0.0;
+		bool movestop = false;
 	};
 	//Queues a function onto the event queue without running the function. Larger priority number = lower priority. 
-	void queueCommand(std::function<void()> Function, int Priority = 0);
+	void queueCommand(std::function<void()> Function, unsigned short Priority = 0);
+	std::vector<std::function<void()>>& getCQueue();
 	void enQueueEngineCommands();
 	double cspin = 0;
 	void UCampos();
@@ -100,13 +103,13 @@ private:
 	void UControls();
 	void cPlayermodel();
 	//sync view matrix with physics coords
-	void sPGraphics(RStorage::eResource& model);
+	void sPGraphics(Object& model);
 	void RotateCam(float Pitch = 0, float Yaw = 0, float Roll = 0);
 	//Fires all queued events/functions in order by priority
 	int eventBusSync();
 	std::mutex evBusLock;
 	Graphics& pGfx;
-	RStorage::eResource* plModel;
+	Object* plModel;
 	DirectX::XMFLOAT4 cWorld;
 	DirectX::XMFLOAT4 nWorld;
 
@@ -114,12 +117,10 @@ private:
 	std::mutex freeCamMTX;
 	std::atomic<bool> freeCamTGL = false;
 	EngineTime inputDelay;
-
+	std::vector<std::function<void()>> wFunctions;
 	Keyboard& kbd;
 	std::mutex usingThread;
 	double lastD = 0.0;
 	std::atomic<short int> queueCount;
-	std::mutex QueueLock;
-	std::map<unsigned int, Event> QueueThreads;
-	std::mutex QueueTLock;
+	std::list<Event> QueueList;
 };

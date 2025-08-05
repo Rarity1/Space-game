@@ -4,121 +4,140 @@ Engine::Engine(Graphics& gfx, Keyboard& kbd, EngineTime& clock):
 	pGfx(gfx),
     cWorld(0,0,0,0),
     kbd(kbd),
-    trackedObjects(*gfx.lModels->trackedObjects),
+    //trackedObjects(gfx.lModels->trackedObjects),
     Clock(clock)
 {
-    phyx = std::make_unique<Physics>(Clock, trackedObjects, updaterate);
-    threads = std::make_unique<THREADS>((int)std::thread::hardware_concurrency());
-    pGfx.LoadPipeline();
+    tracker = std::make_unique<Tracker>(*pGfx.rStorage);
+    phyx = std::make_unique<Physics>(Clock, updaterate);
+    tMain = std::make_unique<THREADS>((int)std::thread::hardware_concurrency());
 }
 
-
+//Initial load of the engine. 
 void Engine::iLoad() {
+
     //Move everything between this into a function in Graphics
-    pGfx.umodel.lock();
 
     //begin model tracking. load a gd default world mf
-    pGfx.lModels->initObject("untitled", 2, 1, 200.0, 0.01, DirectX::XMFLOAT3{ 0,0,138 });
-    pGfx.lModels->initObject("cube", 1, 1, 200.0, 0.01, DirectX::XMFLOAT3{ 10,0,138 });
-    pGfx.lModels->initObject("wrld", 4, 1, 8570000000.0 , 0.3, DirectX::XMFLOAT3{ 0,0,0 });
+    //Player model needs to be set.
+    //Make a better way of setting player model. 
+    cTrackedInstance = &tracker->initInstance(1);
+    plModel = tracker->initObject(cTrackedInstance, "untitled", 2, 1, 200.0, 0.01, DirectX::XMFLOAT3{ 0,0,138 });
+    tracker->initObject(cTrackedInstance, "cube", 1, 1, 200.0, 0.01, DirectX::XMFLOAT3{ 10,0,138 });
+    tracker->initObject(cTrackedInstance, "wrld", 4, 1, 8570000000.0 , 0.3, DirectX::XMFLOAT3{ 0,0,0 });
     //wrld is 1:50000
 
     for (auto i = 0; i < 1; i++) {
         float p = i * 1;
-        pGfx.lModels->initObject("untitled", 2, 1, 200, 0.3, DirectX::XMFLOAT3{ 12 + p,0,138 });
+        tracker->initObject(cTrackedInstance, "untitled", 2, 1, 200, 0.3, DirectX::XMFLOAT3{ 12 + p,0,138 });
     }
 
-    for (auto i = 0; i < 15; i++) {
+    for (auto i = 0; i < 1; i++) {
         float p = i * 1;
-       //pGfx.lModels->initObject("untitled", 1, 1, 200, 0.3, DirectX::XMFLOAT3{ 12 + p,0,138 });
+       tracker->initObject(cTrackedInstance, "untitled", 1, 1, 200, 0.3, DirectX::XMFLOAT3{ 12 + p,0,138 });
     }
 
     //trackedModels[0].mworld = &trackedModels[2];
     //trackedModels[1].mworld = &trackedModels[2];
     //trackedModels[3]->mworld = trackedModels[2];
 
-    //Make a better way of setting player model. 
-    plModel = &trackedObjects[0];
-    
-    //end model tracking. begin resource upload.
-    pGfx.LoadResources();
-    pGfx.umodel.unlock();
+
+
+
+    //end model tracking. begin resource upload.    
+    pGfx.LoadPipeline();
+    pGfx.LoadResources(*cTrackedInstance, *tracker);
 
     if (engInit) {
         engInit = false;
     }
     eRun.store(true);
-    for (auto& m : trackedObjects) {
+    for (auto& m : *cTrackedInstance) {
         pGfx.UpdateModel(&m);
     }
-    phyx->trackM();
+    phyx->trackM(tracker->getInstance(1));
 }
 
-void Engine::Update(double delta)
+bool Engine::Update()
 {
     UControls();
     UCampos();
-    lastD += delta;
-    if ((1.0 / updaterate) <= lastD) {
+    if ((1.0 / updaterate) <= Clock.Peek()) {
         enQueueEngineCommands();
         enQueueExternCommands();
         eventBusSync();
-        lastD = 0.0;
+        mAniUpdate();
+        pGfx.Update(tracker->getInstance(1));
+        engineTimeTaken = Clock.Mark();
+        return true;
     }
     mAniUpdate();
+    pGfx.Update(tracker->getInstance(1));
+    return false;
 }
 
 
 
  void Engine::cPlayermodel()
  {
-     auto movespeed = 1.0;
-     bool movestop = false;
-     Movement move;
-     if (m_keysPressed.FindBuffered(KeysPressed::W)) {
-         move.forward += movespeed;
-     }if (m_keysPressed.FindBuffered(KeysPressed::S)) {
-         move.forward -= movespeed;
-     }if (m_keysPressed.FindBuffered(KeysPressed::A)) {
-         move.left += movespeed;
-     }if (m_keysPressed.FindBuffered(KeysPressed::D)) {
-         move.left -= movespeed;
+     std::unique_ptr<Movement> move(std::make_unique<Movement>());
+
+     {
+         auto movespeed = 1.0;
+         if (m_keysPressed.FindBuffered(KeysPressed::W)) {
+             move->forward += movespeed;
+         }if (m_keysPressed.FindBuffered(KeysPressed::S)) {
+             move->forward -= movespeed;
+         }if (m_keysPressed.FindBuffered(KeysPressed::A)) {
+             move->left += movespeed;
+         }if (m_keysPressed.FindBuffered(KeysPressed::D)) {
+             move->left -= movespeed;
+         }
+         if (m_keysPressed.FindBuffered(KeysPressed::K)) {
+             move->movestop = true;
+         }
      }
-     if (m_keysPressed.FindBuffered(KeysPressed::K)) {
-         movestop = true;
-     }
-     using namespace DirectX;
+
+
 
      if (freeCamTGL.load()) {
-         if (move.forward != 0) {
-             float speedchange = move.forward * 10 / updaterate;
+         if (move->forward != 0) {
+             float speedchange = move->forward * 10 / updaterate;
              // Figure this out
+             using namespace DirectX;
              XMFLOAT4 Temporarydir;
              DirectX::XMStoreFloat4(&Temporarydir, XMVector3Normalize(XMLoadFloat4(&pGfx.curCamera.rotation) * fabs(speedchange)));
 
 
              XMStoreFloat3(&freeCamPos, XMLoadFloat4(&Temporarydir) * speedchange + XMLoadFloat3(&freeCamPos));
          }
-         if (movestop) {
+         if (move->movestop) {
              plModel->velDir = { 0,0,0,0 };
              plModel->speed = 0;
          }
      }
      else {
-         if (move.forward != 0 && !movestop) {
+         if (move->forward != 0 && !move->movestop) {
              float oldspeed = plModel->speed <= 0.0001 ? 0 : plModel->speed;
-             float speedchange = move.forward * 1.0 / updaterate;
+             float speedchange = move->forward * 1.0 / updaterate;
              DirectX::XMFLOAT4 scale = { 0,0,0,0 };
-             auto scalar = DirectX::XMVector3Dot(XMLoadFloat4(&plModel->velDir), XMLoadFloat4(&pGfx.curCamera.rotation) * (fabs(move.forward) / move.forward));
-             DirectX::XMStoreFloat4(&scale, scalar);
+             {
+                 using namespace DirectX;
+                 auto scalar = DirectX::XMVector3Dot(XMLoadFloat4(&plModel->velDir), XMLoadFloat4(&pGfx.curCamera.rotation) * (fabs(move->forward) / move->forward));
+                 DirectX::XMStoreFloat4(&scale, scalar);
+
+             }
              scale.x = fabs(scale.x);
              float totalspeed = plModel->speed + fabs(speedchange);
 
              float speedscal = fabs(speedchange * (scale.x) - speedchange * (1 - scale.x)) / totalspeed;
              float inspeedscal = fabs(plModel->speed * (scale.x)) / totalspeed;
              // Figure this out
-             XMFLOAT4 Temporarydir;
-             DirectX::XMStoreFloat4(&Temporarydir, XMVector3Normalize(XMLoadFloat4(&pGfx.curCamera.rotation) * (fabs(move.forward) / move.forward) * fabs(speedscal) + XMLoadFloat4(&plModel->velDir) * inspeedscal));
+             DirectX::XMFLOAT4 Temporarydir;
+             {
+                 using namespace DirectX;
+                 DirectX::XMStoreFloat4(&Temporarydir, XMVector3Normalize(XMLoadFloat4(&pGfx.curCamera.rotation) * (fabs(move->forward) / move->forward) * fabs(speedscal) + XMLoadFloat4(&plModel->velDir) * inspeedscal));
+
+             }
 
 
              if (scale.y < 0) {
@@ -131,7 +150,7 @@ void Engine::Update(double delta)
 
              plModel->velDir = Temporarydir;
          }
-         else if (movestop) {
+         else if (move->movestop) {
              plModel->velDir = { 0,0,0,0 };
              plModel->speed = 0;
          }
@@ -143,7 +162,6 @@ void Engine::Update(double delta)
 
 void Engine::mAniUpdate(){
     using namespace DirectX;
-    pGfx.umodel.lock();
 
     /*
         if (m_keysPressed.FindBuffered(KeysPressed::K)) {
@@ -159,8 +177,6 @@ void Engine::mAniUpdate(){
     }
     */
 
-
-    pGfx.umodel.unlock();
 }
 
 
@@ -168,39 +184,43 @@ void Engine::mAniUpdate(){
 
 int Engine::eventBusSync()
 {
-    threads.get()->gEndWork(eWref);
+    tMain->gEndWork(eWref);
     return 0;
 }
 
 //Max priority is 65535
-void Engine::queueCommand(std::function<void()> Function, int Priority)
+void Engine::queueCommand(std::function<void()> Function, unsigned short Priority)
 {
-    if (QueueThreads[Priority].inUse) {
-        queueCommand(Function, Priority+1);
-    }
-    else {
-        QueueThreads[Priority] = Event(Priority, Function, true);
-    }
+    QueueList.emplace_back(Event(Priority, Function));
+    ++queueCount;
+}
 
-
+std::vector<std::function<void()>>& Engine::getCQueue()
+{
+    QueueList.sort([](auto& first, auto& second) {
+        return first.wPriority > second.wPriority;
+    });
+    wFunctions.resize(0);
+    for (auto& q : QueueList) {
+        wFunctions.emplace_back(std::move(q.wFunc));
+    }
+    QueueList.resize(0);
+    return wFunctions;
 }
 
 void Engine::enQueueEngineCommands()
 {
-    queueCommand(std::function<void()>([this] {this->cPlayermodel(); }), 0);
-    //this->cPlayermodel();
-    queueCommand(std::function<void()>([this] {phyx->Update(); }), 20);
-    //phyx->Update();
-    queueCommand(std::function<void()>([this] { std::for_each(trackedObjects.begin(), trackedObjects.end(), [this](auto& e) { sPGraphics(e); }); }), 21);
-
-    std::vector<std::function<void()>> wFs;
-
-    for (auto& q : QueueThreads) {
-        wFs.emplace_back(q.second.wFunc);
-        q.second.inUse = false;
-    }
-
-    eWref = threads.get()->gPushWork(wFs);
+    queueCommand([this] {
+        cPlayermodel();
+    }, 0);
+    queueCommand([this] {
+        phyx->Update(*cTrackedInstance);
+    }, 20);
+    queueCommand([this] {
+        std::for_each(cTrackedInstance->begin(), cTrackedInstance->end(), [this](auto& e) { e.UpdatePosition(); });
+    }, 21);
+    //queueCommand([this] {pGfx.Update(tracker->trackedObjects);}, 65535);
+    eWref = tMain->gPushWork(getCQueue());
 }
 
 void Engine::enQueueExternCommands()
@@ -238,29 +258,34 @@ void Engine::UCampos() {
         }
     }
 
-    double delta = Clock.Current();
     float pitch = 0;
     float yaw = 0;
     float roll = 0;
-    if (m_keysPressed.FindBuffered(KeysPressed::up)) {
-        pitch += DirectX::XM_PIDIV2 * delta;
-    }
-    if (m_keysPressed.FindBuffered(KeysPressed::down)) {
-        pitch += -DirectX::XM_PIDIV2 * delta;
-    }
-    if (m_keysPressed.FindBuffered(KeysPressed::left)) {
-        yaw += -DirectX::XM_PIDIV2 * delta;
-    }
-    if (m_keysPressed.FindBuffered(KeysPressed::right)) {
-        yaw += DirectX::XM_PIDIV2 * delta;
+    {
+        //Rotation per second in radians //Currently 15 degrees per second
+        double rotationPS = Clock.Peek() * DirectX::XM_PIDIV4/3;
+
+        if (m_keysPressed.FindBuffered(KeysPressed::up)) {
+            pitch += rotationPS;
+        }
+        if (m_keysPressed.FindBuffered(KeysPressed::down)) {
+            pitch += -rotationPS;
+        }
+        if (m_keysPressed.FindBuffered(KeysPressed::left)) {
+            yaw += -rotationPS;
+        }
+        if (m_keysPressed.FindBuffered(KeysPressed::right)) {
+            yaw += rotationPS;
+        }
+
+        if (m_keysPressed.FindBuffered(KeysPressed::Q)) {
+            roll += rotationPS;
+        }
+        if (m_keysPressed.FindBuffered(KeysPressed::E)) {
+            roll += -rotationPS;
+        }
     }
 
-    if (m_keysPressed.FindBuffered(KeysPressed::Q)) {
-        roll += DirectX::XM_PIDIV2 * delta;
-    }
-    if (m_keysPressed.FindBuffered(KeysPressed::E)) {
-        roll += -DirectX::XM_PIDIV2 * delta;
-    }
 
     if(pitch != 0 || yaw != 0 || roll != 0)
     RotateCam(pitch, yaw, roll);
@@ -268,32 +293,17 @@ void Engine::UCampos() {
 
 }
 
-void Engine::sPGraphics(RStorage::eResource& model)
+void Engine::sPGraphics(Object& model)
 {
-    pGfx.umodel.lock();
 
-
-    using namespace DirectX;
-    model.mPos.posMtx.lock();
-    model.mPos.lastposition = *model.mPos.position;
-    auto pDir = model.CollDir();
-    XMStoreFloat3(model.mPos.position, XMLoadFloat3(model.mPos.position) + XMLoadFloat4(&pDir));
-    model.CollReset();
-    XMStoreFloat3(model.mPos.position, XMLoadFloat3(model.mPos.position) + XMLoadFloat4(&model.velDir) * (model.speed));
-    model.mPos.posMtx.unlock();
-
-
-    XMStoreFloat4x4(&model.cmatrix, XMMatrixRotationQuaternion(XMLoadFloat4(&model.mPos.rotation)) * XMMatrixTranslation(model.mPos.position->x, model.mPos.position->y, model.mPos.position->z));
-    pGfx.umodel.unlock();
 
 }
 
 void Engine::RotateCam(float Pitch, float Yaw, float Roll) {
-    auto gravdirect = DirectX::XMQuaternionInverse(XMLoadFloat4(&plModel->grav));
     auto updirect = XMLoadFloat4(&pGfx.curCamera.upDirection);
     auto lookdirect = XMLoadFloat4(&pGfx.curCamera.rotation);
     
-
+    //auto gravdirect = DirectX::XMQuaternionInverse(XMLoadFloat4(&plModel->grav));
     if (Yaw != 0) {
         auto temp = DirectX::XMQuaternionRotationNormal(updirect, Yaw);
         auto left = DirectX::XMQuaternionMultiply(temp, lookdirect);
@@ -442,8 +452,6 @@ void Engine::UControls() {
 
 
 Engine::~Engine() {
-    //_ASSERT(eWref.uWid != 0);
-    //threads.get()->gEndWork(eWref);
 
     eRun.store(false);
 }

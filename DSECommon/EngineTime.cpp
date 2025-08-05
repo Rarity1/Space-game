@@ -10,21 +10,24 @@ EngineTime::EngineTime()
 }
 double EngineTime::Mark() noexcept
 {
+	std::unique_lock<std::mutex>uLock(clockMTX);
 	const auto old = last;
 	last = high_resolution_clock::now();
-	const duration<double> frameTime = last - old;
-	frame = frameTime.count();
+	frame = duration<double>(last - old).count();
 	return frame;
 }
-double EngineTime::Peek() const noexcept
+double EngineTime::Peek() noexcept
 {
-	duration<double> fs(high_resolution_clock::now() - last);
-	return fs.count();
+	std::unique_lock<std::mutex>uLock(clockMTX);
+	auto result = duration<double>(high_resolution_clock::now() - last).count();
+	return result;
 }
 
-double EngineTime::Current() const
+double EngineTime::Current() noexcept
 {
-	return frame;
+	std::unique_lock<std::mutex>uLock(clockMTX);
+	auto result = frame + duration<double>(high_resolution_clock::now() - last).count();
+	return result;
 }
 
 long long EngineTime::TimeLook() const

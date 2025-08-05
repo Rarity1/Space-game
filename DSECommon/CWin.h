@@ -107,7 +107,7 @@
 #include <bitset>
 #include <optional>
 #include <random>
-#include <pix3.h>
+//#include <pix3.h>
 #include <filesystem>
 #include <d3dx12.h>
 #include <dstorage.h>

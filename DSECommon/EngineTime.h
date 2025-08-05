@@ -7,10 +7,12 @@ class DLL EngineTime
 public:
 	EngineTime();
 	double Mark() noexcept;
-	double Peek() const noexcept;
-	double Current() const;
+	double Peek()noexcept;
+	double Current() noexcept;
 	long long TimeLook() const;
-private:
 	std::chrono::high_resolution_clock::time_point last;
+
+private:
+	std::mutex clockMTX;
 	double frame = 0.0;
 };

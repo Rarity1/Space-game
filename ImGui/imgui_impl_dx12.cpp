@@ -85,7 +85,7 @@ struct ImGui_ImplDX12_Texture
 
 struct ImGui_ImplDX12_Data
 {
-    ImGui_ImplDX12_InitInfo     InitInfo;
+    ImGui_ImplDX12_InitInfo*     InitInfo;
     ID3D12Device*               pd3dDevice;
     ID3D12RootSignature*        pRootSignature;
     ID3D12PipelineState*        pPipelineState;
@@ -93,7 +93,7 @@ struct ImGui_ImplDX12_Data
     bool                        commandQueueOwned;
     DXGI_FORMAT                 RTVFormat;
     DXGI_FORMAT                 DSVFormat;
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>       pd3dSrvDescHeap;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> pd3dSrvDescHeap;
     UINT                        numFramesInFlight;
 
     ImGui_ImplDX12_RenderBuffers* pFrameResources;
@@ -340,9 +340,11 @@ static void ImGui_ImplDX12_DestroyTexture(ImTextureData* tex)
     ImGui_ImplDX12_Texture* backend_tex = (ImGui_ImplDX12_Texture*)tex->BackendUserData;
     if (backend_tex == nullptr)
         return;
-    IM_ASSERT(backend_tex->hFontSrvGpuDescHandle.ptr == (UINT64)tex->TexID);
+
+    //Resizing SrvDescHandle Invalidates these id checks.
+    //IM_ASSERT(backend_tex->hFontSrvGpuDescHandle.ptr == (UINT64)tex->TexID);
     ImGui_ImplDX12_Data* bd = ImGui_ImplDX12_GetBackendData();
-    bd->InitInfo.SrvDescriptorFreeFn(backend_tex->hFontSrvCpuDescHandle, backend_tex->hFontSrvGpuDescHandle);
+    bd->InitInfo->SrvDescriptorFreeFn(backend_tex->hFontSrvCpuDescHandle, backend_tex->hFontSrvGpuDescHandle);
     SafeRelease(backend_tex->pTextureResource);
     backend_tex->hFontSrvCpuDescHandle.ptr = 0;
     backend_tex->hFontSrvGpuDescHandle.ptr = 0;
@@ -366,7 +368,7 @@ void ImGui_ImplDX12_UpdateTexture(ImTextureData* tex)
         IM_ASSERT(tex->TexID == ImTextureID_Invalid && tex->BackendUserData == nullptr);
         IM_ASSERT(tex->Format == ImTextureFormat_RGBA32);
         ImGui_ImplDX12_Texture* backend_tex = IM_NEW(ImGui_ImplDX12_Texture)();
-        bd->InitInfo.SrvDescriptorAllocFn(&backend_tex->hFontSrvCpuDescHandle, &backend_tex->hFontSrvGpuDescHandle); // Allocate a desctriptor handle
+        bd->InitInfo->SrvDescriptorAllocFn(&backend_tex->hFontSrvCpuDescHandle, &backend_tex->hFontSrvGpuDescHandle); // Allocate a desctriptor handle
         D3D12_HEAP_PROPERTIES props = {};
         props.Type = D3D12_HEAP_TYPE_DEFAULT;
         props.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
@@ -835,8 +837,8 @@ bool ImGui_ImplDX12_Init(ImGui_ImplDX12_InitInfo* init_info)
 
     // Setup backend capabilities flags
     ImGui_ImplDX12_Data* bd = IM_NEW(ImGui_ImplDX12_Data)();
-    bd->InitInfo = *init_info; // Deep copy
-    init_info = &bd->InitInfo;
+    bd->InitInfo = init_info; // Deep copy
+    //init_info = &bd->InitInfo;
 
     bd->pd3dDevice = init_info->Device;
     IM_ASSERT(init_info->CommandQueue != NULL);

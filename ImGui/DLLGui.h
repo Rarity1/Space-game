@@ -20,8 +20,8 @@ class DLLG imguid {
 public:
 	imguid(HWND hWnd, ImGui_ImplDX12_InitInfo* DX12);
 	~imguid();
-	void imStart();
-	void imEnd(ID3D12GraphicsCommandList* cmdLst, Microsoft::WRL::ComPtr<ID3D12CommandAllocator>& commandAllocator, UINT frameID, std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>>& renderTargets, Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& rtvDescriptorHeap, UINT rtvDescriptorSize, Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> pCbvSrvDescriptorHeap);
+	void imPrepare();
+	void imPopulateCommand(ID3D12GraphicsCommandList* cmdLst);
 	LRESULT ImGuiProcHndl(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 };
 

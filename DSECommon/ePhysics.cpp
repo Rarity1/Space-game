@@ -4,10 +4,9 @@
 //#pragma OPENCL EXTENSION cl_khr_d3d11_sharing : enable
 
 
-Physics::Physics(EngineTime& Clock, std::vector<RStorage::eResource>& trackedObjects, const int& UpdateRate) :
+Physics::Physics(EngineTime& Clock, const int& UpdateRate) :
     GConst(6.67430 * pow(10, -11)),
     timer(Clock),
-    trackedObjects(trackedObjects),
     urate(UpdateRate)
 {
     coreCount = std::thread::hardware_concurrency();
@@ -50,50 +49,55 @@ Physics::Physics(EngineTime& Clock, std::vector<RStorage::eResource>& trackedObj
     queue = cl::CommandQueue{ context, device };
     
     //Write something that can automatically assign child processess to new THREADS instance
-    thrds = std::make_unique<THREADS>(coreCount);
-    childthrds = std::make_unique<THREADS>(coreCount);
-    subchildthrds = std::make_unique<THREADS>(coreCount);
-
+    tMain = std::make_unique<THREADS>(coreCount);
+    tProcCollide = std::make_unique<THREADS>(coreCount);
+    tProcCollideSub = std::make_unique<THREADS>(coreCount);
 
     clGetDeviceInfo(device.get(), CL_DEVICE_LOCAL_MEM_SIZE, sizeof(cl_ulong), &clLocalMemSize, 0);
 
 }
 
 
-void Physics::Update() {
-    DebugStream dbgStream;
-    std::streambuf* oldBuf = std::cout.rdbuf(&dbgStream);
+void Physics::Update(std::list<Object>& trackedObjects) {
+    //DebugStream dbgStream;
+    //std::streambuf* oldBuf = std::cout.rdbuf(&dbgStream);
     
     CollModels.reserve((trackedObjects.size() ^ 2) / 2);
     //std::for_each(trackedObjects.begin(), trackedObjects.end(), [this](auto& m) {cGravity(&m); });
-    pSpecCollison();
+    pCollison(trackedObjects);
     pSpecReset();
+
+    DebugMTX.lock();
+    std::cout << "Current Tick: " + std::to_string(ticker.cGet()) << std::endl;
+    DebugMTX.unlock();
+
     ticker.incCount();
-    std::cout.rdbuf(oldBuf);
+    //std::cout.rdbuf(oldBuf);
 }
 
 
 
 
-void Physics::trackM() {
+void Physics::trackM(std::list<Object>& trackedObjects) {
     QueueMTX.lock();
+    auto tO = trackedObjects.begin();
     for (int i = 0; i < std::size(trackedObjects); i++) {
-        trackedObjects[i].model->clBuff = cl::Buffer(context, CL_MEM_READ_ONLY, sizeof(std::array<ReadX3D::Vertex, 3>) * trackedObjects[i].model->uData->MappedVertices.size());
-        trackedObjects[i].clPositionBuff = cl::Buffer(context, CL_MEM_READ_WRITE, sizeof(DirectX::XMFLOAT3));
+        tO->model->clBuff = cl::Buffer(context, CL_MEM_READ_ONLY, sizeof(std::array<ReadXML::Vertex, 3>) * tO->model->uData->MappedVertices.size());
+        tO->clPositionBuff = cl::Buffer(context, CL_MEM_READ_WRITE, sizeof(DirectX::XMFLOAT3));
 
         std::vector<DirectX::XMFLOAT3> WBone;
         std::vector<int> IndexOffset;
-        WBone.resize(std::size(trackedObjects[i].model->uData->bdata));
+        WBone.resize(std::size(tO->model->uData->bdata));
         for (auto b = 0; b < std::size(WBone); b++) {
-            WBone[b] = trackedObjects[i].model->uData->bdata[b].sphere.Center;
+            WBone[b] = tO->model->uData->bdata[b].sphere.Center;
         }
-        trackedObjects[i].model->clBoneBuff = cl::Buffer(context, CL_MEM_READ_ONLY, sizeof(DirectX::XMFLOAT3) * std::size(WBone));
+        tO->model->clBoneBuff = cl::Buffer(context, CL_MEM_READ_ONLY, sizeof(DirectX::XMFLOAT3) * std::size(WBone));
 
-        queue.enqueueWriteBuffer(trackedObjects[i].model->clBoneBuff, CL_FALSE, 0, sizeof(DirectX::XMFLOAT3) * std::size(WBone), WBone.data());
+        queue.enqueueWriteBuffer(tO->model->clBoneBuff, CL_FALSE, 0, sizeof(DirectX::XMFLOAT3) * std::size(WBone), WBone.data());
 
-        queue.enqueueWriteBuffer(trackedObjects[i].model->clBuff, CL_FALSE, 0, sizeof(std::array<ReadX3D::Vertex, 3>) * trackedObjects[i].model->uData->MappedVertices.size(), trackedObjects[i].model->uData->MappedVertices.data());
+        queue.enqueueWriteBuffer(tO->model->clBuff, CL_FALSE, 0, sizeof(std::array<ReadXML::Vertex, 3>) * tO->model->uData->MappedVertices.size(), tO->model->uData->MappedVertices.data());
 
-
+        tO++;
     }
     queue.finish();
     QueueMTX.unlock();
@@ -101,7 +105,7 @@ void Physics::trackM() {
 
 }
 
-void Physics::cGravity(RStorage::eResource* obj) {
+void Physics::cGravity(Object* obj) {
     using namespace DirectX;
     if (obj->mworld != nullptr) {
         //obj->grav = fDirection(obj->mPos->position, obj->mworld->mPos->position);
@@ -155,7 +159,7 @@ void Physics::CalProportionalSpeed(DirectX::XMFLOAT4& VelDir1, DirectX::XMFLOAT4
 }
 
 
-Physics::WORKINDI Physics::ProcCollide(RStorage::eResource& obj, RStorage::eResource& obj2,  DirectX::XMFLOAT3& objpos, DirectX::XMFLOAT3& obj2pos, DirectX::XMFLOAT4& dir, float& dist) {
+Physics::WORKINDI Physics::ProcCollide(Object& obj, Object& obj2,  DirectX::XMFLOAT3& objpos, DirectX::XMFLOAT3& obj2pos, DirectX::XMFLOAT4& dir, float& dist) {
     WORKINDI Result;
     using namespace DirectX;
     XMFLOAT3 pos2;
@@ -168,19 +172,20 @@ Physics::WORKINDI Physics::ProcCollide(RStorage::eResource& obj, RStorage::eReso
     auto& MappedVert1 = objudat->MappedVertices;
     auto& MappedVert2 = obj2udat->MappedVertices;
 
-    std::vector<std::vector<int>> WData;
-    {
-        for (auto& b2 : obj2bdata) {
-            BoundingSphere sph2 = b2.sphere;
-            XMStoreFloat3(&sph2.Center, XMLoadFloat3(&sph2.Center) + XMLoadFloat3(&pos2));
-            for (auto& b : objbdata) {
-                if (b.sphere.Intersects(sph2)) {
-                        WData.emplace_back(std::vector<int>{b.bIndex, b2.bIndex});
-                }
-
+    std::vector<std::array<uint16_t, 2>> WData;
+    WData.reserve(obj2bdata.size() * objbdata.size());
+    
+    for (auto& b2 : obj2bdata) {
+        BoundingSphere sph2 = b2.sphere;
+        XMStoreFloat3(&sph2.Center, XMLoadFloat3(&sph2.Center) + XMLoadFloat3(&pos2));
+        for (auto& b : objbdata) {
+            if (b.sphere.Intersects(sph2)) {
+                WData.emplace_back(std::array<uint16_t, 2>{b.bIndex, b2.bIndex});
             }
+
         }
     }
+ 
    
 
     if (WData.size() == 0) return Result;
@@ -216,10 +221,9 @@ Physics::WORKINDI Physics::ProcCollide(RStorage::eResource& obj, RStorage::eReso
         b1ind[i].reserve(objudat->bdata[WData[i][0]].Indices.size());
         b2ind[i].reserve(obj2udat->bdata[WData[i][1]].Indices.size());
 
-        XMFLOAT4 bdirection = fDirection(objudat->bdata[WData[i][0]].sphere.Center, CollSp[1].Center);
-        XMFLOAT4 ibdirection = fDirection(obj2udat->bdata[WData[i][1]].sphere.Center, CollSp[0].Center);
 
-        std::function<void()> tFunc{ [&objudat, &objCheck1, &WData, &b1ind, i, bdirection, &MappedVert1]() {
+        refs1[i] = tProcCollideSub->gPushWork([&objudat, &objCheck1, &WData, &b1ind, i, &CollSp, &MappedVert1]() {
+            XMFLOAT4 bdirection = fDirection(objudat->bdata[WData[i][0]].sphere.Center, CollSp[1].Center);
             std::for_each(objudat->bdata[WData[i][0]].Indices.begin(), objudat->bdata[WData[i][0]].Indices.end(), [&objCheck1, &b1ind, i, &objudat, &bdirection, &MappedVert1](auto& e) {
                 if (!objCheck1[objudat->mIndex[e]].load()) {
                     if (XMVector3GreaterOrEqual(XMVector3Dot(XMLoadFloat4(&bdirection), XMLoadFloat3(&MappedVert1[objudat->mIndex[e]][0].normal)), XMVectorZero())) {
@@ -229,13 +233,15 @@ Physics::WORKINDI Physics::ProcCollide(RStorage::eResource& obj, RStorage::eReso
 
                 }
             });
-        }};
+        });
 
         
 
 
 
-        std::function<void()> tFunc2{ [&obj2udat, &objCheck2, &WData, &b2ind, i, ibdirection, &MappedVert2]() {
+        refs2[i] = tProcCollideSub->gPushWork([&obj2udat, &objCheck2, &WData, &b2ind, i, &CollSp, &MappedVert2]() {
+            XMFLOAT4 ibdirection = fDirection(obj2udat->bdata[WData[i][1]].sphere.Center, CollSp[0].Center);
+
             std::for_each(obj2udat->bdata[WData[i][1]].Indices.begin(), obj2udat->bdata[WData[i][1]].Indices.end(), [&objCheck2, &b2ind, i, &obj2udat, ibdirection, &MappedVert2](auto& e) {
                 if (!objCheck2[obj2udat->mIndex[e]].load()) {
                     if (XMVector3GreaterOrEqual(XMVector3Dot(XMLoadFloat4(&ibdirection), XMLoadFloat3(&MappedVert2[obj2udat->mIndex[e]][0].normal)), XMVectorZero())) {
@@ -245,10 +251,7 @@ Physics::WORKINDI Physics::ProcCollide(RStorage::eResource& obj, RStorage::eReso
                 }
             });
             
-        }};
-
-        refs1[i] = (subchildthrds.get()->gPushWork(tFunc));
-        refs2[i] = (subchildthrds.get()->gPushWork(tFunc2));
+        });
 
     }
 
@@ -260,16 +263,15 @@ Physics::WORKINDI Physics::ProcCollide(RStorage::eResource& obj, RStorage::eReso
     
     WorkIndi2.reserve(obj2udat->MappedVertices.size());
     
-    
+
     for (auto i = 0; i < b1ind.size(); i++) {
-        subchildthrds.get()->gEndWork(refs1[i]);
+        tProcCollideSub->gEndWork(refs1[i]);
         WorkIndi1.append_range(b1ind[i]);
-
     }
-    for (auto i = 0; i < b2ind.size(); i++) {
-        subchildthrds.get()->gEndWork(refs2[i]);
-        WorkIndi2.append_range(b2ind[i]);
 
+    for (auto i = 0; i < b2ind.size(); i++) {
+        tProcCollideSub->gEndWork(refs2[i]);
+        WorkIndi2.append_range(b2ind[i]);
     }
     
 
@@ -282,14 +284,14 @@ Physics::WORKINDI Physics::ProcCollide(RStorage::eResource& obj, RStorage::eReso
     return Result;
 }
 
-
-void Physics::pSpecCollison() {
+void Physics::pCollison(std::list<Object>& trackedObjects) {
 
     std::vector<THREADS::WRef> refs(trackedObjects.size());
-    for (auto h = 0; h < trackedObjects.size(); h++) {
-      std::function<void()> work{[this, h]() {
+    auto tO = trackedObjects.begin();
+    for (auto h = 0; h < refs.size(); h++) {
+        refs[h] = tMain->gPushWork([this, h, tO, &trackedObjects](){
             using namespace DirectX;
-            auto& obj = trackedObjects[h];
+            auto& obj = *tO;
             XMFLOAT3 Pos1;
             obj.mPos.posMtx.lock();
             XMStoreFloat3(&Pos1, XMLoadFloat3(obj.mPos.position));
@@ -301,18 +303,17 @@ void Physics::pSpecCollison() {
             std::vector<collstruct> LCollModels;
             LCollModels.reserve(trackedObjects.size());
 
-
-            for (auto m = 0; m < std::size(trackedObjects); m++) {
-                if (trackedObjects[m] != obj) {
+            for (auto& m : trackedObjects) {
+                if (m != obj) {
                     XMFLOAT3 Pos2;
-                    trackedObjects[m].mPos.posMtx.lock();
-                    XMStoreFloat3(&Pos2, XMLoadFloat3(trackedObjects[m].mPos.position));
-                    auto sph2 = trackedObjects[m].model->uData->Sphere;
-                    trackedObjects[m].mPos.posMtx.unlock();
+                    m.mPos.posMtx.lock();
+                    XMStoreFloat3(&Pos2, XMLoadFloat3(m.mPos.position));
+                    auto sph2 = m.model->uData->Sphere;
+                    m.mPos.posMtx.unlock();
                     auto tdist = fDirection(Pos1, Pos2);
                     XMStoreFloat3(&sph2.Center, XMLoadFloat4(&tdist) * fDistance(Pos1, Pos2));
                     if (sph2.Intersects(sph1)) {
-                        LCollModels.emplace_back(collstruct(&obj, &trackedObjects[m]));
+                        LCollModels.emplace_back(collstruct(&obj, &m));
                     }
                 }
             }
@@ -340,188 +341,183 @@ void Physics::pSpecCollison() {
             cmMtx.unlock();
 
 
-            
+
 
             std::vector<std::thread> tThreads(wCollModels.size());
             std::vector < std::array<int,2>> wSizes(wCollModels.size(), std::array<int, 2>{0,0});
 
             std::vector<THREADS::WRef> refs;
             refs.resize(wCollModels.size());
-            
-
             std::vector<std::vector<RETURNDATA>> retdata(wCollModels.size());
+
+  
+
             for (auto i = 0; i < wCollModels.size(); i++) {
-                std::function<void()> tFunc{ [this, &wCollModels, i, &wSizes, &obj, &Pos1, &retdata]() {
 
-                auto tQueue = cl::CommandQueue{ context, devices.front() };
+                refs[i] = tProcCollide->gPushWork([this, &wCollModels, i, &wSizes, &obj, &Pos1, &retdata]() {
+                    XMFLOAT3 MoveD1{ 0,0,0 };
+                    XMFLOAT3 MoveD2{ 0,0,0 };
+                    XMFLOAT3 Zero{ 0,0,0 };
+                    auto tQueue = cl::CommandQueue{ context, devices.front() };
+                    _ASSERT(wCollModels.size() > 0);
 
-                auto& obj2 = *wCollModels[i].obj2;
-                XMFLOAT3 Pos2;
-                BoundingSphere sph2;
-                obj2.mPos.posMtx.lock();
-                sph2 = obj2.model->uData->Sphere;
-                Pos2 = *obj2.mPos.position;
-                obj2.mPos.posMtx.unlock();
-                auto dir = fDirection(Pos1, Pos2);
-                auto dist = fDistance(Pos1, Pos2);
+                    auto& obj2 = *wCollModels[i].obj2;
+                    XMFLOAT3 Pos2;
+                    BoundingSphere sph2;
+                    obj2.mPos.posMtx.lock();
+                    sph2 = obj2.model->uData->Sphere;
+                    Pos2 = *obj2.mPos.position;
+                    obj2.mPos.posMtx.unlock();
+                    auto dir = fDirection(Pos1, Pos2);
+                    auto dist = fDistance(Pos1, Pos2);
 
-                WORKINDI WorkIndi = ProcCollide(obj, obj2, Pos1, Pos2, dir, dist);
+                    WORKINDI WorkIndi = ProcCollide(obj, obj2, Pos1, Pos2, dir, dist);
 
-                if (WorkIndi.wWorkCount != 0 && WorkIndi.tWorkCount != 0) {
+                    if (WorkIndi.wWorkCount != 0 && WorkIndi.tWorkCount != 0) {
+                        wSizes[i][0] = WorkIndi.wWorkCount;
+                        wSizes[i][1] = WorkIndi.tWorkCount;
 
-                    wSizes[i][0] = WorkIndi.wWorkCount;
-                    wSizes[i][1] = WorkIndi.tWorkCount;
-
-                    retdata[i].resize(wSizes[i][0]);
-
-                    
-
-                    cl::Buffer PositionBuffer(context, CL_MEM_READ_ONLY, sizeof(XMFLOAT3));
-                    cl::Buffer IndexBuffer(context, CL_MEM_READ_ONLY, WorkIndi.Indices.size() * sizeof(int));
-
-                    cl::Kernel kerns(FullColl, "coll");
-
-                    tQueue.enqueueWriteBuffer(PositionBuffer, CL_FALSE, 0, sizeof(XMFLOAT3), &WorkIndi.Position);
-                    tQueue.enqueueWriteBuffer(IndexBuffer, CL_FALSE, 0, WorkIndi.Indices.size() * sizeof(cl_int), WorkIndi.Indices.data());
-                    size_t retdatSize = sizeof(RETURNDATA) * retdata[i].size();
-                    cl::Buffer rbuffer(context, CL_MEM_READ_WRITE, retdatSize);
-                    cl_float fillbuff = 0.0;
-                    tQueue.enqueueFillBuffer(rbuffer, fillbuff, 0, retdatSize);
-                    tQueue.finish();
-
-                    kerns.setArg(0, obj.model->clBuff);
-                    kerns.setArg(1, obj2.model->clBuff);
-                    kerns.setArg(2, PositionBuffer);
-                    kerns.setArg(3, IndexBuffer);
-                    kerns.setArg(4, rbuffer);
+                        retdata[i].resize(wSizes[i][0]);
 
 
 
+                        cl::Buffer PositionBuffer(context, CL_MEM_READ_ONLY, sizeof(XMFLOAT3));
+                        cl::Buffer IndexBuffer(context, CL_MEM_READ_ONLY, WorkIndi.Indices.size() * sizeof(int));
 
-                    size_t wsize[2] = { WorkIndi.wWorkCount, WorkIndi.tWorkCount };
-                    size_t offsize[2] = { 0, WorkIndi.wWorkCount };
-                    auto error = CL_SUCCESS;
+                        cl::Kernel kerns(FullColl, "coll");
 
-                    error = clEnqueueNDRangeKernel(tQueue.get(), kerns.get(), 2, offsize, wsize, nullptr, 0, NULL, NULL);
-                    _ASSERT(error == CL_SUCCESS);
+                        tQueue.enqueueWriteBuffer(PositionBuffer, CL_FALSE, 0, sizeof(XMFLOAT3), &WorkIndi.Position);
+                        tQueue.enqueueWriteBuffer(IndexBuffer, CL_FALSE, 0, WorkIndi.Indices.size() * sizeof(cl_int), WorkIndi.Indices.data());
+                        size_t retdatSize = sizeof(RETURNDATA) * retdata[i].size();
+                        cl::Buffer rbuffer(context, CL_MEM_READ_WRITE, retdatSize);
+                        cl_float fillbuff = 0.0;
+                        tQueue.enqueueFillBuffer(rbuffer, fillbuff, 0, retdatSize);
+                        tQueue.finish();
 
-                    tQueue.finish();
-                    error = tQueue.enqueueReadBuffer(rbuffer, CL_TRUE, 0, sizeof(RETURNDATA)* retdata[i].size(), retdata[i].data());
-                    _ASSERT(error == CL_SUCCESS);
-                    tQueue.finish();
+                        kerns.setArg(0, obj.model->clBuff);
+                        kerns.setArg(1, obj2.model->clBuff);
+                        kerns.setArg(2, PositionBuffer);
+                        kerns.setArg(3, IndexBuffer);
+                        kerns.setArg(4, rbuffer);
 
-                }
 
 
-                } };
-                 refs[i] = (childthrds.get()->gPushWork(tFunc));
+
+                        size_t wsize[2] = { WorkIndi.wWorkCount, WorkIndi.tWorkCount };
+                        size_t offsize[2] = { 0, WorkIndi.wWorkCount };
+                        auto error = CL_SUCCESS;
+
+                        error = clEnqueueNDRangeKernel(tQueue.get(), kerns.get(), 2, offsize, wsize, nullptr, 0, NULL, NULL);
+                        _ASSERT(error == CL_SUCCESS);
+
+                        tQueue.finish();
+                        error = tQueue.enqueueReadBuffer(rbuffer, CL_TRUE, 0, sizeof(RETURNDATA) * retdata[i].size(), retdata[i].data());
+                        _ASSERT(error == CL_SUCCESS);
+                        tQueue.finish();
+                        auto& retdat = retdata[i];
+                        auto& obj2 = *wCollModels[i].obj2;
+
+                        XMFLOAT3 Pos2;
+                        obj2.mPos.posMtx.lock();
+                        XMStoreFloat3(&Pos2, XMLoadFloat3(obj2.mPos.position));
+                        auto sph2 = obj2.model->uData->Sphere;
+                        obj2.mPos.posMtx.unlock();
+
+                        auto dir = fDirection(Pos1, Pos2);
+                        auto dist = fDistance(Pos1, Pos2);
+                        XMFLOAT3 RelPos;
+                        XMStoreFloat3(&RelPos, XMLoadFloat4(&dir)* dist);
+
+                        int coutn = 0;
+                        for (auto& r : retdat) {
+                            if (r.dist[0] != 0 || r.dist[1] != 0) {
+
+                                XMStoreFloat3(&MoveD1, (XMLoadFloat3(&MoveD1) + (XMLoadFloat3(&obj.model->uData->MappedVertices[r.index[0]][0].normal) * r.dist[0])));
+                                XMStoreFloat3(&MoveD2, (XMLoadFloat3(&MoveD2) + (XMLoadFloat3(&obj2.model->uData->MappedVertices[r.index[1]][0].normal) * r.dist[1])));
+                                /*
+                                                        DebugMTX.lock();
+                                std::cout << "Model: " + obj.model->name + " Vert: " + std::to_string(r.index[0]) + " Pos: {" + std::to_string(obj.model->uData->MappedVertices[r.index[0]][r.index[0] % 3].position.x) + ", " +
+                                    std::to_string(obj.model->uData->MappedVertices[r.index[0]][r.index[0] % 3].position.y) +", " + std::to_string(obj.model->uData->MappedVertices[r.index[0]][r.index[0] % 3].position.z) + "} " << std::endl;
+                                std::cout << "Normal: {" + std::to_string(obj.model->uData->MappedVertices[r.index[0]][0].normal.x) + ", " +
+                                    std::to_string(obj.model->uData->MappedVertices[r.index[0]][0].normal.y) + ", " + std::to_string(obj.model->uData->MappedVertices[r.index[0]][0].normal.z) + "} " << std::endl;
+                                auto objvert0 = obj.model->uData->MappedVertices[r.index[0]][0].position;
+                                auto objvert1 = obj.model->uData->MappedVertices[r.index[0]][1].position;
+                                auto objvert2 = obj.model->uData->MappedVertices[r.index[0]][2].position;
+
+                                std::cout << "Mod1 Vert0 pos': {" + std::to_string(objvert0.x) + ", " +
+                                    std::to_string(objvert0.y) + ", " + std::to_string(objvert0.z) + "} " << std::endl;
+                                std::cout << "Mod1 Vert0 pos': {" + std::to_string(objvert1.x) + ", " +
+                                    std::to_string(objvert1.y) + ", " + std::to_string(objvert1.z) + "} " << std::endl;
+                                std::cout << "Mod1 Vert0 pos': {" + std::to_string(objvert2.x) + ", " +
+                                    std::to_string(objvert2.y) + ", " + std::to_string(objvert2.z) + "} " << std::endl;
+
+                                std::cout << "Model2: " + obj2.model->name + " Vert: " + std::to_string(r.index[1]) + " Pos: {" + std::to_string(obj2.model->uData->MappedVertices[r.index[1]][r.index[1] % 3].position.x) + ", " +
+                                    std::to_string(obj2.model->uData->MappedVertices[r.index[1]][r.index[1] % 3].position.y) + ", " + std::to_string(obj2.model->uData->MappedVertices[r.index[1]][r.index[1] % 3].position.z) + "} " << std::endl;
+                                auto obj2vert0 = obj2.model->uData->MappedVertices[r.index[1]][0].position;
+                                auto obj2vert1 = obj2.model->uData->MappedVertices[r.index[1]][1].position;
+                                auto obj2vert2 = obj2.model->uData->MappedVertices[r.index[1]][2].position;
+
+                                std::cout << "Mod2 Vert0 pos': {" + std::to_string(obj2vert0.x) + ", " +
+                                    std::to_string(obj2vert0.y) + ", " + std::to_string(obj2vert0.z) + "} " << std::endl;
+                                std::cout << "Mod2 Vert0 pos': {" + std::to_string(obj2vert1.x) + ", " +
+                                    std::to_string(obj2vert1.y) + ", " + std::to_string(obj2vert1.z) + "} " << std::endl;
+                                std::cout << "Mod2 Vert0 pos': {" + std::to_string(obj2vert2.x) + ", " +
+                                    std::to_string(obj2vert2.y) + ", " + std::to_string(obj2vert2.z) + "} " << std::endl;
+                                std::cout << "Mod 2 rel pos: {" + std::to_string(RelPos.x) + ", " +
+                                    std::to_string(RelPos.y) + ", " + std::to_string(RelPos.z) + "} " << std::endl;
+                                std::cout << "Normal: {" + std::to_string(obj2.model->uData->MappedVertices[r.index[1]][0].normal.x) + ", " +
+                                    std::to_string(obj2.model->uData->MappedVertices[r.index[1]][0].normal.y) + ", " + std::to_string(obj2.model->uData->MappedVertices[r.index[1]][0].normal.z) + "} " << std::endl;
+
+
+
+                                DebugMTX.unlock();
+                                */
+
+                                coutn++;
+                            }
+                        }
+                        if (coutn != 0) {
+                            float massScal1 = (obj.mass / (obj.mass + obj2.mass));
+                            float massScal2 = (obj2.mass / (obj.mass + obj2.mass));
+                            massScal1 = massScal1 < 0.00001 ? 0 : massScal1;
+                            massScal2 = massScal2 < 0.00001 ? 0 : massScal2;
+
+                            XMStoreFloat3(&MoveD1, (XMLoadFloat3(&MoveD1) / coutn) * massScal2);
+                            XMStoreFloat3(&MoveD2, (XMLoadFloat3(&MoveD2) / coutn) * massScal1);
+
+                            XMFLOAT3 Zero(0, 0, 0);
+
+                            //Fixxx thissss
+                            //CalProportionalSpeed(obj->velDir, obj2->velDir, obj->speed, obj2.speed, obj->mass, obj2.mass);
+                            obj.Move(fDirection(Zero, MoveD2), fDistance(Zero, MoveD2));
+                            obj2.Move(fDirection(Zero, MoveD1), fDistance(Zero, MoveD1));
+
+                        }
+                    }
+
+
+                });
+
+
             }
-
-
-           
-
-
-            XMFLOAT3 MoveD1{ 0,0,0 };
-            XMFLOAT3 MoveD2{ 0,0,0 };
-            XMFLOAT3 Zero{ 0,0,0 };
+            tProcCollide->gEndWork(refs);
 
 
 
-            for (auto& r : refs) {
-                childthrds.get()->gEndWork(r);
-            }
+
+
 
 
             for (auto i = 0; i < retdata.size(); i++) {
-                auto& retdat = retdata[i];
-                auto& obj2 = *wCollModels[i].obj2;
-
-                XMFLOAT3 Pos2;
-                obj2.mPos.posMtx.lock();
-                XMStoreFloat3(&Pos2, XMLoadFloat3(obj2.mPos.position));
-                auto sph2 = obj2.model->uData->Sphere;
-                obj2.mPos.posMtx.unlock();
-
-                auto dir = fDirection(Pos1, Pos2);
-                auto dist = fDistance(Pos1, Pos2);
-                XMFLOAT3 RelPos;
-                XMStoreFloat3(&RelPos, XMLoadFloat4(&dir)*dist);
-
-                int coutn = 0;
-                for (auto& r : retdat) {
-                    if (r.dist[0] != 0 || r.dist[1] != 0) {
-
-                        XMStoreFloat3(&MoveD1, (XMLoadFloat3(&MoveD1) + (XMLoadFloat3(&obj.model->uData->MappedVertices[r.index[0]][0].normal) * r.dist[0])));
-                        XMStoreFloat3(&MoveD2, (XMLoadFloat3(&MoveD2) + (XMLoadFloat3(&obj2.model->uData->MappedVertices[r.index[1]][0].normal) * r.dist[1])));
-                        /*
-                                                DebugMTX.lock();
-                        std::cout << "Model: " + obj.model->name + " Vert: " + std::to_string(r.index[0]) + " Pos: {" + std::to_string(obj.model->uData->MappedVertices[r.index[0]][r.index[0] % 3].position.x) + ", " +
-                            std::to_string(obj.model->uData->MappedVertices[r.index[0]][r.index[0] % 3].position.y) +", " + std::to_string(obj.model->uData->MappedVertices[r.index[0]][r.index[0] % 3].position.z) + "} " << std::endl;
-                        std::cout << "Normal: {" + std::to_string(obj.model->uData->MappedVertices[r.index[0]][0].normal.x) + ", " +
-                            std::to_string(obj.model->uData->MappedVertices[r.index[0]][0].normal.y) + ", " + std::to_string(obj.model->uData->MappedVertices[r.index[0]][0].normal.z) + "} " << std::endl;
-                        auto objvert0 = obj.model->uData->MappedVertices[r.index[0]][0].position;
-                        auto objvert1 = obj.model->uData->MappedVertices[r.index[0]][1].position;
-                        auto objvert2 = obj.model->uData->MappedVertices[r.index[0]][2].position;
-
-                        std::cout << "Mod1 Vert0 pos': {" + std::to_string(objvert0.x) + ", " +
-                            std::to_string(objvert0.y) + ", " + std::to_string(objvert0.z) + "} " << std::endl;
-                        std::cout << "Mod1 Vert0 pos': {" + std::to_string(objvert1.x) + ", " +
-                            std::to_string(objvert1.y) + ", " + std::to_string(objvert1.z) + "} " << std::endl;
-                        std::cout << "Mod1 Vert0 pos': {" + std::to_string(objvert2.x) + ", " +
-                            std::to_string(objvert2.y) + ", " + std::to_string(objvert2.z) + "} " << std::endl;
-
-                        std::cout << "Model2: " + obj2.model->name + " Vert: " + std::to_string(r.index[1]) + " Pos: {" + std::to_string(obj2.model->uData->MappedVertices[r.index[1]][r.index[1] % 3].position.x) + ", " +
-                            std::to_string(obj2.model->uData->MappedVertices[r.index[1]][r.index[1] % 3].position.y) + ", " + std::to_string(obj2.model->uData->MappedVertices[r.index[1]][r.index[1] % 3].position.z) + "} " << std::endl;
-                        auto obj2vert0 = obj2.model->uData->MappedVertices[r.index[1]][0].position;
-                        auto obj2vert1 = obj2.model->uData->MappedVertices[r.index[1]][1].position;
-                        auto obj2vert2 = obj2.model->uData->MappedVertices[r.index[1]][2].position;
-
-                        std::cout << "Mod2 Vert0 pos': {" + std::to_string(obj2vert0.x) + ", " +
-                            std::to_string(obj2vert0.y) + ", " + std::to_string(obj2vert0.z) + "} " << std::endl;
-                        std::cout << "Mod2 Vert0 pos': {" + std::to_string(obj2vert1.x) + ", " +
-                            std::to_string(obj2vert1.y) + ", " + std::to_string(obj2vert1.z) + "} " << std::endl;
-                        std::cout << "Mod2 Vert0 pos': {" + std::to_string(obj2vert2.x) + ", " +
-                            std::to_string(obj2vert2.y) + ", " + std::to_string(obj2vert2.z) + "} " << std::endl;
-                        std::cout << "Mod 2 rel pos: {" + std::to_string(RelPos.x) + ", " +
-                            std::to_string(RelPos.y) + ", " + std::to_string(RelPos.z) + "} " << std::endl;
-                        std::cout << "Normal: {" + std::to_string(obj2.model->uData->MappedVertices[r.index[1]][0].normal.x) + ", " +
-                            std::to_string(obj2.model->uData->MappedVertices[r.index[1]][0].normal.y) + ", " + std::to_string(obj2.model->uData->MappedVertices[r.index[1]][0].normal.z) + "} " << std::endl;
-                        
-
-
-                        DebugMTX.unlock();
-                        */
-
-                        coutn++;
-                    }
-                }
-                if (coutn != 0) {
-                    float massScal1 = (obj.mass / (obj.mass + obj2.mass));
-                    float massScal2 = (obj2.mass / (obj.mass + obj2.mass));
-                    massScal1 = massScal1 < 0.00001 ? 0 : massScal1;
-                    massScal2 = massScal2 < 0.00001 ? 0 : massScal2;
-
-                    XMStoreFloat3(&MoveD1, (XMLoadFloat3(&MoveD1) / coutn) * massScal2);
-                    XMStoreFloat3(&MoveD2, (XMLoadFloat3(&MoveD2) / coutn) * massScal1);
-
-                    XMFLOAT3 Zero(0, 0, 0);
-
-                    //Fixxx thissss
-                    //CalProportionalSpeed(obj->velDir, obj2->velDir, obj->speed, obj2.speed, obj->mass, obj2.mass);
-                    obj.CollisionUp(fDirection(Zero, MoveD2), fDistance(Zero, MoveD2));
-                    obj2.CollisionUp(fDirection(Zero, MoveD1), fDistance(Zero, MoveD1));
-
-                }
+               
             }
-           
 
-        }};
-       refs[h] = thrds.get()->gPushWork(work);
-    }
-    for (auto& t : refs) {
-        //_ASSERT(t.uWid != 0);
-        thrds.get()->gEndWork(t);
-    }
+
+        })
+        ;
+        tO++;
+    };
+    tMain->gEndWork(refs);
 }
 
 void Physics::pSpecReset() {
@@ -560,7 +556,3 @@ DirectX::XMFLOAT4 Physics::fDirection(DirectX::XMFLOAT3& pos1, DirectX::XMFLOAT3
     return { 0,0,0,0 };
 }
 
-
-Physics::~Physics() {
-    thrds.get()->gEndWork(lastWref);
-}

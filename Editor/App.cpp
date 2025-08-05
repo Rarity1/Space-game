@@ -7,11 +7,13 @@ App::App()
 };
 
 int App::Go() {
+	wnd.sEng->iLoad();
 	while (Alive.load()) {
 		//Process messages each frame
 		if (wnd.ProcessMessages() == WM_QUIT) {
+			//Add Graceful shutdown here
 			Alive.store(false);
-			return 0;
+			break;
 		}
 		App::DoFrame();
 	}
@@ -19,18 +21,15 @@ int App::Go() {
 }
 
 void App::DoFrame() {
-	if (launch) {
-		wnd.Eng().iLoad();
-		launch = false;
-	}
-	auto delta = wnd.Eng().Clock.Mark();
-	wnd.Eng().Update(delta);
-	updaterate += delta;
-	if (updaterate >= 1.0) {
-		wnd.SetTitle(std::to_string(wnd.Eng().phyx->ticker.cGet()));
-		wnd.Eng().phyx->ticker.reset();
-		updaterate = 0.0;
-	}
-	wnd.Gfx().RenderFrame();
 
+	wnd.sEng->tMain->gEndWork(graphicsWref);
+	if (wnd.sEng->Update()) {
+		delta += wnd.sEng->engineTimeTaken;
+	}
+	if (delta >= 1) {
+		wnd.SetTitle(std::to_string(wnd.sEng->phyx->ticker.cGet()));
+		wnd.sEng->phyx->ticker.reset();
+		delta = wnd.sEng->engineTimeTaken;
+	}
+	graphicsWref = wnd.sEng->tMain->gPushWork([this] {	wnd.pGfx->RenderFrame(wnd.sEng->tracker->getInstance(1));});
 }

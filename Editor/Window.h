@@ -9,6 +9,7 @@
 
 //Window Class
 class Window {
+	friend class App;
 public:
 	class Exception : public Exceptions {
 		using Exceptions::Exceptions;
@@ -25,8 +26,10 @@ public:
 		std::string GetErrorDescription() const noexcept;
 	private:
 		HRESULT hr;
+
 	};
 private:
+
 	class WindowClass
 	{
 	public:
@@ -41,17 +44,14 @@ private:
 		static constexpr const char* wndClassName = "Engine Window";
 		static WindowClass wndClass;
 		HMODULE hInst;
-
 	};
 public:
-	Window(int width, int height, const char* name);
+	Window(uint16_t width, uint16_t height, const char* name);
 	~Window();
 	Window(const Window&) = delete;
 	Window& operator=(const Window&) = delete;
 	void SetTitle(const std::string& title);
 	static std::optional<WPARAM> ProcessMessages();
-	Graphics& Gfx();
-	Engine& Eng();
 
 private:
 	static LRESULT CALLBACK HandleMsgSetup(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
@@ -63,11 +63,11 @@ public:
 	EngineTime clock;
 	Mouse mouse;
 private:
-	int width;
-	int height;
+	RECT WindowRect;
+	uint16_t width;
+	uint16_t height;
 	HWND hWnd;
-	std::shared_ptr<Graphics> pGfx;
-	std::shared_ptr<imguid> iGui;
+	std::unique_ptr<Graphics> pGfx;
 	std::unique_ptr<Engine> sEng;
 };
 

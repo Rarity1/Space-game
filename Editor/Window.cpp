@@ -46,30 +46,27 @@ HMODULE Window::WindowClass::GetInstance() noexcept
 	return wndClass.hInst;
 }
 
-Window::Window(int width, int height, const char* name)
+Window::Window(uint16_t w, uint16_t h, const char* name)
 	:
-	width(width),
-	height(height)
+	width(w),
+	height(h)
 {
 
+	auto WindowStyle =  WS_MINIMIZEBOX | WS_SYSMENU | WS_CAPTION | WS_VISIBLE | WS_SIZEBOX;
 	// calculate window size based on desired client region size
-	RECT wr = { 0, 0, (LONG)width, (LONG)height };
-	AdjustWindowRect(&wr, WS_OVERLAPPED |
-		WS_CAPTION |
-		WS_SYSMENU |
-		WS_THICKFRAME |
-		WS_MINIMIZEBOX |
-		WS_MAXIMIZEBOX, FALSE);
+	WindowRect = RECT{ 0, 0, width, height };
+	AdjustWindowRect(&WindowRect, WindowStyle, FALSE);
+
+	pGfx = std::make_unique<Graphics>(hWnd, WindowRect);
+	sEng = std::make_unique<Engine>(*pGfx, kbd, clock);
+
+
 	// create window & get hWnd
 	hWnd = CreateWindow(
-		WindowClass::GetName(), name,
-		WS_OVERLAPPED |
-		WS_CAPTION |
-		WS_SYSMENU |
-		WS_THICKFRAME |
-		WS_MINIMIZEBOX |
-		WS_MAXIMIZEBOX,
-		CW_USEDEFAULT, CW_USEDEFAULT, wr.right - wr.left, wr.bottom - wr.top,
+		WindowClass::GetName(),
+		name,
+		WindowStyle,
+		CW_USEDEFAULT, CW_USEDEFAULT, WindowRect.right - WindowRect.left, WindowRect.bottom - WindowRect.top,
 		nullptr, nullptr, WindowClass::GetInstance(), this
 	);
 
@@ -78,9 +75,6 @@ Window::Window(int width, int height, const char* name)
 	UpdateWindow(hWnd);
 
 
-	pGfx = std::make_shared<Graphics>(hWnd, height, width);
-	sEng = std::make_unique<Engine>(*pGfx, kbd, clock);
-	iGui = pGfx->iGui;
 }
 
 Window::~Window()
@@ -103,21 +97,14 @@ std::optional<WPARAM> Window::ProcessMessages() {
 		if (msg.message == WM_QUIT) {
 			return msg.message;
 		}
+
 		TranslateMessage(&msg);
 		DispatchMessage(&msg);
+
 	}
 	return msg.message;
 }
 
-Graphics& Window::Gfx()
-{
-	return *pGfx;
-}
-
-Engine& Window::Eng()
-{
-	return *sEng;
-}
 
 LRESULT CALLBACK Window::HandleMsgSetup(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
@@ -130,7 +117,7 @@ LRESULT CALLBACK Window::HandleMsgSetup(HWND hWnd, UINT msg, WPARAM wParam, LPAR
 		//Set the WinAPI-managed user data to store ptr to window class
 		SetWindowLongPtr(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(pWnd));
 		//Set message proc to normal (non-setup) handler now that setup is finished
-		SetWindowLongPtr(hWnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(&Window::HandleMsgThunk));
+		SetWindowLongPtr(hWnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(&HandleMsgThunk));
 		//Forward message to window class handler
 		return pWnd->HandleMsg(hWnd, msg, wParam, lParam);
 	}
@@ -138,14 +125,19 @@ LRESULT CALLBACK Window::HandleMsgSetup(HWND hWnd, UINT msg, WPARAM wParam, LPAR
 LRESULT CALLBACK Window::HandleMsgThunk(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
 	//Retrieve ptr to window class
-	Window* const pWnd = reinterpret_cast<Window*>(GetWindowLongPtr(hWnd, GWLP_USERDATA));
 	//Forward message to window class handler
-	return pWnd->HandleMsg(hWnd, msg, wParam, lParam);
+	return reinterpret_cast<Window*>(GetWindowLongPtr(hWnd, GWLP_USERDATA))->HandleMsg(hWnd, msg, wParam, lParam);
 }
 LRESULT Window::HandleMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
 
 	switch (msg) {
+	case WM_NCCREATE:
+		return DefWindowProc(hWnd, msg, wParam, lParam);
+	case WM_CREATE:
+		return DefWindowProc(hWnd, msg, wParam, lParam);
+	case WM_NCCALCSIZE:
+		return DefWindowProc(hWnd, msg, wParam, lParam);
 	case WM_DESTROY:
 		PostQuitMessage(0);
 		return 0;
@@ -153,8 +145,11 @@ LRESULT Window::HandleMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		kbd.ClearState();
 		break;
 
-
+	case WM_SIZE:
+		GetClientRect(hWnd, &WindowRect);
+		pGfx->updateResolution.store(true);
 		//Keyboard Messages
+		break;
 	case WM_KEYDOWN:
 	case WM_SYSKEYDOWN:
 		if (!(lParam & 0x40000000) || kbd.AutorepeatIsEnabled())
@@ -232,7 +227,7 @@ LRESULT Window::HandleMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	}
 
 	}
-	iGui->ImGuiProcHndl(hWnd, msg, wParam, lParam);
+	pGfx->iGui->ImGuiProcHndl(hWnd, msg, wParam, lParam);
 	return DefWindowProc(hWnd, msg, wParam, lParam);
 }
 

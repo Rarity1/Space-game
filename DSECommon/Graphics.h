@@ -1,15 +1,18 @@
 #pragma once
 #include "CWin.h"
 #include "FrameResource.h"
-#include "RStorage.h"
 #include "EngineTime.h"
+#include "ObjectTracking.h"
 #include "../ImGui/DLLGui.h"
+#include <dxcapi.h>
 
 class DLL Graphics
 {
+	friend class Window;
+	friend class FrameResource;
 public:
 	static const UINT bufferCount = 3;
-	Graphics(HWND hWnd, int height, int widthm);
+	Graphics(HWND& hWnd, RECT& WindowRect);
 	Graphics(const Graphics&) = delete;
 	Graphics& operator=(const Graphics&) = delete;
 	~Graphics();
@@ -21,36 +24,47 @@ public:
 		DirectX::XMFLOAT4 forwardDirect = { 1,0,0,0 };
 		DirectX::XMMATRIX cmatrix;
 	};
-	
-	void UpdateModel(RStorage::eResource* bm);
-	void RenderFrame();
-	void LoadResources();
+	//update graphics for a list of tracked objects. Preferably objects loaded in memory and meant to be rendered
+	void Update(std::list<Object>& trackedObjects);
+
+
+	void CreateBuffers(std::list<Object>& trackedObjects);
+	void UpdBuffer(Object& bm, Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList, Microsoft::WRL::ComPtr<ID3D12Device> pDevice, Microsoft::WRL::ComPtr<ID3D12CommandAllocator> commandAllocator, Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue);
+
+	void lModel(Object& obj, UINT umID) noexcept;
+
+
+	void UpdateModel(Object* bm);
+	void RenderFrame(std::list<Object>& trackedObjects);
+	void LoadResources(std::list<Object>& trackedObjects, Tracker& oTracker);
 	void LoadPipeline();
-	void UpdateLocalTransform(RStorage::eResource& bm);
-	std::shared_ptr<imguid> iGui;
+	void UpdateLocalTransform(Object& bm);
+	static void UpdateConstantBuffers(DirectX::FXMMATRIX view, DirectX::CXMMATRIX projection, std::list<Object>& trackedObjects);
+	std::unique_ptr<imguid> iGui;
 	pCamera curCamera;
 	std::vector<std::string> loadbuff;
-	std::mutex umodel;
-	std::unique_ptr<RStorage> lModels;
-	std::vector<RStorage::eResource>& trackedObjects;
+	std::unique_ptr<RStorage> rStorage;
+	std::atomic<bool> updateResolution;
 private:
+	void UpdateFrameResources();
+	void CreateFrameResources();
 	ImGui_ImplDX12_InitInfo ImGuiInfo;
-
+	DirectX::XMFLOAT4X4 fovPerspective;
 	float Max(float number, float maximum);
 	float Min(float minimum, float number);
 	float RotateHelper(float& rNumber);
 	float timesincestart;
-	void CreateFrameResources();
-	void RecurLTrans(ReadX3D::Node* n, ReadX3D::Node* P);
+	void RecurLTrans(ReadXML::Node* n, ReadXML::Node* P);
 	int bIndex(std::vector<int> w, int bInd);
 	GErrors::CheckerToken chk;
-	UINT width;
-	UINT height;
-	HWND hwnd;
-	
-
+	//uint16_t& width;
+	//uint16_t& height;
+	RECT& windowResolution;
+	HWND& hwnd;
+	CD3DX12_RECT scissorRect;
+	CD3DX12_VIEWPORT viewport;
 	static const bool UseBundles = true;
-	std::vector<std::unique_ptr<FrameResource>> frameResources;
+	std::vector<std::unique_ptr<FrameResource>> FrameResources;
 	struct PipelineStateStream
 	{
 		CD3DX12_PIPELINE_STATE_STREAM_ROOT_SIGNATURE RootSignature;
@@ -61,21 +75,23 @@ private:
 		CD3DX12_PIPELINE_STATE_STREAM_DEPTH_STENCIL_FORMAT DSVFormat;
 		CD3DX12_PIPELINE_STATE_STREAM_RENDER_TARGET_FORMATS RTVFormats;
 	} pipelineStateStream;
-	UINT CurBackBuffer;
-	UINT cframeIndex;
+	uint8_t cframeIndex;
+	UINT rtvDescriptorSize;
+	UINT dsvDescriptorSize;
+
 	
-	uint64_t fenceValue;
-	Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature;
-	Microsoft::WRL::ComPtr<ID3D12Device2> pDevice;
+	uint8_t fenceValue = 0;
+	Microsoft::WRL::ComPtr<ID3D12RootSignature> pRootSignature;
+	Microsoft::WRL::ComPtr<ID3D12Device9> pDevice;
 	Microsoft::WRL::ComPtr<IDStorageFactory> pStorage;
 	Microsoft::WRL::ComPtr<IDStorageQueue> storageQueue;
-	Microsoft::WRL::ComPtr<IDXGIFactory4> dxgiFactory;
+	Microsoft::WRL::ComPtr<IDXGIFactory7> dxgiFactory;
 	Microsoft::WRL::ComPtr<IDXGISwapChain4> swapChain;
 	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> pSamplerDescriptorHeap;
-	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> pCbvSrvDescriptorHeap;
+	//Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> pCbvSrvDescriptorHeap;
 	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> rtvDescriptorHeap;
 	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> dsvDescriptorHeap;
-	Microsoft::WRL::ComPtr<ID3D12Resource> depthBuffer;
+
 	std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> renderTargets;
 
 
@@ -90,10 +106,8 @@ private:
 	std::vector<D3D12_INDEX_BUFFER_VIEW*> ibvarr;
 	
 
-	Microsoft::WRL::ComPtr<ID3D12PipelineState> pipelineState;
+	Microsoft::WRL::ComPtr<ID3D12PipelineState> pPipelineState;
 
-	CD3DX12_RECT scissorRect;
-	CD3DX12_VIEWPORT viewport;
 	UINT modelSubCount;
 
 	HANDLE fenceEvent;
@@ -106,55 +120,87 @@ private:
 	{
 	public:
 
-		Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> Heap;
+		Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> DescHeap;
 		D3D12_DESCRIPTOR_HEAP_TYPE HeapType;
 		D3D12_CPU_DESCRIPTOR_HANDLE HeapStartCpu;
 		D3D12_GPU_DESCRIPTOR_HANDLE HeapStartGpu;
-		UINT                        HeapHandleIncrement;
-		std::vector<int>               FreeIndices;
+		struct handls {
+			D3D12_CPU_DESCRIPTOR_HANDLE* cpuHndl;
+			D3D12_GPU_DESCRIPTOR_HANDLE* gpuHndl;
+			//Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> originHeap;
+		};
+		//std::unordered_map<uint64_t, handls> allocatedHandles;
+		std::unordered_map<SIZE_T, uint64_t> uidHndls;
 
-		DescriptorHeapAllocator(Microsoft::WRL::ComPtr<ID3D12Device2>& pDevice, Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> imguiSrvDescHeap)
+		Microsoft::WRL::ComPtr<ID3D12Device9> pDevice;
+		uint64_t HeapHandleIncrement;
+		std::vector<uint64_t> FreeIndices;
+		uint64_t lastSize = 0;
+		DescriptorHeapAllocator(Microsoft::WRL::ComPtr<ID3D12Device9>& pD, uint64_t DescpCount = 1000000):
+			pDevice(pD)
 		{
-			Heap = imguiSrvDescHeap;
-			D3D12_DESCRIPTOR_HEAP_DESC desc = imguiSrvDescHeap->GetDesc();
+			{
+				D3D12_DESCRIPTOR_HEAP_DESC desc = {};
+				desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+				desc.NumDescriptors = DescpCount;
+				desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+				pDevice->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&DescHeap));
+			}
+
+			D3D12_DESCRIPTOR_HEAP_DESC desc = DescHeap->GetDesc();
 			HeapType = desc.Type;
-			HeapStartCpu = Heap->GetCPUDescriptorHandleForHeapStart();
-			HeapStartGpu = Heap->GetGPUDescriptorHandleForHeapStart();
+			HeapStartCpu = DescHeap->GetCPUDescriptorHandleForHeapStart();
+			HeapStartGpu = DescHeap->GetGPUDescriptorHandleForHeapStart();
 			HeapHandleIncrement = pDevice->GetDescriptorHandleIncrementSize(HeapType);
-			FreeIndices.reserve((int)desc.NumDescriptors);
-			for (int n = desc.NumDescriptors; n > 0; n--)
-				FreeIndices.push_back(n - 1);
+			FreeIndices.reserve(desc.NumDescriptors);
+			FreeIndices.resize(desc.NumDescriptors);
+			std::iota(FreeIndices.begin(), FreeIndices.end(), 0);
+			std::reverse(FreeIndices.begin(), FreeIndices.end());
+			lastSize = desc.NumDescriptors;
 		}
 		~DescriptorHeapAllocator() {
 			Destroy();
 		}
 
+
 		void Destroy()
 		{
-			Heap = nullptr;
+			DescHeap = nullptr;
 			FreeIndices.clear();
 		}
 		void Alloc(D3D12_CPU_DESCRIPTOR_HANDLE* out_cpu_desc_handle, D3D12_GPU_DESCRIPTOR_HANDLE* out_gpu_desc_handle)
 		{
-			_ASSERT(FreeIndices.size() > 0);
-			int idx = FreeIndices.back();
+			uint64_t idx = FreeIndices.back();
 			FreeIndices.pop_back();
 			out_cpu_desc_handle->ptr = HeapStartCpu.ptr + (idx * HeapHandleIncrement);
 			out_gpu_desc_handle->ptr = HeapStartGpu.ptr + (idx * HeapHandleIncrement);
+
+			//Is a map faster than division?
+			//uidHndls[out_cpu_desc_handle->ptr] = idx;
+			//allocatedHandles[idx] = { out_cpu_desc_handle , out_gpu_desc_handle};
+
 		}
 		void Free(D3D12_CPU_DESCRIPTOR_HANDLE out_cpu_desc_handle, D3D12_GPU_DESCRIPTOR_HANDLE out_gpu_desc_handle)
 		{
-			int cpu_idx = (int)((out_cpu_desc_handle.ptr - HeapStartCpu.ptr) / HeapHandleIncrement);
-			int gpu_idx = (int)((out_gpu_desc_handle.ptr - HeapStartGpu.ptr) / HeapHandleIncrement);
+			//Map faster or slower than division ?
+			//uint64_t cpu_idx = uidHndls[out_cpu_desc_handle.ptr];
+			//uidHndls.erase(out_cpu_desc_handle.ptr);
+			uint64_t cpu_idx = (out_cpu_desc_handle.ptr - HeapStartCpu.ptr) / HeapHandleIncrement;
+			uint64_t gpu_idx = (out_gpu_desc_handle.ptr - HeapStartGpu.ptr) / HeapHandleIncrement;
 			_ASSERT(cpu_idx == gpu_idx);
+			//allocatedHandles.erase(cpu_idx);
 			FreeIndices.push_back(cpu_idx);
 		}
 	};
+
+	std::unique_ptr< DescriptorHeapAllocator> lmodelSRVCVB;
+
 	std::shared_ptr<DescriptorHeapAllocator> imHAllocator;
+	std::unique_ptr<DescriptorHeapAllocator> objectAllocator;
+
 	
 	Microsoft::WRL::ComPtr<ID3D12CommandAllocator> imGuicommandAllocator;
 
 	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> imGuicommandList;
 
-	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> imguiSrvDescHeap;
 };

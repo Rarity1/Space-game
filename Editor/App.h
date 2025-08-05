@@ -10,8 +10,9 @@ public:
 	int Go();
 private:
 	void DoFrame();
+	double delta = 0;
 	Window wnd;
+	THREADS::WRef graphicsWref;
 	std::atomic<bool> ignKey;
 	double updaterate = 0;
-	bool launch = true;
 };

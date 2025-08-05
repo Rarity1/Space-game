@@ -15,18 +15,21 @@
     <Filter Include="Header Files\Util">
       <UniqueIdentifier>{2447351e-eb07-4062-a33b-ad7e6e04552f}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Source Files\Util">
-      <UniqueIdentifier>{fd92ff06-bf5f-47ca-969a-1b0a2dc7438d}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Shaders\Resource Files">
+    <Filter Include="Resource Files">
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
-    <Filter Include="Shaders\Resource Files\models">
+    <Filter Include="Resource Files\models">
       <UniqueIdentifier>{cc1d3107-58f2-422a-9bc4-ed577b36533b}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Shaders\Resource Files\OCL">
+    <Filter Include="Util">
+      <UniqueIdentifier>{fd92ff06-bf5f-47ca-969a-1b0a2dc7438d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resource Files\OpenCL">
       <UniqueIdentifier>{47440870-f9f2-4437-9432-a92e1894ce91}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resource Files\textures">
+      <UniqueIdentifier>{9ff8d6da-cada-4d45-928e-89a5c3f2196d}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -48,7 +51,7 @@
     <ClInclude Include="GraphicsErrors.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="X3DInt.h">
+    <ClInclude Include="ReadXML.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="RStorage.h">
@@ -183,35 +186,49 @@
     <ClInclude Include="util\CL\Utils\Utils.hpp">
       <Filter>Header Files\Util</Filter>
     </ClInclude>
+    <ClInclude Include="Input.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ObjectTracking.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="hw3d.rc">
-      <Filter>Shaders\Resource Files</Filter>
+      <Filter>Resource Files</Filter>
     </ResourceCompile>
   </ItemGroup>
   <ItemGroup>
     <Image Include="icon1.ico">
-      <Filter>Shaders\Resource Files</Filter>
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="..\textures\cube.dds">
+      <Filter>Resource Files\textures</Filter>
+    </Image>
+    <Image Include="..\textures\untitled.dds">
+      <Filter>Resource Files\textures</Filter>
+    </Image>
+    <Image Include="..\textures\wrld.dds">
+      <Filter>Resource Files\textures</Filter>
     </Image>
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
-  </ItemGroup>
-  <ItemGroup>
-    <FxCompile Include="PixelShader.hlsl">
-      <Filter>Shaders</Filter>
-    </FxCompile>
-    <FxCompile Include="VertexShader.hlsl">
-      <Filter>Shaders</Filter>
-    </FxCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <CopyFileToFolders Include="..\OpenCL\ePhysics.cl">
-      <Filter>Shaders\Resource Files\OCL</Filter>
-    </CopyFileToFolders>
-    <CopyFileToFolders Include="..\OpenCL\SphrKern.cl">
-      <Filter>Shaders\Resource Files\OCL</Filter>
-    </CopyFileToFolders>
+    <None Include="..\OpenCL\ePhysics.cl">
+      <Filter>Resource Files\OpenCL</Filter>
+    </None>
+    <None Include="..\OpenCL\SphrKern.cl">
+      <Filter>Resource Files\OpenCL</Filter>
+    </None>
+    <None Include="..\models\#01#cube.dae">
+      <Filter>Resource Files\models</Filter>
+    </None>
+    <None Include="..\models\#02#untitled.dae">
+      <Filter>Resource Files\models</Filter>
+    </None>
+    <None Include="..\models\#04#wrld.dae">
+      <Filter>Resource Files\models</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Engine.cpp">
@@ -244,11 +261,25 @@
     <ClCompile Include="Threads.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="X3DInt.cpp">
+    <ClCompile Include="ReadXML.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Graphics.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="Input.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="ObjectTracking.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <CopyFileToFolders Include="..\shaders\PixelShader.hlsl">
+      <Filter>Shaders</Filter>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="..\shaders\VertexShader.hlsl">
+      <Filter>Shaders</Filter>
+    </CopyFileToFolders>
   </ItemGroup>
 </Project>
