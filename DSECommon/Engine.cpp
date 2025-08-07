@@ -20,20 +20,21 @@ void Engine::iLoad() {
     //begin model tracking. load a gd default world mf
     //Player model needs to be set.
     //Make a better way of setting player model. 
-    cTrackedInstance = &tracker->initInstance(1);
-    plModel = tracker->initObject(cTrackedInstance, "untitled", 2, 1, 200.0, 0.01, DirectX::XMFLOAT3{ 0,0,138 });
-    tracker->initObject(cTrackedInstance, "cube", 1, 1, 200.0, 0.01, DirectX::XMFLOAT3{ 10,0,138 });
-    tracker->initObject(cTrackedInstance, "wrld", 4, 1, 8570000000.0 , 0.3, DirectX::XMFLOAT3{ 0,0,0 });
+    cTrackedInstance = 1;
+    tracker->initInstance(cTrackedInstance);
+    plModel = tracker->initObject(tracker->getInstance(cTrackedInstance), "untitled", 2, 1, 200.0, 0.01, DirectX::XMFLOAT3{ 0,0,138 });
+    tracker->initObject(tracker->getInstance(cTrackedInstance), "cube", 1, 1, 200.0, 0.01, DirectX::XMFLOAT3{ 10,0,138 });
+    tracker->initObject(tracker->getInstance(cTrackedInstance), "wrld", 4, 1, 8570000000.0 , 0.3, DirectX::XMFLOAT3{ 0,0,0 });
     //wrld is 1:50000
 
     for (auto i = 0; i < 1; i++) {
         float p = i * 1;
-        tracker->initObject(cTrackedInstance, "untitled", 2, 1, 200, 0.3, DirectX::XMFLOAT3{ 12 + p,0,138 });
+        tracker->initObject(tracker->getInstance(cTrackedInstance), "untitled", 2, 1, 200, 0.3, DirectX::XMFLOAT3{ 12 + p,0,138 });
     }
 
     for (auto i = 0; i < 1; i++) {
         float p = i * 1;
-       tracker->initObject(cTrackedInstance, "untitled", 1, 1, 200, 0.3, DirectX::XMFLOAT3{ 12 + p,0,138 });
+       tracker->initObject(tracker->getInstance(cTrackedInstance), "untitled", 1, 1, 200, 0.3, DirectX::XMFLOAT3{ 12 + p,0,138 });
     }
 
     //trackedModels[0].mworld = &trackedModels[2];
@@ -45,34 +46,41 @@ void Engine::iLoad() {
 
     //end model tracking. begin resource upload.    
     pGfx.LoadPipeline();
-    pGfx.LoadResources(*cTrackedInstance, *tracker);
+    pGfx.LoadResources(tracker->getInstance(cTrackedInstance));
 
     if (engInit) {
         engInit = false;
     }
     eRun.store(true);
-    for (auto& m : *cTrackedInstance) {
-        pGfx.UpdateModel(&m);
+    for (auto& t : tracker->getInstance(cTrackedInstance).tmodelLinkedObjects) {
+        for (auto& m : t.second) {
+            pGfx.UpdateModel(m);
+        }
     }
-    phyx->trackM(tracker->getInstance(1));
+    phyx->trackM(tracker->getInstance(cTrackedInstance));
 }
 
 bool Engine::Update()
 {
     UControls();
     UCampos();
-    if ((1.0 / updaterate) <= Clock.Peek()) {
+    if (Clock.Peek() >= 1.0 / updaterate) {
+        engineTimeTaken = Clock.Mark();
         enQueueEngineCommands();
         enQueueExternCommands();
         eventBusSync();
         mAniUpdate();
-        pGfx.Update(tracker->getInstance(1));
-        engineTimeTaken = Clock.Mark();
+        pGfx.Update(tracker->getInstance(cTrackedInstance));
+        auto peek = Clock.Peek();
+
         return true;
     }
-    mAniUpdate();
-    pGfx.Update(tracker->getInstance(1));
     return false;
+}
+
+void Engine::RenderI()
+{
+    pGfx.RenderFrame(tracker->getInstance(cTrackedInstance));
 }
 
 
@@ -214,10 +222,15 @@ void Engine::enQueueEngineCommands()
         cPlayermodel();
     }, 0);
     queueCommand([this] {
-        phyx->Update(*cTrackedInstance);
+        phyx->Update(tracker->getInstance(cTrackedInstance));
     }, 20);
     queueCommand([this] {
-        std::for_each(cTrackedInstance->begin(), cTrackedInstance->end(), [this](auto& e) { e.UpdatePosition(); });
+        std::for_each(tracker->getInstance(cTrackedInstance).tmodelLinkedObjects.begin(), tracker->getInstance(cTrackedInstance).tmodelLinkedObjects.end(), [this](auto& e) { 
+            for (auto& tObjects : e.second) {
+                tObjects->UpdatePosition();
+            }
+        
+        });
     }, 21);
     //queueCommand([this] {pGfx.Update(tracker->trackedObjects);}, 65535);
     eWref = tMain->gPushWork(getCQueue());

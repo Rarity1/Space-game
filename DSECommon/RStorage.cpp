@@ -13,8 +13,8 @@ RStorage::RStorage()
 	std::filesystem::current_path(std::wstring(path).substr(0, std::wstring(path).find(L"\\")));
 	for (auto& file : std::filesystem::directory_iterator{ std::filesystem::current_path() / "models" }) {
 		if (file.path().extension() == ".dae") {
-			auto& smData = AvailableModels.emplace_back(mData());
-			smData.model = file.path();
+			mData smData;
+			smData.modelPath = file.path();
 			bool toggle = false;
 			auto name = file.path().filename().string().substr(0, file.path().filename().string().find(file.path().extension().string()));
 			std::vector<char> UniqueID(1, '0');
@@ -31,7 +31,7 @@ RStorage::RStorage()
 
 			}
 			smData.umID = std::stoul(std::string(UniqueID.data(), UniqueID.size()));
-			
+			AvailableModels.emplace(smData.umID, smData);
 		}
 	}
 	for (auto& file : std::filesystem::directory_iterator{ std::filesystem::current_path() / "textures" }) {
@@ -47,28 +47,23 @@ RStorage::RStorage()
 
 
 
-RStorage::mData* RStorage::GetModel(UINT umID) {
-	auto result = std::find_if(AvailableModels.begin(), AvailableModels.end(), [umID](const RStorage::mData& UDat) {
-		return UDat.umID == umID;
-	});
-	_ASSERT(result != AvailableModels.end());
-	return &*result;
+RStorage::mData* RStorage::GetMData(UINT umID) {
+	_ASSERT(AvailableModels.find(umID) != AvailableModels.end());
+	return &AvailableModels[umID];
 }
 
 RStorage::bmResource* RStorage::loadModel(mData& umData)
 {
-	auto result = std::find_if(LoadedModels.begin(), LoadedModels.end(), [umData](const RStorage::bmResource& UDat) {
-		return umData.umID == UDat.umID;
-	});
-	if (result == LoadedModels.end()) {
-		return &LoadedModels.emplace_back(RStorage::bmResource(umData.umID, std::make_unique<ReadXML>(umData.model.string(), ReadXML::PARSE::MODEL ), umData.name));
+	if (AvailableModels[umData.umID].model == nullptr) {
+		//Need to count referenced myself inorder to delete them
+		LoadedModels.emplace(umData.umID, RStorage::bmResource(umData.umID, std::make_unique<ReadXML>(umData.modelPath.string(), ReadXML::PARSE::MODEL), umData.name));
+		AvailableModels[umData.umID].model = &LoadedModels[umData.umID];
 	}
-	return &*result;
+	return AvailableModels[umData.umID].model;
 }
 
 void RStorage::trackModelID(UINT umID, UINT UOID)
 {
-	trackedModels[umID].emplace_back(UOID);
 	tmodelIndexMap[UOID] = umID;
 }
 
@@ -89,5 +84,10 @@ std::filesystem::path RStorage::getTexture(std::string name)
 
 RStorage::~RStorage()
 {
+	for (auto& a : LoadedModels) {
+		if (a.second.cbvwriteBuffer != nullptr) {
+			a.second.cbvwriteBuffer->Unmap(0, nullptr);
+		}
+	}
 }
 

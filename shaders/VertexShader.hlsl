@@ -16,18 +16,19 @@ struct CBVData
 {
     float4x4 viewMatrix;
     uint texIdex;
+    //This has 12Bytes of padding because float4x4 in hlsl is 16 byte aligned while in c++ its 4 byte aligned
 };
 
 cbuffer cbuffer0 : register(b0)
 {
-    CBVData cbvData;
+    CBVData cbvData[819];
 };
 
 PSInput main(VSInput input)
 {
     PSInput result;
     
-    result.position = mul(float4(input.position, 1.0), cbvData.viewMatrix);
+    result.position = mul(float4(input.position, 1.0), cbvData[input.Instance].viewMatrix);
     result.texPos = input.texPos;
     
     return result;

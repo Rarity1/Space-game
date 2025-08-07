@@ -5,14 +5,21 @@
 #include "ObjectTracking.h"
 #include "../ImGui/DLLGui.h"
 #include <dxcapi.h>
+#include <DDSTextureLoader.h>
+#include <ResourceUploadBatch.h>
+
 
 class DLL Graphics
 {
 	friend class Window;
 	friend class FrameResource;
+	friend class Engine;
 public:
-	static const UINT bufferCount = 3;
-	Graphics(HWND& hWnd, RECT& WindowRect);
+	struct thRect {
+		RECT wr;
+		std::mutex Mtx;
+	};
+	Graphics(HWND& hWnd, thRect& WindowRect);
 	Graphics(const Graphics&) = delete;
 	Graphics& operator=(const Graphics&) = delete;
 	~Graphics();
@@ -25,29 +32,32 @@ public:
 		DirectX::XMMATRIX cmatrix;
 	};
 	//update graphics for a list of tracked objects. Preferably objects loaded in memory and meant to be rendered
-	void Update(std::list<Object>& trackedObjects);
+	void Update(Tracker::InstanceStruc& tInstance);
 
 
-	void CreateBuffers(std::list<Object>& trackedObjects);
-	void UpdBuffer(Object& bm, Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList, Microsoft::WRL::ComPtr<ID3D12Device> pDevice, Microsoft::WRL::ComPtr<ID3D12CommandAllocator> commandAllocator, Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue);
+	void CreateBuffers(Tracker::InstanceStruc& tInstance);
+	void UpdBuffer(RStorage::bmResource& bm, Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList, Microsoft::WRL::ComPtr<ID3D12Device> pDevice, Microsoft::WRL::ComPtr<ID3D12CommandAllocator> commandAllocator, Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue);
 
 	void lModel(Object& obj, UINT umID) noexcept;
 
 
 	void UpdateModel(Object* bm);
-	void RenderFrame(std::list<Object>& trackedObjects);
-	void LoadResources(std::list<Object>& trackedObjects, Tracker& oTracker);
+	void RenderFrame(Tracker::InstanceStruc& tInstance);
+	void LoadResources(Tracker::InstanceStruc& tInstance);
 	void LoadPipeline();
 	void UpdateLocalTransform(Object& bm);
-	static void UpdateConstantBuffers(DirectX::FXMMATRIX view, DirectX::CXMMATRIX projection, std::list<Object>& trackedObjects);
+	static void UpdateConstantBuffers(DirectX::FXMMATRIX view, DirectX::CXMMATRIX projection, Tracker::InstanceStruc& tInstance);
+private:
+	const UINT bufferCount = 3;
 	std::unique_ptr<imguid> iGui;
 	pCamera curCamera;
 	std::vector<std::string> loadbuff;
 	std::unique_ptr<RStorage> rStorage;
 	std::atomic<bool> updateResolution;
-private:
 	void UpdateFrameResources();
 	void CreateFrameResources();
+	std::condition_variable uFrameResource;
+	std::mutex frMutex;
 	ImGui_ImplDX12_InitInfo ImGuiInfo;
 	DirectX::XMFLOAT4X4 fovPerspective;
 	float Max(float number, float maximum);
@@ -59,7 +69,8 @@ private:
 	GErrors::CheckerToken chk;
 	//uint16_t& width;
 	//uint16_t& height;
-	RECT& windowResolution;
+
+	thRect& windowResolution;
 	HWND& hwnd;
 	CD3DX12_RECT scissorRect;
 	CD3DX12_VIEWPORT viewport;

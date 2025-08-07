@@ -1,5 +1,6 @@
 #pragma once
 #include "CWin.h"
+#include <rapidxml/rapidxml.hpp>
 
 class DLL ReadXML{
 public:

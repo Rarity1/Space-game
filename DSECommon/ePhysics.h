@@ -9,9 +9,9 @@ class DLL Physics {
 public:
 	Physics(EngineTime& timer, const int& UpdateRate);
 	~Physics() = default;
-	void Update(std::list<Object>& trackedObjects);
+	void Update(Tracker::InstanceStruc& tInstance);
 	//Call if loaded models/tracked models changes
-	void trackM(std::list<Object>& trackedObjects);
+	void trackM(Tracker::InstanceStruc& tInstance);
 	struct tpsCounter {
 	public:
 		tpsCounter() {
@@ -58,7 +58,7 @@ private:
 	int bIndex(std::vector<int> w, int bInd);
 	void CalProportionalSpeed(DirectX::XMFLOAT4& VelDir1, DirectX::XMFLOAT4& VelDir2, float& VSpeed1, float& VSpeed2, float& Mass1, float& Mass2);
 	//Main Collision function
-	void pCollison(std::list<Object>& trackedObjects);
+	void pCollison(Tracker::InstanceStruc& tInstance);
 	void pSpecReset();
 
 	std::vector<std::thread> collisionThreads;

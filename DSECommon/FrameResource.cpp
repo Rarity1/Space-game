@@ -9,15 +9,16 @@ FrameResource::FrameResource(
     uint16_t puFID
 ):
     uFID(puFID),
-    fenceValue(0)
+    fenceValue(0),
+    rtvDescriptorHeap(Parent->rtvDescriptorHeap),
+    dsvDescriptorHeap(Parent->dsvDescriptorHeap),
+    pPipelineState(Parent->pPipelineState),
+    pRootSignature(Parent->pRootSignature),
+    pSamplerDescriptorHeap(Parent->pSamplerDescriptorHeap),
+    pCbvSrvDescriptorHeap(Parent->objectAllocator->DescHeap)
 {
-    pPipelineState = (Parent->pPipelineState);
-    pRootSignature = (Parent->pRootSignature);
-    rtvDescriptorHeap = (Parent->rtvDescriptorHeap);
-    dsvDescriptorHeap = (Parent->dsvDescriptorHeap);
-    pSamplerDescriptorHeap = (Parent->pSamplerDescriptorHeap);
-    pCbvSrvDescriptorHeap = Parent->objectAllocator->DescHeap;
-    rtvDescriptorSize = Parent->pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+
+    rtvDescriptorSize = Parent->rtvDescriptorSize;
     samplerDescriptorSize = Parent->pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
 
     rtv = CD3DX12_CPU_DESCRIPTOR_HANDLE(rtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart(), uFID, rtvDescriptorSize);
@@ -27,9 +28,10 @@ FrameResource::FrameResource(
     Parent->pDevice->CreateRenderTargetView(renderTarget.Get(), nullptr, rtv);
     //DSV
     {
-
-        auto width = Parent->windowResolution.right - Parent->windowResolution.left;
-        auto height = Parent->windowResolution.bottom - Parent->windowResolution.top;
+        auto width = Parent->windowResolution.wr.right - Parent->windowResolution.wr.left;
+        auto height = Parent->windowResolution.wr.bottom - Parent->windowResolution.wr.top;
+        width = width > 0 ? width : 8;
+        height = height > 0 ? height : 8;
         auto heapprop = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
         auto resDesc = CD3DX12_RESOURCE_DESC::Tex2D(
             DXGI_FORMAT_D32_FLOAT,
@@ -70,9 +72,18 @@ FrameResource::FrameResource(
     //Command List
     Parent->pDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT,
         commandAllocator.Get(), nullptr, IID_PPV_ARGS(&pCommandList)) >> chk;
-    NAME_D3D12_OBJECT(pCommandList);
+    //NAME_D3D12_OBJECT(pCommandList);
     pCommandList->Close();
 
+
+}
+
+FrameResource::~FrameResource()
+{
+    renderTarget.Reset();
+    depthBuffer.Reset();
+    pCommandList.Reset();
+    commandAllocator.Reset();
 
 }
 
@@ -96,13 +107,14 @@ void FrameResource::InitBundle(Microsoft::WRL::ComPtr<ID3D12Device>  pDevice, Mi
 
 void FrameResource::UpdateResolution(Graphics* Parent)
 {
-
     Parent->swapChain->GetBuffer(uFID, IID_PPV_ARGS(&renderTarget)) >> chk;
     Parent->pDevice->CreateRenderTargetView(renderTarget.Get(), nullptr, rtv);
     //DSV
     {
-        auto width = Parent->windowResolution.right - Parent->windowResolution.left;
-        auto height = Parent->windowResolution.bottom - Parent->windowResolution.top;
+        auto width = Parent->windowResolution.wr.right - Parent->windowResolution.wr.left;
+        auto height = Parent->windowResolution.wr.bottom - Parent->windowResolution.wr.top;
+        width = width > 0 ? width : 8;
+        height = height > 0 ? height : 8;
         auto heapprop = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
         auto resDesc = CD3DX12_RESOURCE_DESC::Tex2D(
             DXGI_FORMAT_D32_FLOAT,
@@ -128,14 +140,10 @@ void FrameResource::UpdateResolution(Graphics* Parent)
         depthStencilDesc.Flags = D3D12_DSV_FLAG_NONE;
 
         Parent->pDevice->CreateDepthStencilView(depthBuffer.Get(), &depthStencilDesc, dsv);
-
-
     }
-
-
 }
 
-void FrameResource::PopulateCommandList(CD3DX12_RECT& scissorRect, CD3DX12_VIEWPORT& viewport, std::list<Object>& trackedObjects)
+void FrameResource::PopulateCommandList(CD3DX12_RECT& scissorRect, CD3DX12_VIEWPORT& viewport, Tracker::InstanceStruc& tInstance)
 {
 
     pCommandList->SetGraphicsRootSignature(pRootSignature.Get());
@@ -164,22 +172,22 @@ void FrameResource::PopulateCommandList(CD3DX12_RECT& scissorRect, CD3DX12_VIEWP
 
         pCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-        //pCommandList->SetGraphicsRootDescriptorTable(2, pSamplerDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
+        pCommandList->SetGraphicsRootDescriptorTable(2, pSamplerDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
         pCommandList->SetPipelineState(pPipelineState.Get());
 
         //PIXBeginEvent(pCommandList.Get(), 0, "Draw everything");
 
         //Try to Render by models not tracked objects. 
         UINT indexC = 0;
-        for (auto& tO : trackedObjects) {
+        for (auto& tModels : tInstance.tmodelLinkedObjects) {
+            auto model = tInstance.pTracker->GetModel(tModels.first);
+            pCommandList->IASetIndexBuffer(&model->ibuffView);
+            pCommandList->IASetVertexBuffers(0, 1, &model->vbuffView);
+            pCommandList->SetGraphicsRootDescriptorTable(0, model->cbvGpuHandle);
+            pCommandList->SetGraphicsRootDescriptorTable(1, model->srvGpuHandle);
+            //Replace this with instanced viewbuffer
+            pCommandList->DrawIndexedInstanced(model->uData->sIndex.size(), tModels.second.size(), 0, 0, 0);
 
-            pCommandList->IASetIndexBuffer(&tO.model->ibuffView);
-            pCommandList->IASetVertexBuffers(0, 1, &tO.model->vbuffView);
-
-            pCommandList->SetGraphicsRootDescriptorTable(0, tO.cbvGpuHandle);
-            pCommandList->SetGraphicsRootDescriptorTable(1, tO.srvGpuHandle);
-
-            pCommandList->DrawIndexedInstanced(tO.model->uData->sIndex.size(), 1, 0, 0, 0);
 
         }
 

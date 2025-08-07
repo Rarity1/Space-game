@@ -15,12 +15,12 @@ class FrameResource
     friend class Graphics;
 private:
     GErrors::CheckerToken chk;
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> rtvDescriptorHeap;
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> dsvDescriptorHeap;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> pPipelineState;
-    Microsoft::WRL::ComPtr<ID3D12RootSignature> pRootSignature;
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> pSamplerDescriptorHeap;
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> pCbvSrvDescriptorHeap;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& rtvDescriptorHeap;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& dsvDescriptorHeap;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState>& pPipelineState;
+    Microsoft::WRL::ComPtr<ID3D12RootSignature>& pRootSignature;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& pSamplerDescriptorHeap;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& pCbvSrvDescriptorHeap;
     Microsoft::WRL::ComPtr<ID3D12Resource> renderTarget;
     UINT rtvDescriptorSize;
     //UINT pCbvSrvDescriptorHeapSize;
@@ -51,7 +51,7 @@ public:
         Graphics* Parent,
         uint16_t uFID
     );
-    ~FrameResource() = default;
+    ~FrameResource();
 
     //void InitBundle(Microsoft::WRL::ComPtr<ID3D12Device>  pDevice, Microsoft::WRL::ComPtr < ID3D12PipelineState> pPso1,
     //    UINT frameResourceIndex, Microsoft::WRL::ComPtr <ID3D12DescriptorHeap> pCbvSrvDescriptorHeap, UINT cbvSrvDescriptorSize, Microsoft::WRL::ComPtr < ID3D12DescriptorHeap> pSamplerDescriptorHeap, UINT samplerDescriptorSize, Microsoft::WRL::ComPtr < ID3D12RootSignature> pRootSignature, std::vector<RStorage::eResource>& models);
@@ -59,7 +59,6 @@ public:
     void UpdateResolution(Graphics* Parent);
 
 
-    void PopulateCommandList(CD3DX12_RECT& scissorRect, CD3DX12_VIEWPORT& viewport, std::list<Object>& trackedObjects);
+    void PopulateCommandList(CD3DX12_RECT& scissorRect, CD3DX12_VIEWPORT& viewport, Tracker::InstanceStruc& tInstance);
 
-    void UpdateConstantBuffers(DirectX::FXMMATRIX view, DirectX::CXMMATRIX projection, std::list<Object>& trackedObjects);
 };

@@ -58,15 +58,8 @@ public:
 		speed(),
 		mPos(relposVect(initPos))
 	{
-		ptrcbvData = std::addressof(cbvData);
 	};
-	~Object() {
-	
-		if (cbvwriteBuffer != nullptr) {
-			cbvwriteBuffer->Unmap(0, nullptr);
-
-		}
-	};
+	~Object() {};
 	Object(Object&& old) noexcept :
 		model(std::move(old.model)),
 		name(std::move(old.name)),
@@ -78,15 +71,11 @@ public:
 		grav(std::move(old.grav)),
 		gravpull(std::move(old.gravpull)),
 		mworld(std::move(old.mworld)),
-		curTexture(std::move(old.curTexture)),
 		clPositionBuff(std::move(old.clPositionBuff)),
 		pDir(std::move(old.pDir)),
-		tbuffer(std::move(old.tbuffer)),
-		mPos(std::move(old.mPos)),
-		cbvwriteBuffer(std::move(old.cbvwriteBuffer)),
-		cbvData(std::move(old.cbvData))
+		mPos(std::move(old.mPos))
+
 	{
-		ptrcbvData = std::addressof(cbvData);
 	}
 	Object& operator = (Object&& old) noexcept
 	{
@@ -100,14 +89,9 @@ public:
 		grav = std::move(old.grav);
 		gravpull = std::move(old.gravpull);
 		mworld = std::move(old.mworld);
-		curTexture = std::move(old.curTexture);
 		clPositionBuff = std::move(old.clPositionBuff);
 		pDir = std::move(old.pDir);
-		tbuffer = std::move(old.tbuffer);
 		mPos = std::move(old.mPos);
-		cbvwriteBuffer = std::move(old.cbvwriteBuffer);
-		cbvData = (old.cbvData);
-		ptrcbvData = std::addressof(cbvData);
 		return *this;
 
 
@@ -212,52 +196,56 @@ public:
 	RStorage::bmResource* model;
 
 
-	//Instanced texture path and buffer.
-	std::filesystem::path curTexture;
-	Microsoft::WRL::ComPtr<ID3D12Resource> tbuffer;
 
-	struct CBVData {
-		DirectX::XMFLOAT4X4 cbvMatrix;
+	 struct CBVData {
+		 __declspec(align(16)) DirectX::XMFLOAT4X4 cbvMatrix;
 		UINT Texture = 0;
+		//do not use
+		//UINT Padding[3];
 	};
-	CBVData cbvData;
 	//View Matrix
 	DirectX::XMFLOAT4X4 vMatrix;
 	std::mutex viewMtx;
 
-	CBVData* ptrcbvData;
-
 
 	//upload view matrix.
-	Microsoft::WRL::ComPtr<ID3D12Resource> cbvwriteBuffer;
+	//Microsoft::WRL::ComPtr<ID3D12Resource> cbvwriteBuffer;
 	//Instanced buffer specific to object for physics calculations
 	cl::Buffer clPositionBuff;
 	
-	CD3DX12_CPU_DESCRIPTOR_HANDLE cbvCpuHandle;
-	CD3DX12_GPU_DESCRIPTOR_HANDLE cbvGpuHandle;
-	CD3DX12_CPU_DESCRIPTOR_HANDLE srvCpuHandle;
-	CD3DX12_GPU_DESCRIPTOR_HANDLE srvGpuHandle;
+
 };
 
 class DLL Tracker {
 	friend class Engine;
+public: 
+	struct InstanceStruc {
+		//umID to list of objects using that model
+		std::unordered_map<UINT, std::list<Object*>> tmodelLinkedObjects{};
+		std::unordered_map<UINT, Object::CBVData*> instancedCBVData;
+		Tracker* pTracker = nullptr;
+		UINT Count;
+	};
 private:
 	RStorage& storage;
 	std::atomic<uint64_t> lastUOIDused = 0;
 	//UMID, tracked objs using model
-	std::map<uint32_t, std::list<Object*>> objCounter;
-	std::vector<std::pair<uint64_t, bool>> UOIDlist;
-	std::unordered_map<uint16_t, std::list<Object>> objectInstances;
-	std::unordered_map<uint64_t, Object*> mapUOID;
+
+	//UOID to ptr storing that tracked object
+	std::unordered_map<uint16_t, InstanceStruc> objectInstances;
+	std::unordered_map<UINT, std::unique_ptr<Object>> mapUOID;
 public:
 	Tracker(RStorage& tstorage) :
 		storage(tstorage)
 	{
 	};
-	~Tracker() = default;
-	UINT getModelID(uint64_t oID);
-	std::list<Object>& initInstance(uint16_t instanceID);
-	std::list<Object>& getInstance(uint16_t instanceID);
-	Object* initObject(std::list<Object>* oInstance, std::string textureName, UINT filebModelIndex = 0, float mScale = 1.0, float mMass = 0.0, float mFriction = 0.01, DirectX::XMFLOAT3 initPos = { 0,0,0 }, DirectX::XMFLOAT3 initRot = { 0,0,0 }, DirectX::XMFLOAT3 initVelDir = { 0,0,0 }, float initSpeed = 0);
+	~Tracker() {
+	};
+	//Returns ID of current model given UOID(Unique Object ID)
+	UINT getModelID(UINT UOID);
+	RStorage::bmResource* GetModel(UINT umID);
+	InstanceStruc& initInstance(uint16_t instanceID);
+	InstanceStruc& getInstance(uint16_t instanceID);
+	Object* initObject(InstanceStruc& oInstance, std::string textureName, UINT filebModelIndex = 0, float mScale = 1.0, float mMass = 0.0, float mFriction = 0.01, DirectX::XMFLOAT3 initPos = { 0,0,0 }, DirectX::XMFLOAT3 initRot = { 0,0,0 }, DirectX::XMFLOAT3 initVelDir = { 0,0,0 }, float initSpeed = 0);
 	void unloadObject(uint64_t obj);
 };

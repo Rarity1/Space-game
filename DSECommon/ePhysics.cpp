@@ -58,13 +58,13 @@ Physics::Physics(EngineTime& Clock, const int& UpdateRate) :
 }
 
 
-void Physics::Update(std::list<Object>& trackedObjects) {
+void Physics::Update(Tracker::InstanceStruc& tInstance) {
     //DebugStream dbgStream;
     //std::streambuf* oldBuf = std::cout.rdbuf(&dbgStream);
     
-    CollModels.reserve((trackedObjects.size() ^ 2) / 2);
+    CollModels.reserve((tInstance.Count ^ 2) / 2);
     //std::for_each(trackedObjects.begin(), trackedObjects.end(), [this](auto& m) {cGravity(&m); });
-    pCollison(trackedObjects);
+    pCollison(tInstance);
     pSpecReset();
 
     DebugMTX.lock();
@@ -78,26 +78,27 @@ void Physics::Update(std::list<Object>& trackedObjects) {
 
 
 
-void Physics::trackM(std::list<Object>& trackedObjects) {
+void Physics::trackM(Tracker::InstanceStruc& tInstance) {
     QueueMTX.lock();
-    auto tO = trackedObjects.begin();
-    for (int i = 0; i < std::size(trackedObjects); i++) {
-        tO->model->clBuff = cl::Buffer(context, CL_MEM_READ_ONLY, sizeof(std::array<ReadXML::Vertex, 3>) * tO->model->uData->MappedVertices.size());
-        tO->clPositionBuff = cl::Buffer(context, CL_MEM_READ_WRITE, sizeof(DirectX::XMFLOAT3));
 
-        std::vector<DirectX::XMFLOAT3> WBone;
-        std::vector<int> IndexOffset;
-        WBone.resize(std::size(tO->model->uData->bdata));
-        for (auto b = 0; b < std::size(WBone); b++) {
-            WBone[b] = tO->model->uData->bdata[b].sphere.Center;
+    for (auto& mTrack : tInstance.tmodelLinkedObjects) {
+        for (auto& tObj : mTrack.second) {
+            tObj->model->clBuff = cl::Buffer(context, CL_MEM_READ_ONLY, sizeof(std::array<ReadXML::Vertex, 3>) * tObj->model->uData->MappedVertices.size());
+            tObj->clPositionBuff = cl::Buffer(context, CL_MEM_READ_WRITE, sizeof(DirectX::XMFLOAT3));
+
+            std::vector<DirectX::XMFLOAT3> WBone;
+            std::vector<int> IndexOffset;
+            WBone.resize(std::size(tObj->model->uData->bdata));
+            for (auto b = 0; b < std::size(WBone); b++) {
+                WBone[b] = tObj->model->uData->bdata[b].sphere.Center;
+            }
+            tObj->model->clBoneBuff = cl::Buffer(context, CL_MEM_READ_ONLY, sizeof(DirectX::XMFLOAT3) * std::size(WBone));
+
+            queue.enqueueWriteBuffer(tObj->model->clBoneBuff, CL_FALSE, 0, sizeof(DirectX::XMFLOAT3) * std::size(WBone), WBone.data());
+
+            queue.enqueueWriteBuffer(tObj->model->clBuff, CL_FALSE, 0, sizeof(std::array<ReadXML::Vertex, 3>) * tObj->model->uData->MappedVertices.size(), tObj->model->uData->MappedVertices.data());
         }
-        tO->model->clBoneBuff = cl::Buffer(context, CL_MEM_READ_ONLY, sizeof(DirectX::XMFLOAT3) * std::size(WBone));
 
-        queue.enqueueWriteBuffer(tO->model->clBoneBuff, CL_FALSE, 0, sizeof(DirectX::XMFLOAT3) * std::size(WBone), WBone.data());
-
-        queue.enqueueWriteBuffer(tO->model->clBuff, CL_FALSE, 0, sizeof(std::array<ReadXML::Vertex, 3>) * tO->model->uData->MappedVertices.size(), tO->model->uData->MappedVertices.data());
-
-        tO++;
     }
     queue.finish();
     QueueMTX.unlock();
@@ -284,14 +285,19 @@ Physics::WORKINDI Physics::ProcCollide(Object& obj, Object& obj2,  DirectX::XMFL
     return Result;
 }
 
-void Physics::pCollison(std::list<Object>& trackedObjects) {
+void Physics::pCollison(Tracker::InstanceStruc& tInstance) {
 
-    std::vector<THREADS::WRef> refs(trackedObjects.size());
+    std::vector<THREADS::WRef> refs(tInstance.Count);
+    std::list<Object*> trackedObjects;
+    for (auto& tObjs : tInstance.tmodelLinkedObjects) {
+        trackedObjects.append_range(tObjs.second);
+    }
+
     auto tO = trackedObjects.begin();
     for (auto h = 0; h < refs.size(); h++) {
         refs[h] = tMain->gPushWork([this, h, tO, &trackedObjects](){
             using namespace DirectX;
-            auto& obj = *tO;
+            auto& obj = **tO;
             XMFLOAT3 Pos1;
             obj.mPos.posMtx.lock();
             XMStoreFloat3(&Pos1, XMLoadFloat3(obj.mPos.position));
@@ -304,16 +310,16 @@ void Physics::pCollison(std::list<Object>& trackedObjects) {
             LCollModels.reserve(trackedObjects.size());
 
             for (auto& m : trackedObjects) {
-                if (m != obj) {
+                if (*m != obj) {
                     XMFLOAT3 Pos2;
-                    m.mPos.posMtx.lock();
-                    XMStoreFloat3(&Pos2, XMLoadFloat3(m.mPos.position));
-                    auto sph2 = m.model->uData->Sphere;
-                    m.mPos.posMtx.unlock();
+                    m->mPos.posMtx.lock();
+                    XMStoreFloat3(&Pos2, XMLoadFloat3(m->mPos.position));
+                    auto sph2 = m->model->uData->Sphere;
+                    m->mPos.posMtx.unlock();
                     auto tdist = fDirection(Pos1, Pos2);
                     XMStoreFloat3(&sph2.Center, XMLoadFloat4(&tdist) * fDistance(Pos1, Pos2));
                     if (sph2.Intersects(sph1)) {
-                        LCollModels.emplace_back(collstruct(&obj, &m));
+                        LCollModels.emplace_back(collstruct(&obj, m));
                     }
                 }
             }
@@ -513,8 +519,7 @@ void Physics::pCollison(std::list<Object>& trackedObjects) {
             }
 
 
-        })
-        ;
+        });
         tO++;
     };
     tMain->gEndWork(refs);

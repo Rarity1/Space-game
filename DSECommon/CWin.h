@@ -94,10 +94,11 @@
 #include <D3Dcompiler.h>
 #include <DirectXMath.h>
 #include <fstream>
-#include <rapidxml/rapidxml.hpp>
 #include <DirectXCollision.h>
 #include <iostream>
 #include <cmath>
+#include <mutex>
+#include <functional>
 #include <numbers>
 #include <numeric>
 #include <ranges>
@@ -111,8 +112,6 @@
 #include <filesystem>
 #include <d3dx12.h>
 #include <dstorage.h>
-#include <DDSTextureLoader.h>
-#include <ResourceUploadBatch.h>
 #include <complex>
 #pragma comment(lib,"d3d12.lib")
 #pragma comment(lib,"dxgi.lib")

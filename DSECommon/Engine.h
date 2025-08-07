@@ -7,12 +7,14 @@
 #include "ObjectTracking.h"
 
 class DLL Engine {
+	friend class App;
 public:
 	Engine(Graphics& gfx, Keyboard& kbd, EngineTime& clock);
 	~Engine();
 	const int updaterate = 60;
 	void iLoad();
 	bool Update();
+	void RenderI();
 	bool engInit = true;
 	double engineTimeTaken = 0;
 	EngineTime& Clock;
@@ -78,7 +80,7 @@ public:
 	};
 	virtual void enQueueExternCommands();
 private:
-	std::list<Object>* cTrackedInstance;
+	UINT cTrackedInstance;
 	THREADS::WRef eWref;
 	std::atomic<bool> eRun;
 	struct Movement {

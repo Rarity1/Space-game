@@ -46,14 +46,22 @@ private:
 		HMODULE hInst;
 	};
 public:
-	Window(uint16_t width, uint16_t height, const char* name);
+	Window(uint16_t width, uint16_t height, const char* name, std::atomic<bool>& Alive);
 	~Window();
 	Window(const Window&) = delete;
 	Window& operator=(const Window&) = delete;
 	void SetTitle(const std::string& title);
 	static std::optional<WPARAM> ProcessMessages();
+	void Update();
+	void exeWinLoop(std::atomic<bool>& Alive);
 
 private:
+	std::mutex upLock;
+	std::mutex downLock;
+	bool waitbl = false;
+	std::condition_variable windowTimer;
+	std::condition_variable appTimer;
+
 	static LRESULT CALLBACK HandleMsgSetup(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 	static LRESULT CALLBACK HandleMsgThunk(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 	LRESULT HandleMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
@@ -62,13 +70,16 @@ public:
 	Keyboard kbd;
 	EngineTime clock;
 	Mouse mouse;
+	std::condition_variable winReady;
+	std::mutex winWait;
 private:
-	RECT WindowRect;
+	Graphics::thRect WindowRect;
 	uint16_t width;
 	uint16_t height;
 	HWND hWnd;
 	std::unique_ptr<Graphics> pGfx;
 	std::unique_ptr<Engine> sEng;
+	std::thread windowThread;
 };
 
 

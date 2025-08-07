@@ -56,19 +56,25 @@ DirectX::XMFLOAT3 Object::UpdatePosition()
 	return mPos.lastposition;
 }
 
-UINT Tracker::getModelID(uint64_t oID)
+UINT Tracker::getModelID(UINT UOID)
 {
 
-	return storage.getModelID(oID);
+	return storage.getModelID(UOID);
 }
 
-std::list<Object>& Tracker::initInstance(uint16_t instanceID)
+RStorage::bmResource* Tracker::GetModel(UINT umID)
 {
-	objectInstances.insert({ instanceID,  std::list<Object>()});
+	return storage.GetMData(umID)->model;
+}
+
+Tracker::InstanceStruc& Tracker::initInstance(uint16_t instanceID)
+{
+	objectInstances[instanceID] = Tracker::InstanceStruc{};
+	objectInstances[instanceID].pTracker = this;
 	return objectInstances[instanceID];
 }
 
-std::list<Object>& Tracker::getInstance(uint16_t instanceID)
+Tracker::InstanceStruc& Tracker::getInstance(uint16_t instanceID)
 {
 	if (objectInstances.find(instanceID) == objectInstances.end()) {
 		return initInstance(instanceID);
@@ -76,22 +82,22 @@ std::list<Object>& Tracker::getInstance(uint16_t instanceID)
 	return objectInstances[instanceID];
 }
 
-Object* Tracker::initObject(std::list<Object>* oInstance, std::string textureName, UINT filebModelIndex, float mScale, float mMass, float mFriction, DirectX::XMFLOAT3 initPos, DirectX::XMFLOAT3 initRot, DirectX::XMFLOAT3 initVelDir, float initSpeed) {
+Object* Tracker::initObject(InstanceStruc& oInstance, std::string textureName, UINT filebModelIndex, float mScale, float mMass, float mFriction, DirectX::XMFLOAT3 initPos, DirectX::XMFLOAT3 initRot, DirectX::XMFLOAT3 initVelDir, float initSpeed) {
 
-//Impliment object tracking for real. Track per world(Doesnt have to be entire planet just local zeropoint.)
-	auto& result = oInstance->emplace_back(Object(textureName,
+	//Impliment object tracking for real. Track per world(Doesnt have to be entire planet just local zeropoint.)
+	auto UIOD = lastUOIDused.load();
+	storage.trackModelID(filebModelIndex, UIOD);
+
+	mapUOID[UIOD] = std::make_unique<Object>(textureName,
 		//Move this elsewhere.
 		nullptr,
-		mScale, mMass, mFriction, initPos, initRot, initVelDir, initSpeed));
-	objCounter[filebModelIndex].emplace_back(&result);
-	{
-		auto UIOD = lastUOIDused.load();
-		storage.trackModelID(filebModelIndex, UIOD);
-		result.UOID = UIOD;
-	}
-	mapUOID[result.UOID] = &result;
+		mScale, mMass, mFriction, initPos, initRot, initVelDir, initSpeed);
+
+	auto& result = oInstance.tmodelLinkedObjects[filebModelIndex].emplace_back(mapUOID[UIOD].get());
+	oInstance.instancedCBVData[filebModelIndex] = nullptr;
+	oInstance.Count++;
 	lastUOIDused++;
-	return &result;
+	return result;
 
 }
 void Tracker::unloadObject(uint64_t obj)

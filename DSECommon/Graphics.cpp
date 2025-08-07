@@ -3,7 +3,7 @@
 
 
 
-Graphics::Graphics(HWND& hWnd, RECT& WindowRect)
+Graphics::Graphics(HWND& hWnd, thRect& WindowRect)
 	:
 	//width(w),
 	//height(h),
@@ -14,6 +14,34 @@ Graphics::Graphics(HWND& hWnd, RECT& WindowRect)
 {
 }
 
+
+
+float Graphics::Max(float number, float maximum)
+{
+	float rtrn = number;
+	if (number > maximum) {
+		rtrn = maximum;
+	}
+	return rtrn;
+}
+float Graphics::Min(float minimum, float number)
+{
+	float rtrn = number;
+	if (number < minimum) {
+		rtrn = minimum;
+	}
+	return rtrn;
+}
+float Graphics::RotateHelper(float& rNumber)
+{
+	if (rNumber > Max(rNumber, DirectX::XM_2PI)) {
+		return 0;
+	}
+	if (rNumber < Min(-DirectX::XM_2PI, rNumber)) {
+		return 0;
+	}
+	return rNumber;
+}
 
 void Graphics::LoadPipeline() {
 	UINT dxgiFactoryFlags = 0;
@@ -27,10 +55,11 @@ void Graphics::LoadPipeline() {
 	dxgiFactoryFlags |= DXGI_CREATE_FACTORY_DEBUG;
 #endif
 	//Just some stuff
-	XMStoreFloat4x4(&fovPerspective, DirectX::XMMatrixPerspectiveFovRH(DirectX::XM_PIDIV2, float(windowResolution.right - windowResolution.left) / float(windowResolution.bottom - windowResolution.top), 0.1f, 100000.0f));
-	scissorRect = CD3DX12_RECT(0, 0, windowResolution.right, windowResolution.bottom);
-	viewport = CD3DX12_VIEWPORT(0.f, 0.f, windowResolution.right, windowResolution.bottom);
-
+	windowResolution.Mtx.lock();
+	XMStoreFloat4x4(&fovPerspective, DirectX::XMMatrixPerspectiveFovRH(DirectX::XM_PIDIV2, float(windowResolution.wr.right - windowResolution.wr.left) / float(windowResolution.wr.bottom - windowResolution.wr.top), 0.1f, 100000.0f));
+	scissorRect = CD3DX12_RECT(0, 0, windowResolution.wr.right, windowResolution.wr.bottom);
+	viewport = CD3DX12_VIEWPORT(0.f, 0.f, windowResolution.wr.right, windowResolution.wr.bottom);
+	windowResolution.Mtx.unlock();
 	//DStorageGetFactory(IID_PPV_ARGS(&pStorage)) >> chk;
 	CreateDXGIFactory2(dxgiFactoryFlags, IID_PPV_ARGS(&dxgiFactory)) >> chk;
 	D3D12CreateDevice(nullptr, D3D_FEATURE_LEVEL_12_2, IID_PPV_ARGS(&pDevice)) >> chk;
@@ -307,20 +336,99 @@ void Graphics::LoadPipeline() {
 
 
 	iGui = std::make_unique<imguid>(hwnd, &ImGuiInfo);
+
 	CreateFrameResources();
+
+
+}
+
+void Graphics::Update(Tracker::InstanceStruc& tInstance) {
+	UpdateFrameResources();
+	auto width = windowResolution.wr.right - windowResolution.wr.left;
+	auto height = windowResolution.wr.bottom - windowResolution.wr.top;
+	width = width > 0 ? width : 8;
+	height = height > 0 ? height : 8;
+
+	XMStoreFloat4x4(&fovPerspective, DirectX::XMMatrixPerspectiveFovRH(DirectX::XM_PIDIV2, float(width) / float(height), 0.1f, 1000000.0f));
+
+	iGui->imPrepare();
+	curCamera.posMtx->lock();
+	curCamera.cmatrix = DirectX::XMMatrixLookToRH(XMLoadFloat3(curCamera.position), XMLoadFloat4(&curCamera.rotation), XMLoadFloat4(&curCamera.upDirection));
+	curCamera.posMtx->unlock();
+	UpdateConstantBuffers(curCamera.cmatrix, XMLoadFloat4x4(&fovPerspective), tInstance);
+}
+
+void Graphics::RenderFrame(Tracker::InstanceStruc& tInstance) {
+
+	frMutex.lock();
+	//uFrameResource.wait(loc, [this] {return !updateResolution.load(); });
+	auto lastFrame = cframeIndex;
+	cframeIndex = swapChain->GetCurrentBackBufferIndex();
+
+	auto& cframeBuffer = *backBuffers[cframeIndex];
+
+	cframeBuffer.commandAllocator->Reset() >> chk;
+	cframeBuffer.pCommandList->Reset(cframeBuffer.commandAllocator.Get(), pPipelineState.Get()) >> chk;
+
+
+	{
+		auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+			cframeBuffer.renderTarget.Get(),
+			D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+		cframeBuffer.pCommandList->ResourceBarrier(1, &barrier);
+	}
+
+
+
+
+	cframeBuffer.PopulateCommandList(scissorRect, viewport, tInstance);
+
+
+
+	iGui->imPopulateCommand(cframeBuffer.pCommandList.Get());
+
+	{
+		auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+			cframeBuffer.renderTarget.Get(),
+			D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
+		cframeBuffer.pCommandList->ResourceBarrier(1, &barrier);
+	}
+
+	cframeBuffer.pCommandList->Close() >> chk;
+
+	fenceValue = fence->GetCompletedValue();
+	//Something something prevent something idk
+	if (backBuffers[lastFrame]->fenceValue != fenceValue) {
+		fence->SetEventOnCompletion(backBuffers[lastFrame]->fenceValue, fenceEvent) >> chk;
+		WaitForSingleObject(fenceEvent, INFINITE);
+	}
+	cframeBuffer.fenceValue = fenceValue + 1;
+
+	std::vector<ID3D12CommandList*> commandLists = { cframeBuffer.pCommandList.Get() };
+	commandQueue->ExecuteCommandLists(commandLists.size(), commandLists.data());
+	commandQueue->Signal(fence.Get(), cframeBuffer.fenceValue) >> chk;
+	
+
+	//Vsync off. add toggle here for changing vsync
+	swapChain->Present(0, 512) >> chk;
+
+
+
+	frMutex.unlock();
 
 }
 
 
 //Rework to use loaded models instead of tracked objects
-void Graphics::CreateBuffers(std::list<Object>& trackedObjects) {
+void Graphics::CreateBuffers(Tracker::InstanceStruc& tInstance) {
 	DirectX::ResourceUploadBatch upload(pDevice.Get());
 	upload.Begin();
 
 	//This is wasteful if multiple objects share the same model also this can be multithreaded
-	for (auto& bm : trackedObjects) {
-		if (bm.model->vbuffer == nullptr) {
-			UINT vbuffSize = bm.model->uData->sIndex.size() * sizeof(ReadXML::Vertex);
+	for (auto& trackedModel : tInstance.tmodelLinkedObjects) {
+		auto& model = *tInstance.pTracker->GetModel(trackedModel.first);
+		if (model.vbuffer == nullptr) {
+			UINT vbuffSize = model.uData->sIndex.size() * sizeof(ReadXML::Vertex);
 			{
 				const CD3DX12_HEAP_PROPERTIES heapProps{ D3D12_HEAP_TYPE_DEFAULT };
 				const auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(vbuffSize);
@@ -330,10 +438,10 @@ void Graphics::CreateBuffers(std::list<Object>& trackedObjects) {
 					&resourceDesc,
 					D3D12_RESOURCE_STATE_COMMON,
 					nullptr,
-					IID_PPV_ARGS(&bm.model->vbuffer)
+					IID_PPV_ARGS(&model.vbuffer)
 				) >> chk;
-				bm.model->vbuffView = D3D12_VERTEX_BUFFER_VIEW{
-					.BufferLocation = bm.model->vbuffer->GetGPUVirtualAddress(),
+				model.vbuffView = D3D12_VERTEX_BUFFER_VIEW{
+					.BufferLocation = model.vbuffer->GetGPUVirtualAddress(),
 					.SizeInBytes = vbuffSize,
 					.StrideInBytes = (UINT)sizeof(ReadXML::Vertex)
 				};
@@ -347,11 +455,11 @@ void Graphics::CreateBuffers(std::list<Object>& trackedObjects) {
 					D3D12_HEAP_FLAG_NONE,
 					&resourceDesc,
 					D3D12_RESOURCE_STATE_GENERIC_READ,
-					nullptr, IID_PPV_ARGS(&bm.model->uvbuffer)
+					nullptr, IID_PPV_ARGS(&model.uvbuffer)
 				) >> chk;
 			}
 
-			UINT ibuffSize = bm.model->uData->sIndex.size() * sizeof(uint32_t);
+			UINT ibuffSize = model.uData->sIndex.size() * sizeof(uint32_t);
 
 			{
 				const CD3DX12_HEAP_PROPERTIES heapProps{ D3D12_HEAP_TYPE_DEFAULT };
@@ -362,11 +470,11 @@ void Graphics::CreateBuffers(std::list<Object>& trackedObjects) {
 					&resourceDesc,
 					D3D12_RESOURCE_STATE_COMMON,
 					nullptr,
-					IID_PPV_ARGS(&bm.model->ibuffer)
+					IID_PPV_ARGS(&model.ibuffer)
 				) >> chk;
-				bm.model->ibuffView = D3D12_INDEX_BUFFER_VIEW{
-					.BufferLocation = bm.model->ibuffer->GetGPUVirtualAddress(),
-					.SizeInBytes = (UINT)std::size(bm.model->uData->sIndex) * (UINT)sizeof(uint32_t),
+				model.ibuffView = D3D12_INDEX_BUFFER_VIEW{
+					.BufferLocation = model.ibuffer->GetGPUVirtualAddress(),
+					.SizeInBytes = (UINT)std::size(model.uData->sIndex) * (UINT)sizeof(uint32_t),
 					.Format = DXGI_FORMAT_R32_UINT
 				};
 			}
@@ -379,65 +487,71 @@ void Graphics::CreateBuffers(std::list<Object>& trackedObjects) {
 					D3D12_HEAP_FLAG_NONE,
 					&resourceDesc,
 					D3D12_RESOURCE_STATE_GENERIC_READ,
-					nullptr, IID_PPV_ARGS(&bm.model->uibuffer)
+					nullptr, IID_PPV_ARGS(&model.uibuffer)
 				) >> chk;
 			}
 			{
 				{
 
 					ReadXML::Vertex* mappedVertexData = nullptr;
-					bm.model->uvbuffer->Map(0, nullptr, reinterpret_cast<void**>(&mappedVertexData)) >> chk;
+					model.uvbuffer->Map(0, nullptr, reinterpret_cast<void**>(&mappedVertexData)) >> chk;
 					WORD* mappedIndexData = nullptr;
-					bm.model->uibuffer->Map(0, nullptr, reinterpret_cast<void**>(&mappedIndexData)) >> chk;
+					model.uibuffer->Map(0, nullptr, reinterpret_cast<void**>(&mappedIndexData)) >> chk;
 
-					memcpy(mappedVertexData, bm.model->uData->MappedVertices.data(), vbuffSize);
-					memcpy(mappedIndexData, bm.model->uData->sIndex.data(), ibuffSize);
+					memcpy(mappedVertexData, model.uData->MappedVertices.data(), vbuffSize);
+					memcpy(mappedIndexData, model.uData->sIndex.data(), ibuffSize);
 
 				}
-				bm.model->uvbuffer->Unmap(0, nullptr);
-				bm.model->uibuffer->Unmap(0, nullptr);
+				model.uvbuffer->Unmap(0, nullptr);
+				model.uibuffer->Unmap(0, nullptr);
 
 
 			}
 
 
 		}
-		if (bm.curTexture.string() != "") {
-			CreateDDSTextureFromFile(pDevice.Get(), upload, bm.curTexture.wstring().c_str(), bm.tbuffer.ReleaseAndGetAddressOf()) >> chk;
-		}
-		else {
-			CreateDDSTextureFromMemory(pDevice.Get(), upload, missing_dds, missing_dds_size, bm.tbuffer.ReleaseAndGetAddressOf()) >> chk;
-		}
-
-		UpdBuffer(bm, commandList, pDevice, commandAllocator, commandQueue);
 
 		{
 			const CD3DX12_HEAP_PROPERTIES heapProps{ D3D12_HEAP_TYPE_UPLOAD };
-			const auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(sizeof(bm.cbvData) + (256 - (sizeof(bm.cbvData) % 256)));
+			const auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer((sizeof(Object::CBVData) * trackedModel.second.size()) + (256 - ((sizeof(Object::CBVData) * trackedModel.second.size()) % 256)));
 			pDevice->CreateCommittedResource(
 				&heapProps,
 				D3D12_HEAP_FLAG_NONE,
 				&resourceDesc,
 				D3D12_RESOURCE_STATE_GENERIC_READ,
 				nullptr,
-				IID_PPV_ARGS(&bm.cbvwriteBuffer)) >> chk;
+				IID_PPV_ARGS(&model.cbvwriteBuffer)) >> chk;
+		}
+		CD3DX12_RANGE readRange(0, 0);
+		
+		model.cbvwriteBuffer->Map(0, &readRange, reinterpret_cast<void**>(std::addressof(tInstance.instancedCBVData[trackedModel.first]))) >> chk;
+
+		if (model.curTexture.string() != "") {
+			CreateDDSTextureFromFile(pDevice.Get(), upload, model.curTexture.wstring().c_str(), model.tbuffer.ReleaseAndGetAddressOf()) >> chk;
+		}
+		else {
+			CreateDDSTextureFromMemory(pDevice.Get(), upload, missing_dds, missing_dds_size, model.tbuffer.ReleaseAndGetAddressOf()) >> chk;
 		}
 
-		CD3DX12_RANGE readRange(0, 0);
-		bm.cbvwriteBuffer->Map(0, &readRange, reinterpret_cast<void**>(std::addressof(bm.ptrcbvData))) >> chk;
+		UpdBuffer(model, commandList, pDevice, commandAllocator, commandQueue);
+
+
+
 	}
 	upload.End(commandQueue.Get());
 
 
 	//Need to rewrite this so that similar models can have CBV in order in memory.
-	for (auto & tO : trackedObjects) {
+	for (auto& trackedObjects : tInstance.tmodelLinkedObjects) {
+		auto model = tInstance.pTracker->GetModel(trackedObjects.first);
 		// Describe and create a constant buffer view (CBV).
-		auto size = sizeof(tO.cbvData) + (256 - (sizeof(tO.cbvData) % 256));
+		auto size = sizeof(Object::CBVData) + (256 - (sizeof(Object::CBVData) % 256));
 		D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
-		cbvDesc.BufferLocation = tO.cbvwriteBuffer->GetGPUVirtualAddress();
+		cbvDesc.BufferLocation = model->cbvwriteBuffer->GetGPUVirtualAddress();
 		cbvDesc.SizeInBytes = size;
-		objectAllocator->Alloc(&tO.cbvCpuHandle, &tO.cbvGpuHandle);
-		pDevice->CreateConstantBufferView(&cbvDesc, tO.cbvCpuHandle);
+		objectAllocator->Alloc(&model->cbvCpuHandle, &model->cbvGpuHandle);
+		pDevice->CreateConstantBufferView(&cbvDesc, model->cbvCpuHandle);
+
 
 		D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
 		srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
@@ -446,37 +560,36 @@ void Graphics::CreateBuffers(std::list<Object>& trackedObjects) {
 		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
 		srvDesc.Texture2D.MipLevels = -1;
 
-		objectAllocator->Alloc(&tO.srvCpuHandle, &tO.srvGpuHandle);
-		pDevice->CreateShaderResourceView(tO.tbuffer.Get(), &srvDesc, tO.srvCpuHandle);
-
+		objectAllocator->Alloc(&model->srvCpuHandle, &model->srvGpuHandle);
+		pDevice->CreateShaderResourceView(model->tbuffer.Get(), &srvDesc, model->srvCpuHandle);
 
 	}
 }
 
-void Graphics::UpdBuffer(Object& bm, Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList, Microsoft::WRL::ComPtr<ID3D12Device> pDevice, Microsoft::WRL::ComPtr<ID3D12CommandAllocator> commandAllocator, Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue) {
+void Graphics::UpdBuffer(RStorage::bmResource& model, Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList, Microsoft::WRL::ComPtr<ID3D12Device> pDevice, Microsoft::WRL::ComPtr<ID3D12CommandAllocator> commandAllocator, Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue) {
 	{
 		const auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-			bm.model->vbuffer.Get(),
+			model.vbuffer.Get(),
 			D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, D3D12_RESOURCE_STATE_COPY_DEST);
 		commandList->ResourceBarrier(1, &barrier);
 	}
 	{
 		const auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-			bm.model->ibuffer.Get(),
+			model.ibuffer.Get(),
 			D3D12_RESOURCE_STATE_INDEX_BUFFER, D3D12_RESOURCE_STATE_COPY_DEST);
 		commandList->ResourceBarrier(1, &barrier);
 	}
-	commandList->CopyResource(bm.model->vbuffer.Get(), bm.model->uvbuffer.Get());
-	commandList->CopyResource(bm.model->ibuffer.Get(), bm.model->uibuffer.Get());
+	commandList->CopyResource(model.vbuffer.Get(), model.uvbuffer.Get());
+	commandList->CopyResource(model.ibuffer.Get(), model.uibuffer.Get());
 	{
 		const auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-			bm.model->vbuffer.Get(),
+			model.vbuffer.Get(),
 			D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
 		commandList->ResourceBarrier(1, &barrier);
 	}
 	{
 		const auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-			bm.model->ibuffer.Get(),
+			model.ibuffer.Get(),
 			D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_INDEX_BUFFER);
 		commandList->ResourceBarrier(1, &barrier);
 	}
@@ -486,24 +599,24 @@ void Graphics::UpdBuffer(Object& bm, Microsoft::WRL::ComPtr<ID3D12GraphicsComman
 void Graphics::lModel(Object& obj, UINT umID) noexcept
 {
 
-		auto ReadData = rStorage->GetModel(umID);
+		auto ReadData = rStorage->GetMData(umID);
 		obj.model = rStorage->loadModel(*ReadData);
-		obj.curTexture = rStorage->getTexture(ReadData->name);
+		obj.model->curTexture = rStorage->getTexture(ReadData->name);
 }
 
-void Graphics::LoadResources(std::list<Object>& trackedObjects, Tracker& oTracker)
+void Graphics::LoadResources(Tracker::InstanceStruc& tInstance)
 {
 	
 
-	std::for_each(trackedObjects.begin(), trackedObjects.end(), [this, &oTracker](Object& e) {
-		lModel(e, oTracker.getModelID(e.UOID));
+	std::for_each(tInstance.tmodelLinkedObjects.begin(), tInstance.tmodelLinkedObjects.end(), [this](auto& e) {
+		for (auto& o : e.second) {
+			lModel(*o, e.first);
+		}
 	});
 
 	commandAllocator->Reset() >> chk;
 	commandList->Reset(commandAllocator.Get(), nullptr) >> chk;
-
-	CreateBuffers(trackedObjects);
-
+	CreateBuffers(tInstance);
 
 	commandList->Close() >> chk;
 
@@ -602,8 +715,15 @@ int Graphics::bIndex(std::vector<int> w, int bInd) {
 
 void Graphics::CreateFrameResources() {
 	backBuffers.resize(0);
-	scissorRect = CD3DX12_RECT(0, 0, windowResolution.right, windowResolution.bottom);
-	viewport = CD3DX12_VIEWPORT(0.f, 0.f, windowResolution.right, windowResolution.bottom);
+	windowResolution.Mtx.lock();
+	auto width = windowResolution.wr.right - windowResolution.wr.left;
+	auto height = windowResolution.wr.bottom - windowResolution.wr.top;
+	width = width > 0 ? width : 8;
+	height = height > 0 ? height : 8;
+	scissorRect = CD3DX12_RECT(0, 0, width, height);
+	viewport = CD3DX12_VIEWPORT(0.f, 0.f, width, height);
+
+
 
 	//rtv Descriptor heap
 	{
@@ -631,6 +751,8 @@ void Graphics::CreateFrameResources() {
 		//pFrameResource.InitBundle(pDevice.Get(), pipelineState.Get(), i, srvDescriptorHeap.Get(), srvDescriptorSize, samplerDescriptorHeap.Get(), samplerDescriptorSize, rootSignature.Get(), modelVect);
 
 	}
+	windowResolution.Mtx.unlock();
+
 	updateResolution.store(false);
 
 }
@@ -638,36 +760,59 @@ void Graphics::CreateFrameResources() {
 void Graphics::UpdateFrameResources()
 {
 	if (updateResolution.load()) {
+		frMutex.lock();
+		auto lastframe = cframeIndex;
+		fenceValue = fence->GetCompletedValue();
+		commandQueue->Signal(fence.Get(), fenceValue + 1);
+		fence->SetEventOnCompletion(fenceValue + 1, fenceEvent) >> chk;
+		WaitForSingleObject(fenceEvent, INFINITE);
+
 		//Swapchain buffers wont resize until all buffers are unused.
 		for (auto& b : backBuffers) {
 			b->renderTarget.Reset();
 		}
-		swapChain->ResizeBuffers(bufferCount, windowResolution.right, windowResolution.bottom, DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING) >> chk;
-		scissorRect = CD3DX12_RECT(0, 0, windowResolution.right, windowResolution.bottom);
-		viewport = CD3DX12_VIEWPORT(0.f, 0.f, windowResolution.right, windowResolution.bottom);
+		windowResolution.Mtx.lock();
+
+		auto width = windowResolution.wr.right - windowResolution.wr.left;
+		auto height = windowResolution.wr.bottom - windowResolution.wr.top;
+		width = width > 0 ? width : 8;
+		height = height > 0 ? height : 8;
+
+		swapChain->ResizeBuffers(bufferCount, width, height, DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING) >> chk;
+		scissorRect = CD3DX12_RECT(0, 0, width, height);
+		viewport = CD3DX12_VIEWPORT(0.f, 0.f, width, height);
 
 		for (auto& b : backBuffers) {
 			b->UpdateResolution(this);
 		}
+		windowResolution.Mtx.unlock();
+
+		frMutex.unlock();
+
 		updateResolution.store(false);
+
+
+		//uFrameResource.notify_all();
 
 	}
 
 }
 
-void Graphics::UpdateConstantBuffers(DirectX::FXMMATRIX view, DirectX::CXMMATRIX projection, std::list<Object>& trackedObjects)
+void Graphics::UpdateConstantBuffers(DirectX::FXMMATRIX view, DirectX::CXMMATRIX projection, Tracker::InstanceStruc& tInstance)
 {
-
 	using namespace DirectX;
-	auto tO = trackedObjects.begin();
-	for (auto i = 0; i < std::size(trackedObjects); i++)
+	for (auto& cbvData : tInstance.instancedCBVData)
 	{
-		tO->viewMtx.lock();
-		XMStoreFloat4x4(&tO->ptrcbvData->cbvMatrix, XMMatrixTranspose(XMLoadFloat4x4(&tO->vMatrix) * view * projection));
-		tO->viewMtx.unlock();
-		// Copy this matrix into the appropriate location in the upload heap subresource.
-		//memcpy(cbvbuff[i], &mvp, sizeof(mvp));
-		tO++;
+		auto trackedModels = tInstance.tmodelLinkedObjects[cbvData.first].begin();
+		for (auto i = 0; i < tInstance.tmodelLinkedObjects[cbvData.first].size();  i++) {
+			auto& tO = *trackedModels;
+			XMStoreFloat4x4(&cbvData.second[i].cbvMatrix, XMMatrixTranspose(XMLoadFloat4x4(&tO->vMatrix) * view * projection));
+			trackedModels++;
+		}
+
+			// Copy this matrix into the appropriate location in the upload heap subresource.
+			//memcpy(cbvbuff[i], &mvp, sizeof(mvp));
+
 	}
 }
 
@@ -692,110 +837,5 @@ Graphics::~Graphics() {
 	}
 
 
-}
-
-void Graphics::Update(std::list<Object>& trackedObjects) {
-	UpdateFrameResources();
-
-	XMStoreFloat4x4(&fovPerspective, DirectX::XMMatrixPerspectiveFovRH(DirectX::XM_PIDIV2, float(windowResolution.right - windowResolution.left) / float(windowResolution.bottom - windowResolution.top), 0.1f, 1000000.0f));
-
-	iGui->imPrepare();
-	curCamera.posMtx->lock();
-	curCamera.cmatrix = DirectX::XMMatrixLookToRH(XMLoadFloat3(curCamera.position), XMLoadFloat4(&curCamera.rotation), XMLoadFloat4(&curCamera.upDirection));
-	curCamera.posMtx->unlock();
-	UpdateConstantBuffers(curCamera.cmatrix, XMLoadFloat4x4(&fovPerspective), trackedObjects);
-}
-
-
-void Graphics::RenderFrame(std::list<Object>& trackedObjects) {
-
-
-
-	fenceValue = fence->GetCompletedValue();
-
-	auto lastFrame = cframeIndex;
-	cframeIndex = swapChain->GetCurrentBackBufferIndex();
-
-
-	auto& cframeBuffer = *backBuffers[cframeIndex];
-
-	cframeBuffer.commandAllocator->Reset() >> chk;
-	cframeBuffer.pCommandList->Reset(cframeBuffer.commandAllocator.Get(), pPipelineState.Get()) >> chk;
-
-
-	{
-		auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-			cframeBuffer.renderTarget.Get(),
-			D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
-		cframeBuffer.pCommandList->ResourceBarrier(1, &barrier);
-	}
-
-
-
-
-	cframeBuffer.PopulateCommandList( scissorRect, viewport, trackedObjects);
-
-
-
-	iGui->imPopulateCommand(cframeBuffer.pCommandList.Get());
-
-	{
-		auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-			cframeBuffer.renderTarget.Get(),
-			D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
-		cframeBuffer.pCommandList->ResourceBarrier(1, &barrier);
-	}
-
-	cframeBuffer.pCommandList->Close() >> chk;
-
-
-
-
-	std::vector<ID3D12CommandList*> commandLists = { cframeBuffer.pCommandList.Get()};
-	commandQueue->ExecuteCommandLists(commandLists.size(), commandLists.data());
-
-	//Vsync off. add toggle here for changing vsync
-	swapChain->Present(0, 512) >> chk;
-
-	//Something something prevent something idk
-	if (backBuffers[lastFrame]->fenceValue != fenceValue) {
-		fence->SetEventOnCompletion(backBuffers[lastFrame]->fenceValue, fenceEvent);
-		WaitForSingleObject(fenceEvent, INFINITE);
-	}
-
-
-	cframeBuffer.fenceValue = fenceValue + 1;
-	commandQueue->Signal(fence.Get(), cframeBuffer.fenceValue) >> chk;
-}
-
-
-float Graphics::Max(float number, float maximum)
-{
-	float rtrn = number;
-	if (number > maximum) {
-		rtrn = maximum;
-	}
-	return rtrn;
-}
-
-
-
-float Graphics::Min(float minimum, float number)
-{
-	float rtrn = number;
-	if (number < minimum) {
-		rtrn = minimum;
-	}
-	return rtrn;
-}
-float Graphics::RotateHelper(float& rNumber)
-{
-	if (rNumber > Max(rNumber, DirectX::XM_2PI)) {
-		return 0;
-	}
-	if (rNumber < Min(-DirectX::XM_2PI, rNumber)) {
-		return 0;
-	}
-	return rNumber;
 }
 

@@ -46,39 +46,47 @@ HMODULE Window::WindowClass::GetInstance() noexcept
 	return wndClass.hInst;
 }
 
-Window::Window(uint16_t w, uint16_t h, const char* name)
+Window::Window(uint16_t w, uint16_t h, const char* name, std::atomic<bool>& Alive)
 	:
 	width(w),
 	height(h)
 {
+	windowThread = std::thread([this, name, &Alive] {
+		std::unique_lock loc(winWait);
+		auto WindowStyle = WS_MINIMIZEBOX | WS_SYSMENU | WS_CAPTION | WS_VISIBLE ;
+		// calculate window size based on desired client region size
+		WindowRect.wr = RECT{ 0, 0, width, height };
+		AdjustWindowRect(&WindowRect.wr, WindowStyle, FALSE);
 
-	auto WindowStyle =  WS_MINIMIZEBOX | WS_SYSMENU | WS_CAPTION | WS_VISIBLE | WS_SIZEBOX;
-	// calculate window size based on desired client region size
-	WindowRect = RECT{ 0, 0, width, height };
-	AdjustWindowRect(&WindowRect, WindowStyle, FALSE);
-
-	pGfx = std::make_unique<Graphics>(hWnd, WindowRect);
-	sEng = std::make_unique<Engine>(*pGfx, kbd, clock);
+		pGfx = std::make_unique<Graphics>(hWnd, WindowRect);
+		sEng = std::make_unique<Engine>(*pGfx, kbd, clock);
 
 
-	// create window & get hWnd
-	hWnd = CreateWindow(
-		WindowClass::GetName(),
-		name,
-		WindowStyle,
-		CW_USEDEFAULT, CW_USEDEFAULT, WindowRect.right - WindowRect.left, WindowRect.bottom - WindowRect.top,
-		nullptr, nullptr, WindowClass::GetInstance(), this
-	);
+		// create window & get hWnd
+		hWnd = CreateWindow(
+			WindowClass::GetName(),
+			name,
+			WindowStyle,
+			CW_USEDEFAULT, CW_USEDEFAULT, WindowRect.wr.right - WindowRect.wr.left, WindowRect.wr.bottom - WindowRect.wr.top,
+			nullptr, nullptr, WindowClass::GetInstance(), this
+		);
 
-	// newly created windows start off as hidden
-	ShowWindow(hWnd, SW_SHOWDEFAULT);
-	UpdateWindow(hWnd);
+		// newly created windows start off as hidden
+		ShowWindow(hWnd, SW_SHOWDEFAULT);
+		UpdateWindow(hWnd);
 
+		Alive.store(true);
+		loc.unlock();
+		winReady.notify_all();
+		exeWinLoop(Alive);
+	
+	});
 
 }
 
 Window::~Window()
 {
+	windowThread.join();
 	DestroyWindow(hWnd);
 }
 
@@ -87,6 +95,21 @@ void Window::SetTitle(const std::string& title)
 	if (SetWindowTextA(hWnd, title.c_str()) == 0)
 	{
 		throw CHWND_LAST_EXCEPT();
+	}
+}
+void Window::Update() {
+
+	windowTimer.notify_all();
+
+}
+
+void Window::exeWinLoop(std::atomic<bool>& Alive) {
+	std::unique_lock exelock(upLock);
+	while (Alive.load()) {
+		windowTimer.wait(exelock);
+		if (ProcessMessages() == WM_QUIT) {
+			Alive.store(false); 
+		}
 	}
 }
 
@@ -145,11 +168,15 @@ LRESULT Window::HandleMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		kbd.ClearState();
 		break;
 
+	case WM_SIZING:
 	case WM_SIZE:
-		GetClientRect(hWnd, &WindowRect);
+		WindowRect.Mtx.lock();
+		GetClientRect(hWnd, &WindowRect.wr);
+		WindowRect.Mtx.unlock();
 		pGfx->updateResolution.store(true);
-		//Keyboard Messages
+
 		break;
+	//Keyboard Messages
 	case WM_KEYDOWN:
 	case WM_SYSKEYDOWN:
 		if (!(lParam & 0x40000000) || kbd.AutorepeatIsEnabled())

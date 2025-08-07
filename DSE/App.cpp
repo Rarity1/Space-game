@@ -21,7 +21,7 @@ int App::Go() {
 //Misnomer This is a cycle. 
 void App::DoFrame() {
 	auto delta = wnd.Eng().Clock.Mark();
-	wnd.Eng().Update(delta);
+	wnd.Eng().Update();
 	updaterate += delta;
 	//This is a tick
 	if (updaterate >= 1.0) {
