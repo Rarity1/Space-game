@@ -65,7 +65,6 @@ private:
 	float RotateHelper(float& rNumber);
 	float timesincestart;
 	void RecurLTrans(ReadXML::Node* n, ReadXML::Node* P);
-	int bIndex(std::vector<int> w, int bInd);
 	GErrors::CheckerToken chk;
 	//uint16_t& width;
 	//uint16_t& height;

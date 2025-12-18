@@ -22,19 +22,19 @@ void Engine::iLoad() {
     //Make a better way of setting player model. 
     cTrackedInstance = 1;
     tracker->initInstance(cTrackedInstance);
-    plModel = tracker->initObject(tracker->getInstance(cTrackedInstance), "untitled", 2, 1, 200.0, 0.01, DirectX::XMFLOAT3{ 0,0,138 });
+    plModel = tracker->initObject(tracker->getInstance(cTrackedInstance), "untitled", 2, 1, 2000.0, 0.01, DirectX::XMFLOAT3{ 0,0,138 });
     tracker->initObject(tracker->getInstance(cTrackedInstance), "cube", 1, 1, 200.0, 0.01, DirectX::XMFLOAT3{ 10,0,138 });
     tracker->initObject(tracker->getInstance(cTrackedInstance), "wrld", 4, 1, 8570000000.0 , 0.3, DirectX::XMFLOAT3{ 0,0,0 });
     //wrld is 1:50000
 
-    for (auto i = 0; i < 1; i++) {
-        float p = i * 1;
-        tracker->initObject(tracker->getInstance(cTrackedInstance), "untitled", 2, 1, 200, 0.3, DirectX::XMFLOAT3{ 12 + p,0,138 });
+    for (auto i = 0; i < 20; i++) {
+        float p = i * 2;
+        //tracker->initObject(tracker->getInstance(cTrackedInstance), "untitled", 2, 1, 200, 0.3, DirectX::XMFLOAT3{ 12 + p,0,138 });
     }
 
-    for (auto i = 0; i < 1; i++) {
-        float p = i * 1;
-       tracker->initObject(tracker->getInstance(cTrackedInstance), "untitled", 1, 1, 200, 0.3, DirectX::XMFLOAT3{ 12 + p,0,138 });
+    for (auto i = 0; i < 10; i++) {
+        float p = i * 2;
+       //tracker->initObject(tracker->getInstance(cTrackedInstance), "cube", 1, 1, 200, 0.3, DirectX::XMFLOAT3{ 12 + p,0,138 });
     }
 
     //trackedModels[0].mworld = &trackedModels[2];
@@ -52,29 +52,26 @@ void Engine::iLoad() {
         engInit = false;
     }
     eRun.store(true);
-    for (auto& t : tracker->getInstance(cTrackedInstance).tmodelLinkedObjects) {
-        for (auto& m : t.second) {
-            pGfx.UpdateModel(m);
-        }
-    }
+
     phyx->trackM(tracker->getInstance(cTrackedInstance));
 }
 
 bool Engine::Update()
 {
+    constexpr double update = 1.0 / 60;
     UControls();
-    UCampos();
-    if (Clock.Peek() >= 1.0 / updaterate) {
-        engineTimeTaken = Clock.Mark();
+    ucontrolClock.Mark();
+    if (Clock.Peek() >= update) {
+        //_ASSERT(elapsedtime == 0);
+        Clock.Mark();
         enQueueEngineCommands();
         enQueueExternCommands();
         eventBusSync();
-        mAniUpdate();
-        pGfx.Update(tracker->getInstance(cTrackedInstance));
-        auto peek = Clock.Peek();
 
-        return true;
+        //return true;
     }
+    mAniUpdate();
+    pGfx.Update(tracker->getInstance(cTrackedInstance));
     return false;
 }
 
@@ -90,7 +87,7 @@ void Engine::RenderI()
      std::unique_ptr<Movement> move(std::make_unique<Movement>());
 
      {
-         auto movespeed = 1.0;
+         auto movespeed = 2.0;
          if (m_keysPressed.FindBuffered(KeysPressed::W)) {
              move->forward += movespeed;
          }if (m_keysPressed.FindBuffered(KeysPressed::S)) {
@@ -106,17 +103,16 @@ void Engine::RenderI()
      }
 
 
+     float speedchange = move->forward * updateClock.Peek();
 
      if (freeCamTGL.load()) {
          if (move->forward != 0) {
-             float speedchange = move->forward * 10 / updaterate;
              // Figure this out
              using namespace DirectX;
-             XMFLOAT4 Temporarydir;
-             DirectX::XMStoreFloat4(&Temporarydir, XMVector3Normalize(XMLoadFloat4(&pGfx.curCamera.rotation) * fabs(speedchange)));
 
 
-             XMStoreFloat3(&freeCamPos, XMLoadFloat4(&Temporarydir) * speedchange + XMLoadFloat3(&freeCamPos));
+
+             XMStoreFloat3(&freeCamPos, XMLoadFloat4(&pGfx.curCamera.rotation) * speedchange + XMLoadFloat3(&freeCamPos));
          }
          if (move->movestop) {
              plModel->velDir = { 0,0,0,0 };
@@ -126,7 +122,6 @@ void Engine::RenderI()
      else {
          if (move->forward != 0 && !move->movestop) {
              float oldspeed = plModel->speed <= 0.0001 ? 0 : plModel->speed;
-             float speedchange = move->forward * 1.0 / updaterate;
              DirectX::XMFLOAT4 scale = { 0,0,0,0 };
              {
                  using namespace DirectX;
@@ -135,6 +130,8 @@ void Engine::RenderI()
 
              }
              scale.x = fabs(scale.x);
+
+             speedchange *= 0.1;
              float totalspeed = plModel->speed + fabs(speedchange);
 
              float speedscal = fabs(speedchange * (scale.x) - speedchange * (1 - scale.x)) / totalspeed;
@@ -193,6 +190,8 @@ void Engine::mAniUpdate(){
 int Engine::eventBusSync()
 {
     tMain->gEndWork(eWref);
+    updateClock.Mark();
+
     return 0;
 }
 
@@ -224,14 +223,7 @@ void Engine::enQueueEngineCommands()
     queueCommand([this] {
         phyx->Update(tracker->getInstance(cTrackedInstance));
     }, 20);
-    queueCommand([this] {
-        std::for_each(tracker->getInstance(cTrackedInstance).tmodelLinkedObjects.begin(), tracker->getInstance(cTrackedInstance).tmodelLinkedObjects.end(), [this](auto& e) { 
-            for (auto& tObjects : e.second) {
-                tObjects->UpdatePosition();
-            }
-        
-        });
-    }, 21);
+    queueCommand([this] {std::for_each(tracker->getInstance(cTrackedInstance).tmodelLinkedObjects.begin(), tracker->getInstance(cTrackedInstance).tmodelLinkedObjects.end(), [this](auto& e) { for (auto& tObjects : e.second) {tObjects->UpdatePosition();}});}, 21);
     //queueCommand([this] {pGfx.Update(tracker->trackedObjects);}, 65535);
     eWref = tMain->gPushWork(getCQueue());
 }
@@ -275,8 +267,8 @@ void Engine::UCampos() {
     float yaw = 0;
     float roll = 0;
     {
-        //Rotation per second in radians //Currently 15 degrees per second
-        double rotationPS = Clock.Peek() * DirectX::XM_PIDIV4/3;
+        //Rotation per second in radians //Currently 90 degrees per second
+        double rotationPS = ucontrolClock.Peek() * DirectX::XM_PIDIV2;
 
         if (m_keysPressed.FindBuffered(KeysPressed::up)) {
             pitch += rotationPS;
@@ -459,7 +451,7 @@ void Engine::UControls() {
             OnKeyDown(ss->GetCode());
         }
     }
-
+    UCampos();
 }
 
 

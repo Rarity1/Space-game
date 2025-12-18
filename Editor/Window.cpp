@@ -87,6 +87,7 @@ Window::Window(uint16_t w, uint16_t h, const char* name, std::atomic<bool>& Aliv
 Window::~Window()
 {
 	windowThread.join();
+	pGfx.reset();
 	DestroyWindow(hWnd);
 }
 

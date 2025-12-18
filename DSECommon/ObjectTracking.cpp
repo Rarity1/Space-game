@@ -85,15 +85,16 @@ Tracker::InstanceStruc& Tracker::getInstance(uint16_t instanceID)
 Object* Tracker::initObject(InstanceStruc& oInstance, std::string textureName, UINT filebModelIndex, float mScale, float mMass, float mFriction, DirectX::XMFLOAT3 initPos, DirectX::XMFLOAT3 initRot, DirectX::XMFLOAT3 initVelDir, float initSpeed) {
 
 	//Impliment object tracking for real. Track per world(Doesnt have to be entire planet just local zeropoint.)
-	auto UIOD = lastUOIDused.load();
-	storage.trackModelID(filebModelIndex, UIOD);
+	auto UOID = lastUOIDused.load();
+	storage.trackModelID(filebModelIndex, UOID);
 
-	mapUOID[UIOD] = std::make_unique<Object>(textureName,
+	mapUOID[UOID] = std::make_unique<Object>(textureName,
 		//Move this elsewhere.
 		nullptr,
 		mScale, mMass, mFriction, initPos, initRot, initVelDir, initSpeed);
+	mapUOID[UOID]->UOID = UOID;
 
-	auto& result = oInstance.tmodelLinkedObjects[filebModelIndex].emplace_back(mapUOID[UIOD].get());
+	auto& result = oInstance.tmodelLinkedObjects[filebModelIndex].emplace_back(mapUOID[UOID].get());
 	oInstance.instancedCBVData[filebModelIndex] = nullptr;
 	oInstance.Count++;
 	lastUOIDused++;

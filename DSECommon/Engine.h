@@ -90,6 +90,9 @@ private:
 		float right = 0.0;
 		bool movestop = false;
 	};
+	EngineTime updateClock;
+	EngineTime ucontrolClock;
+
 	//Queues a function onto the event queue without running the function. Larger priority number = lower priority. 
 	void queueCommand(std::function<void()> Function, unsigned short Priority = 0);
 	std::vector<std::function<void()>>& getCQueue();

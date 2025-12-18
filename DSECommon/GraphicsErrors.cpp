@@ -26,7 +26,7 @@ void operator>>(GErrors::HrGrabber g, GErrors::CheckerToken)
 			std::ranges::to<std::basic_string>();
 		
 		throw std::runtime_error{
-			std::format("Graphics Error: {}\n   {}({})",
+			std::format("Error: {}\n   {}({})",
 				errorString, g.loc.file_name(), g.loc.line())
 		};
 	}

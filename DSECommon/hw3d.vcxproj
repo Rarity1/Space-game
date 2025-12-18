@@ -179,6 +179,7 @@ XCOPY "$(SolutionDir)OpenCL\" "$(TargetDir)OpenCL\" /E /Y</Command>
       <EnablePREfast>true</EnablePREfast>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <LanguageStandard_C>stdclatest</LanguageStandard_C>
+      <EnableEnhancedInstructionSet>NotSet</EnableEnhancedInstructionSet>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -191,7 +192,7 @@ XCOPY "$(SolutionDir)OpenCL\" "$(TargetDir)OpenCL\" /E /Y</Command>
     <PostBuildEvent>
       <Command>XCOPY "$(SolutionDir)models\" "$(TargetDir)models\" /E /Y
 XCOPY "$(SolutionDir)textures\" "$(TargetDir)textures\" /E /Y
-XCOPY "$(SolutionDir)OpenCL\" "$(TargetDir)OpenCL\" /E /Y</Command>
+</Command>
     </PostBuildEvent>
     <FxCompile>
       <ShaderModel>6.6</ShaderModel>
@@ -215,6 +216,7 @@ XCOPY "$(SolutionDir)OpenCL\" "$(TargetDir)OpenCL\" /E /Y</Command>
       <CompileAsWinRT>false</CompileAsWinRT>
       <EnablePREfast>true</EnablePREfast>
       <LanguageStandard_C>stdclatest</LanguageStandard_C>
+      <EnableEnhancedInstructionSet>NotSet</EnableEnhancedInstructionSet>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -227,7 +229,7 @@ XCOPY "$(SolutionDir)OpenCL\" "$(TargetDir)OpenCL\" /E /Y</Command>
     <PostBuildEvent>
       <Command>XCOPY "$(SolutionDir)models\" "$(TargetDir)models\" /E /Y
 XCOPY "$(SolutionDir)textures\" "$(TargetDir)textures\" /E /Y
-XCOPY "$(SolutionDir)OpenCL\" "$(TargetDir)OpenCL\" /E /Y</Command>
+</Command>
     </PostBuildEvent>
     <FxCompile>
       <ShaderModel>6.6</ShaderModel>
@@ -301,7 +303,7 @@ XCOPY "$(SolutionDir)OpenCL\" "$(TargetDir)OpenCL\" /E /Y</Command>
     <None Include="..\models\#01#cube.dae" />
     <None Include="..\models\#02#untitled.dae" />
     <None Include="..\models\#04#wrld.dae" />
-    <None Include="..\OpenCL\ePhysics.cl">
+    <CopyFileToFolders Include="..\OpenCL\ePhysics.cl">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">false</ExcludedFromBuild>
       <FileType>Document</FileType>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">false</ExcludedFromBuild>
@@ -311,14 +313,18 @@ XCOPY "$(SolutionDir)OpenCL\" "$(TargetDir)OpenCL\" /E /Y</Command>
       <DeploymentContent Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</DeploymentContent>
       <DeploymentContent Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</DeploymentContent>
       <DeploymentContent Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</DeploymentContent>
-    </None>
-    <None Include="..\OpenCL\SphrKern.cl">
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(OutDir)\OpenCL</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(OutDir)\OpenCL</DestinationFolders>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="..\OpenCL\SphrKern.cl">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
       <DeploymentContent Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</DeploymentContent>
       <FileType>Document</FileType>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</ExcludedFromBuild>
       <DeploymentContent Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</DeploymentContent>
-    </None>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(OutDir)\OpenCL</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(OutDir)\OpenCL</DestinationFolders>
+    </CopyFileToFolders>
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>

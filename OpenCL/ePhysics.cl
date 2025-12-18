@@ -22,14 +22,24 @@ typedef struct XMFLOAT3
 }
 XMFLOAT3;
 
+static XMFLOAT3 Zero = {0.0,0.0,0.0 };
+//Accuracy seems to be somewhere between 0.01 and 0.001 not amazing but good enough I guess
+static double epsilon = 0.005;
+
+typedef enum
+{
+    X, Y, Z
+}XYZ;
+
+
 typedef struct CINTERVAL
 {
-    float V0;
-    float V1;
-    float V2;
-    float X0;
-    float X1;
-    bool CoPlan;
+    float Vector0Distance;
+    float Vector1Distance;
+    float Vector2Distance;
+    float Scalar0Difference;
+    float Scalar1Difference;
+    bool isCoPlanar;
 }
 CINTERVAL;
 
@@ -75,6 +85,7 @@ typedef struct CLOSEFORM
     float dist[2];
 }
 CLOSEFORM;
+
 XMFLOAT3 MulXMFLOAT3(XMFLOAT3 a, float b)
 {
     XMFLOAT3 result = { 0, 0, 0 };
@@ -110,7 +121,25 @@ float fDistance(XMFLOAT3 pos1, XMFLOAT3 pos2)
 {
     XMFLOAT3 Result = SubXMFLOAT3(pos2, pos1);
     float dist = XMVector3Dot(Result, Result);
-    if(dist <= 0.001)
+    if(dist <= 0)
+    {
+        return 0.0;
+    }
+    else
+    {
+        return sqrt(dist);
+    }
+}
+
+double dDistance(XMFLOAT3 pos1, XMFLOAT3 pos2)
+{
+    XMFLOAT3 Result = SubXMFLOAT3(pos2, pos1);
+    double dist = 0;
+    dist += Result.x * Result.x;
+    dist += Result.y * Result.y;
+    dist += Result.z * Result.z;
+
+    if (dist <= epsilon)
     {
         return 0.0;
     }
@@ -122,8 +151,9 @@ float fDistance(XMFLOAT3 pos1, XMFLOAT3 pos2)
 
 XMFLOAT3 fDirection(XMFLOAT3 pos1, XMFLOAT3 pos2) {
     XMFLOAT3 Result = SubXMFLOAT3(pos2, pos1);
-    float mag = fDistance(pos1, pos2);
-    Result = MulXMFLOAT3(Result, 1/mag);
+    double mag = dDistance(pos1, pos2);
+    mag = mag != 0 ? 1 / mag : 0;
+    Result = MulXMFLOAT3(Result, mag);
     return Result;
 }
 
@@ -138,10 +168,6 @@ XMFLOAT3 AddXMFLOAT3(XMFLOAT3 a, XMFLOAT3 b)
     return result;
 }
 
-
-
-
-
 XMFLOAT3 XMVector3Cross(XMFLOAT3 a, XMFLOAT3 b)
 {
     XMFLOAT3 result = { 0, 0, 0 };
@@ -153,229 +179,33 @@ XMFLOAT3 XMVector3Cross(XMFLOAT3 a, XMFLOAT3 b)
     return result;
 }
 
-float Xyzret(XMFLOAT3 V, int Case)
+
+double areaOfTriangle(XMFLOAT3 TriA, XMFLOAT3 TriB, XMFLOAT3 TriC)
 {
-    switch (Case)
-    {
-        case 0:
-            {
-                return V.x;
-            }
-        case 1:
-            {
-                return V.y;
-            }
-        case 2:
-            {
-                return V.z;
-            }
-    }
-}
-bool EdgeEdgeTest(float Axy[2], XMFLOAT3 V0, XMFLOAT3 U0, XMFLOAT3 U1, int Case0, int Case1)
-{
-    float Bx, By, Cx, Cy, e, d, f;
-    float Ax = Axy[0];
-    float Ay = Axy[1];
-    switch (Case0)
-    {
-        case 0:
-            {
-                Bx = U0.x - U1.x;
-                Cx = V0.x - U0.x;
-                break;
-            }
-        case 1:
-            {
-                Bx = U0.y - U1.y;
-                Cx = V0.y - U0.y;
-                break;
-            }
-        case 2:
-            {
-                Bx = U0.z - U1.z;
-                Cx = V0.z - U0.z;
-                break;
-            }
-    }
+    XMFLOAT3 AB = XMVector3Cross(TriA, TriB);
+    XMFLOAT3 AC = XMVector3Cross(TriA, TriC);
+    XMFLOAT3 ABC = XMVector3Cross(AB, AC);
 
-    switch (Case1)
-    {
-        case 0:
-            {
-                By = U0.x - U1.x;
-                Cy = V0.x - U0.x;
-                break;
-            }
-        case 1:
-            {
-                By = U0.y - U1.y;
-                Cy = V0.y - U0.y;
-                break;
-            }
-        case 2:
-            {
-                By = U0.z - U1.z;
-                Cy = V0.z - U0.z;
-                break;
-            }
-    }
-
-
-    f = Ay * Bx - Ax * By;
-    d = By * Cx - Bx * Cy;
-    if ((f > 0 && d >= 0 && d <= f) || (f < 0 && d <= 0 && d >= f))
-    {
-        e = Ax * Cy - Ay * Cx;
-        if (f > 0)
-        {
-            if (e >= 0 && e <= f) return true;
-        }
-        else
-        {
-            if (e <= 0 && e >= f) return true;
-        }
-    }
-
-    return false;
+    double Area = dDistance(ABC, Zero)/2;
+    return Area;
 }
 
-bool EdgeTriTest(XMFLOAT3 V0, XMFLOAT3 V1, XMFLOAT3 U0, XMFLOAT3 U1, XMFLOAT3 U2, int Case0, int Case1)
-{
-    bool Result = false;
-    float Axy[2];
-    switch (Case0)
-    {
-        case 0:
-            {
-                Axy[0] = V1.x - V0.x;
-                break;
-            }
-        case 1:
-            {
-                Axy[0] = V1.y - V0.y;
-                break;
-            }
-        case 2:
-            {
-                Axy[0] = V1.z - V0.z;
-                break;
-            }
-    }
-    switch (Case1)
-    {
-        case 0:
-            {
-                Axy[1] = V1.x - V0.x;
-                break;
-            }
-        case 1:
-            {
-                Axy[1] = V1.y - V0.y;
-                break;
-            }
-        case 2:
-            {
-                Axy[1] = V1.z - V0.z;
-                break;
-            }
-    }
-
-    Result = EdgeEdgeTest(Axy, V0, U0, U1, Case0, Case1);
-    Result = Result ? true : EdgeEdgeTest(Axy, V0, U1, U2, Case0, Case1);
-    Result = Result ? true : EdgeEdgeTest(Axy, V0, U2, U0, Case0, Case1);
-
-
-    return Result;
-}
-
-
-
-bool PointInTri(XMFLOAT3 V0, XMFLOAT3 U0, XMFLOAT3 U1, XMFLOAT3 U2, int Case0, int Case1)
+bool PointInTri(XMFLOAT3 TestPoint, XMFLOAT3 TriA, XMFLOAT3 TriB, XMFLOAT3 TriC)
 {
 
-                                              
-      float a, b, c, d0, d1, d2;
-    /* is T1 completly inside T2? */
-    /* check if V0 is inside tri(U0,U1,U2) */
+    XMFLOAT3 Vect1 = SubXMFLOAT3(TriB, TriA);
+    XMFLOAT3 Vect2 = SubXMFLOAT3(TestPoint, TriA);
 
-    float U00, U01, U10, U11, U20, U21, V1, V2;
-    
-    U00 = Xyzret(U0, Case0);
-    U01 = Xyzret(U0, Case1);
-    U10 = Xyzret(U1, Case0);
-    U11 = Xyzret(U1, Case1);
-    U20 = Xyzret(U2, Case0);
-    U21 = Xyzret(U2, Case1);
-    V1 = Xyzret(V0, Case0);
-    V2 = Xyzret(V0, Case1);
+    XMFLOAT3 Normal1 = fDirection(Zero, XMVector3Cross(Vect1, Vect2));
+    Vect1 = SubXMFLOAT3(TriC, TriB);
+    Vect2 = SubXMFLOAT3(TestPoint, TriB);
+    XMFLOAT3 Normal2 = fDirection(Zero, XMVector3Cross(Vect1, Vect2));
 
 
-      a = U11 - U01;                          
-      b = -(U10 - U00);                       
-      c = -a * U00 - b * U01;                     
-      d0 = a * V1 + b * V2 + c;                   
-                                                
-      a = U21 - U11;                          
-      b = -(U20 - U10);                       
-      c = -a * U10 - b * U11;                     
-      d1 = a * V1 + b * V2 + c;                   
-                                                
-      a = U01 - U21;                          
-      b = -(U00 - U20);                       
-      c = -a * U20 - b * U21;                     
-      d2 = a * V1 + b * V2 + c;                   
-      if (d0 * d1 > 0.0)                             
-      {                                         
-        if (d0 * d2 > 0.0) return true;                 
-      }                                         
-
+    //Check if sum of A1, A2 and A3 is same as A
+    return (fabs(XMVector3Dot(Normal1, Normal2)) > (1.0 - epsilon));
 }
 
-bool CoplanCheck(XMFLOAT3 XN, XMFLOAT3 V0, XMFLOAT3 V1, XMFLOAT3 V2,
-                     XMFLOAT3 U0, XMFLOAT3 U1, XMFLOAT3 U2)
-{
-    bool Result = false;
-    float A[3];
-    int i0, i1;
-    A[0] = fabs(XN.x);
-    A[1] = fabs(XN.y);
-    A[2] = fabs(XN.z);
-    if (A[0] > A[1])
-    {
-        if (A[0] > A[2])
-        {
-            i0 = 1;      /* A[0] is greatest */
-            i1 = 2;
-        }
-        else
-        {
-            i0 = 0;      /* A[2] is greatest */
-            i1 = 1;
-        }
-    }
-    else   /* A[0]<=A[1] */
-    {
-        if (A[2] > A[1])
-        {
-            i0 = 0;      /* A[2] is greatest */
-            i1 = 1;
-        }
-        else
-        {
-            i0 = 0;      /* A[1] is greatest */
-            i1 = 2;
-        }
-    }
-
-    Result = EdgeTriTest(V0, V1, U0, U1, U2, i0, i1);
-    Result = Result ? true : EdgeTriTest(V1, V2, U0, U1, U2, i0, i1);
-    Result = Result ? true : EdgeTriTest(V2, V0, U0, U1, U2, i0, i1);
-
-    Result = Result ? true : PointInTri(V0, U0, U1, U2, i0, i1);
-    Result = Result ? true : PointInTri(U0, V0, V1, V2, i0, i1);
-
-    return Result;
-}
 
 int Sign(float x)
 {
@@ -391,88 +221,91 @@ int Sign(float x)
 
 int OddOneOut(float x, float y, float z)
 {
-
+    //None can be all 1 or all -1. If they are the same they have to be 0
+    int SignX = Sign(x);
+    int SignY = Sign(y);
+    int SignZ = Sign(z);
+    //X:0 Y:1 Z:2
     int result = 0;
-    if(Sign(x) * Sign(y) > 0)
+    if (SignX == SignY)
     {
         result = 2;
-    }else if(Sign(x) * Sign(z) > 0)
+    }
+    else if(SignX == SignZ)
     {
         result = 1;
-    }
-    else if (Sign(y) * Sign(z) > 0 || Sign(x) != 0)
-    {
+    }else if (SignY == SignZ){
         result = 0;
-    }else if(Sign(y) != 0)
+    }else if (SignY <= 0)
     {
         result = 1;
-    }else if(Sign(z) != 0)
+    }else if(SignZ <= 0)
     {
         result = 2;
     }
-    else
+    if(SignX == 0, SignY == 0, SignZ == 0 )
     {
-        result = 3;
+        //Coplanar
+        return 3;
     }
-
 
     return result;
 }
 
 //Dist is dist from plane. Positive means in front negative means behind. 
-CINTERVAL ComputeInterval(float VV0, float VV1, float VV2, float Dist0, float Dist1, float Dist2)
+CINTERVAL ComputeInterval(float Vector0Vert, float Vector1Vert, float Vector2Vert, float Scalar[3])
 {
     CINTERVAL Result;
-    Result.CoPlan = false;
+    Result.isCoPlanar = false;
 
-    float A, B, C, X0, X1 = 0;
+    float XDistance, YDistance, ZDistance, ScalarDifference0, ScalarDifference1 = 0;
 
     //A or X should be odd man out. YZ or BC should be on same side.
 
-    switch (OddOneOut(Dist0, Dist1, Dist2))
+    switch (OddOneOut(Scalar[0], Scalar[1], Scalar[2]))
     {
         case 0:
             {
 
-                A = VV0;
-                B = (VV1 - VV0) * Dist0;
-                C = (VV2 - VV0) * Dist0;
-                X0 = Dist0 - Dist1;
-                X1 = Dist0 - Dist2;
+                XDistance = Vector0Vert;
+                YDistance = (Vector1Vert - Vector0Vert) * Scalar[0];
+                ZDistance = (Vector2Vert - Vector0Vert) * Scalar[0];
+                ScalarDifference0 = Scalar[0] - Scalar[1];
+                ScalarDifference1 = Scalar[0] - Scalar[2];
                 break;
             }
         case 1:
             {
 
-                A = VV1;
-                B = (VV0 - VV1) * Dist1;
-                C = (VV2 - VV1) * Dist1;
-                X0 = Dist1 - Dist0;
-                X1 = Dist1 - Dist2;
+                XDistance = Vector1Vert;
+                YDistance = (Vector0Vert - Vector1Vert) * Scalar[1];
+                ZDistance = (Vector2Vert - Vector1Vert) * Scalar[1];
+                ScalarDifference0 = Scalar[1] - Scalar[0];
+                ScalarDifference1 = Scalar[1] - Scalar[2];
                 break;
             }
         case 2:
             {
 
-                A = VV2;
-                B = (VV0 - VV2) * Dist2;
-                C = (VV1 - VV2) * Dist2;
-                X0 = Dist2 - Dist0;
-                X1 = Dist2 - Dist1;
+                XDistance = Vector2Vert;
+                YDistance = (Vector0Vert - Vector2Vert) * Scalar[2];
+                ZDistance = (Vector1Vert - Vector2Vert) * Scalar[2];
+                ScalarDifference0 = Scalar[2] - Scalar[0];
+                ScalarDifference1 = Scalar[2] - Scalar[1];
                 break;
             }
         case 3:
             {
-                Result.CoPlan = true;
+                Result.isCoPlanar = true;
                 break;
             }
     }
 
-    Result.V0 = A;
-    Result.V1 = B;
-    Result.V2 = C;
-    Result.X0 = X0;
-    Result.X1 = X1;
+    Result.Vector0Distance = XDistance;
+    Result.Vector1Distance = YDistance;
+    Result.Vector2Distance = ZDistance;
+    Result.Scalar0Difference = ScalarDifference0;
+    Result.Scalar1Difference = ScalarDifference1;
 
     return Result;
 }
@@ -480,7 +313,8 @@ CINTERVAL ComputeInterval(float VV0, float VV1, float VV2, float Dist0, float Di
 
 
 //This is supposed to say object is colliding when triangle is inside another object but doesnt work currently
-CLOSEFORM CloseCheck(float TDistance[3], XMFLOAT3 WAPoint, XMFLOAT3 WBPoint, XMFLOAT3 WCPoint, XMFLOAT3 TAPoint, XMFLOAT3 TBPoint, XMFLOAT3 TCPoint, XMFLOAT3 Bone1, XMFLOAT3 TPos, XMFLOAT3 Bone2, float bdist, XMFLOAT3 bdir, XMFLOAT3 WNorm, XMFLOAT3 TNorm)
+/*
+ CLOSEFORM CloseCheck(float TDistance[3], XMFLOAT3 WAPoint, XMFLOAT3 WBPoint, XMFLOAT3 WCPoint, XMFLOAT3 TAPoint, XMFLOAT3 TBPoint, XMFLOAT3 TCPoint, XMFLOAT3 Bone1, XMFLOAT3 TPos, XMFLOAT3 Bone2, float bdist, XMFLOAT3 bdir, XMFLOAT3 WNorm, XMFLOAT3 TNorm)
 {
     CLOSEFORM Result;
     Result.dist[0] = 0;
@@ -511,7 +345,7 @@ CLOSEFORM CloseCheck(float TDistance[3], XMFLOAT3 WAPoint, XMFLOAT3 WBPoint, XMF
 
 
         //Make sure triangles are actually ontop of each other
-        if (CoplanCheck(Bonedir, WNewPointA, WNewPointB, WNewPointC, TNewPointA, TNewPointB, TNewPointC))
+        //if (CoplanCheck(Bonedir, WNewPointA, WNewPointB, WNewPointC, TNewPointA, TNewPointB, TNewPointC))
         {
             Result.dist[0] = 0.1;
             Result.dist[1] = 0.1;
@@ -524,13 +358,186 @@ CLOSEFORM CloseCheck(float TDistance[3], XMFLOAT3 WAPoint, XMFLOAT3 WBPoint, XMF
 
     return Result;
 }
+ */
+typedef struct XMF32
+{
+    XMFLOAT3 a;
+    XMFLOAT3 b;
+}XMF32;
 
+XMF32 LIntersectPoint(XMFLOAT3 TriA, XMFLOAT3 TriB, XMFLOAT3 TriC, XMFLOAT3 Tri2A, XMFLOAT3 Tri2Normal){
+    XMF32 Result;
+    //tripoint direction b to a
+    XMFLOAT3 BA = fDirection(TriB, TriA);
+    //tripoint direction c to a
+    XMFLOAT3 CA = fDirection(TriC, TriA);
+
+    float t2D = XMVector3Dot(Tri2Normal, Tri2A);
+
+    float BAd = (t2D - XMVector3Dot(Tri2Normal, TriB)) / XMVector3Dot(Tri2Normal, BA);
+    float CAd = (t2D - XMVector3Dot(Tri2Normal, TriC)) / XMVector3Dot(Tri2Normal, CA);
+
+    //Goal is to find a point along the direction BA or CA that intersects the plane of Tri2 then project that point back onto the first triangle and measure the distance between the two points
+    //This isnt correct?
+
+    Result.a = AddXMFLOAT3(TriB, MulXMFLOAT3(BA, BAd));
+    Result.b = AddXMFLOAT3(TriC, MulXMFLOAT3(CA, CAd));
+    return Result;
+}
+
+
+float TriDist(XMFLOAT3 TriA, XMFLOAT3 TriB, XMFLOAT3 TriC, XMFLOAT3 Tri2A, XMFLOAT3 Tri2B, XMFLOAT3 Tri2C, XMFLOAT3 Tri2Normal, XMFLOAT3 TriNormal, float Tri1Scalar[3], float Tri2Scalar[3])
+{
+    float Result = 0.1;
+
+    //Goal is to find a point along the direction BA or CA that intersects the plane of Tri2 then project that point back onto the first triangle and measure the distance between the two points
+    //This isnt correct?
+    //float distBAp = ;
+
+
+    //float distCAp = XMVector3Dot(SubXMFLOAT3(Tri2A, TriA), Tri2Normal) * CAd;
+
+    //Need to have both points to figure out distance to move. Putting thoughts here to remember later
+
+    XMF32 Tri1;
+    XMF32 Tri2;
+    int OddSide1 = OddOneOut(Tri1Scalar[0], Tri1Scalar[1], Tri1Scalar[2]);
+    int OddSide2 = OddOneOut(Tri2Scalar[0], Tri2Scalar[1], Tri2Scalar[2]);
+    float Dist1 = 0;
+    float Dist2 = 0;
+    XMFLOAT3 OddTri1;
+    XMFLOAT3 OddTri2;
+
+
+    //Check if odd one out has the shorter distance to move. Possible it doesnt
+    switch (OddSide1)
+    {
+        case 0:
+            {
+                Tri1 = LIntersectPoint(TriA, TriB, TriC, Tri2A ,Tri2Normal);
+                Dist1 = Tri1Scalar[0];
+                OddTri1 = TriA;
+
+                break;
+
+            }
+        case 1:
+            {
+                Tri1 = LIntersectPoint(TriB, TriC, Tri2A, Tri2A, Tri2Normal);
+
+                Dist1 = Tri1Scalar[1];
+                OddTri1 = TriB;
+
+                break;
+            }
+        case 2:
+            {
+                Tri1 = LIntersectPoint(TriC, TriA, TriB, Tri2A, Tri2Normal);
+                Dist1 = Tri1Scalar[2];
+                OddTri1 = TriC;
+
+                break;
+            }
+        case 3:
+            {
+                //Distance to move
+                return 69;
+                break;
+            }
+
+    }
+    switch (OddSide2)
+    {
+        case 0:
+            {
+
+                Tri2 = LIntersectPoint(Tri2A, Tri2B, Tri2C, TriA, TriNormal);
+                Dist2 = Tri2Scalar[0];
+                OddTri2 = Tri2A;
+
+                break;
+            }
+        case 1:
+            {
+                Tri2 = LIntersectPoint(Tri2B, Tri2C, Tri2A, TriA, TriNormal);
+                Dist2 = Tri2Scalar[1];
+                OddTri2 = Tri2B;
+
+                break;
+            }
+        case 2:
+            {
+                Tri2 = LIntersectPoint(Tri2C, Tri2A, Tri2B, TriA, TriNormal);
+                Dist2 = Tri2Scalar[2];
+                OddTri2 = Tri2C;
+
+                break;
+            }
+        case 3:
+            {
+                //Distance to move
+                return 69;
+                break;
+            }
+
+    }
+      /*
+    if (PointInTri(Tri1.a, Tri2A, Tri2B, Tri2C))
+    {
+
+        if (PointInTri(Tri2.a, TriA, TriB, TriC))
+        {
+
+            return 1;
+        }
+        else
+        if (PointInTri(Tri2.b, TriA, TriB, TriC))
+        {
+
+            return 2;
+        }
+    }
+    else
+    if (PointInTri(Tri1.b, Tri2A, Tri2B, Tri2C))
+    {
+        if (PointInTri(Tri2.a, TriA, TriB, TriC))
+        {
+
+            return 3;
+        }
+        else
+        if (PointInTri(Tri2.b, TriA, TriB, TriC))
+        {
+
+            return 4;
+        }
+    }
+    else
+    {
+
+    }
+      */
+
+    //Test case odd side is negative and collides with other triangle. Move distance = distance from odd point to plane of other triangle
+    if(Dist1 < 0)
+    {
+
+        if (PointInTri(AddXMFLOAT3(OddTri1, MulXMFLOAT3(Tri2Normal, sqrt(fabs(Dist1)))), Tri2A, Tri2B, Tri2C))
+        {
+            Result = 69;
+        }
+    }
+
+    return Result;
+
+}
 
 CLOSEFORM TooClose(TRIANGLE Tri1, TRIANGLE Tri2, XMFLOAT3 TPos)
 {
     CLOSEFORM Result;
     Result.dist[0] = 0;
     Result.dist[1] = 0;
+
 
     XMFLOAT3 WAPoint = Tri1.Vertices[0].position;
     XMFLOAT3 WBPoint = Tri1.Vertices[1].position;
@@ -540,127 +547,149 @@ CLOSEFORM TooClose(TRIANGLE Tri1, TRIANGLE Tri2, XMFLOAT3 TPos)
     XMFLOAT3 TCPoint = AddXMFLOAT3(Tri2.Vertices[2].position, TPos);
 
 
-
-    float TDistance[3];
-    float WDistance[3];
+    //A:0 B:1 C:2
+    float TNormalScalar[3];
+    float WNormalScalar[3];
 
     XMFLOAT3 WNorm = Tri1.Vertices[0].normal;
     XMFLOAT3 TNorm = Tri2.Vertices[0].normal;
 
-    //Check all sides then set collision apropriately. Check if inside other object
-    TDistance[0] = XMVector3Dot(WNorm, SubXMFLOAT3(TAPoint, WAPoint));
-    TDistance[1] = XMVector3Dot(WNorm, SubXMFLOAT3(TBPoint, WAPoint));
-    TDistance[2] = XMVector3Dot(WNorm, SubXMFLOAT3(TCPoint, WAPoint));
+    //A:0 B:1 C:2 Scalar distance of T*point mapped onto plane of WNorm given WA as origin.
+    //XMFLOAT3 AverageW = MulXMFLOAT3(AddXMFLOAT3(WAPoint, AddXMFLOAT3(WBPoint, WCPoint)),0.333333333333333333);
+    TNormalScalar[0] = XMVector3Dot(WNorm, SubXMFLOAT3(TAPoint, WAPoint));
+    TNormalScalar[1] = XMVector3Dot(WNorm, SubXMFLOAT3(TBPoint, WAPoint));
+    TNormalScalar[2] = XMVector3Dot(WNorm, SubXMFLOAT3(TCPoint, WAPoint));
 
 
 
-    if (!(Sign(TDistance[0]) == Sign(TDistance[1]) && Sign(TDistance[0]) == Sign(TDistance[2])))
+    if (!(Sign(TNormalScalar[0]) == Sign(TNormalScalar[1]) && Sign(TNormalScalar[0]) == Sign(TNormalScalar[2])))
     {
-        WDistance[0] = XMVector3Dot(TNorm, SubXMFLOAT3(WAPoint, TAPoint));
-        WDistance[1] = XMVector3Dot(TNorm, SubXMFLOAT3(WBPoint, TAPoint));
-        WDistance[2] = XMVector3Dot(TNorm, SubXMFLOAT3(WCPoint, TAPoint));
+        //XMFLOAT3 AverageT = MulXMFLOAT3(AddXMFLOAT3(TAPoint, AddXMFLOAT3(TBPoint, TCPoint)), 0.333333333333333333);
+        //A:0 B:1 C:2 Scalar distance of W*point mapped onto plane of TNorm given TA as origin.
+        WNormalScalar[0] = XMVector3Dot(TNorm, SubXMFLOAT3(WAPoint, TAPoint));
+        WNormalScalar[1] = XMVector3Dot(TNorm, SubXMFLOAT3(WBPoint, TAPoint));
+        WNormalScalar[2] = XMVector3Dot(TNorm, SubXMFLOAT3(WCPoint, TAPoint));
 
 
-        if (Sign(WDistance[0]) == Sign(WDistance[1]) && Sign(WDistance[0]) == Sign(WDistance[2]))
+        if (Sign(WNormalScalar[0]) == Sign(WNormalScalar[1]) && Sign(WNormalScalar[0]) == Sign(WNormalScalar[2]))
         {
             return Result;
         }
 
-
+        //Vector describing the intersection line of the two normal planes
         XMFLOAT3 ISectLineDir = XMVector3Cross(WNorm, TNorm);
-        int iSectdex = 0;
 
-        float ISect0 = fabs(ISectLineDir.x);
 
-        if (fabs(ISectLineDir.y) > ISect0) ISect0 = fabs(ISectLineDir.y), iSectdex = 1;
-        if (fabs(ISectLineDir.z) > ISect0) ISect0 = fabs(ISectLineDir.z), iSectdex = 2;
+        //Finding greatest magnitude component of Intersection line(Aka biggest difference between planes)
+        //X:0 Y:1 Z:2
+        XYZ iSectdex = X;
+        {
+            float ISect0 = fabs(ISectLineDir.x);
+            if (fabs(ISectLineDir.y) > ISect0){
+                ISect0 = fabs(ISectLineDir.y);
+                iSectdex = Y;
+            }
+            if (fabs(ISectLineDir.z) > ISect0) {
+                iSectdex = Z;
+            }
+        }
 
-        CINTERVAL cval0;
-        CINTERVAL cval1;
+        CINTERVAL cIntervalW;
+        CINTERVAL cIntervalT;
         switch (iSectdex)
         {
-            case 0:
+            //X
+            case X:
                 {
-                    cval0 = ComputeInterval(WAPoint.x, WBPoint.x, WCPoint.x, WDistance[0], WDistance[1], WDistance[2]);
-                    cval1 = ComputeInterval(TAPoint.x, TBPoint.x, TCPoint.x, TDistance[0], TDistance[1], TDistance[2]);
+                    cIntervalW = ComputeInterval(WAPoint.x, WBPoint.x, WCPoint.x, WNormalScalar);
+                    cIntervalT = ComputeInterval(TAPoint.x, TBPoint.x, TCPoint.x, TNormalScalar);
                     break;
                 }
-            case 1:
+            //Y
+            case Y:
                 {
-                    cval0 = ComputeInterval(WAPoint.y, WBPoint.y, WCPoint.y, WDistance[0], WDistance[1], WDistance[2]);
-                    cval1 = ComputeInterval(TAPoint.y, TBPoint.y, TCPoint.y, TDistance[0], TDistance[1], TDistance[2]);
+                    cIntervalW = ComputeInterval(WAPoint.y, WBPoint.y, WCPoint.y, WNormalScalar);
+                    cIntervalT = ComputeInterval(TAPoint.y, TBPoint.y, TCPoint.y, TNormalScalar);
                     break;
                 }
-            case 2:
+            //Z
+            case Z:
                 {
-                    cval0 = ComputeInterval(WAPoint.z, WBPoint.z, WCPoint.z, WDistance[0], WDistance[1], WDistance[2]);
-                    cval1 = ComputeInterval(TAPoint.z, TBPoint.z, TCPoint.z, TDistance[0], TDistance[1], TDistance[2]);
+                    cIntervalW = ComputeInterval(WAPoint.z, WBPoint.z, WCPoint.z, WNormalScalar);
+                    cIntervalT = ComputeInterval(TAPoint.z, TBPoint.z, TCPoint.z, TNormalScalar);
                     break;
                 }
         }
 
-        if (cval0.CoPlan)
-        {
-            if (CoplanCheck(WNorm, WAPoint, WBPoint, WCPoint, TAPoint, TBPoint, TCPoint))
-            {
-                Result.dist[0] = 0.1;
-                Result.dist[1] = 0.1;
-            }
-
-            return Result;
-        }
-        else
+        if (!cIntervalW.isCoPlanar)
         {
 
-            //figure out what this code means and fix it because its wrong.
-            float xx = cval0.X0 * cval0.X1;
-            float yy = cval1.X0 * cval1.X1;
-            float xxyy = xx * yy;
+            float WS0S1Product = cIntervalW.Scalar0Difference * cIntervalW.Scalar1Difference;
+            float TS0S1Product = cIntervalT.Scalar0Difference * cIntervalT.Scalar1Difference;
+            float TWScalarpProduct = WS0S1Product * TS0S1Product;
 
 
-            float tmp = cval0.V0 * xxyy;
-            float i = tmp + cval0.V1 * cval0.X1 * yy;
-            float i1 = tmp + cval0.V2 * cval0.X0 * yy;
+            float W0Size = cIntervalW.Vector0Distance * TWScalarpProduct;
+            float W1Size = W0Size + cIntervalW.Vector1Distance * cIntervalW.Scalar1Difference * TS0S1Product;
+            float W2Size = W0Size + cIntervalW.Vector2Distance * cIntervalW.Scalar0Difference * TS0S1Product;
 
-            tmp = cval1.V0 * xxyy;
-            float u = tmp + cval1.V1 * xx * cval1.X1;
-            float u1 = tmp + cval1.V2 * xx * cval1.X0;
+            float T0Size = cIntervalT.Vector0Distance * TWScalarpProduct;
+            float T1Size = T0Size + cIntervalT.Vector1Distance * WS0S1Product * cIntervalT.Scalar1Difference;
+            float T2Size = T0Size + cIntervalT.Vector2Distance * WS0S1Product * cIntervalT.Scalar0Difference;
 
 
-            float test0[2];
-            float test1[2];
+            float LeastToMostW[2];
+            float LeastToMostT[2];
 
-            test0[0] = i;
-            test0[1] = i1;
-            test1[0] = u;
-            test1[1] = u1;
-            if (test0[0] > test0[1])
+            LeastToMostW[0] = W1Size;
+            LeastToMostW[1] = W2Size;
+            LeastToMostT[0] = T1Size;
+            LeastToMostT[1] = T2Size;
+
+            if (LeastToMostW[0] > LeastToMostW[1])
             {
+
                 float temp;
-                temp = test0[0];
-                test0[0] = test0[1];
-                test0[1] = temp;
+                temp = LeastToMostW[0];
+                LeastToMostW[0] = LeastToMostW[1];
+                LeastToMostW[1] = temp;
             }
 
-            if (test1[0] > test1[1])
+            if (LeastToMostT[0] > LeastToMostT[1])
             {
-                float temp;
-                temp = test1[0];
-                test1[0] = test1[1];
-                test1[1] = temp;
-            }
 
-            if (test0[1] < test1[0] || test1[1] < test0[0]) {
+                float temp;
+                temp = LeastToMostT[0];
+                LeastToMostT[0] = LeastToMostT[1];
+                LeastToMostT[1] = temp;
+            }
+            if (LeastToMostW[1] < LeastToMostT[0] || LeastToMostT[1] < LeastToMostW[0])
+            {
+
                 return Result;
             }
+            //TriDist(WAPoint, WBPoint, WCPoint, TAPoint, TBPoint, TCPoint, TNorm, WNorm, WNormalScalar, TNormalScalar)
             Result.dist[0] = 0.1;
             Result.dist[1] = 0.1;
 
-        }
-    }
-    //else if(TDistance[0] < 0 && TDistance[1] < 0 && TDistance[2] < 0)
-    {
+            // Project triangle vertices onto intersection line direction
 
+
+        }
+        else
+        {             
+            //Tris are coplanar so move them accordingly if theyre intersecting
+            //Distance to move W
+            //Result.dist[0] = 0.001;
+            //Distance to move T
+            //Result.dist[1] = 0.001;
+        }
+
+    }
+    //else if(TNormalScalar[0] < 0 && TNormalScalar[1] < 0 && TNormalScalar[2] < 0)
+    {
+        //Result.dist[0] = 0.1;
+        //Result.dist[1] = 0.1;
         //Result = CloseCheck(TDistance, WAPoint, WBPoint, WCPoint, TAPoint, TBPoint, TCPoint, Bone1, TPos, Bone2, bdist, bdir, WNorm, TNorm);
     }
 
@@ -673,11 +702,11 @@ int Wind = get_global_id(0);
 int Tind = get_global_id(1);
 int rd = Wind;
 
-    if (!(retdat[rd].dist[0] > 0 || retdat[rd].dist[1] > 0))
+    if (!(retdat[rd].dist[0] != 0 || retdat[rd].dist[1] != 0))
     {
         CLOSEFORM Result = TooClose(WModel[WorkingIndices[Wind]], TModel[WorkingIndices[Tind]], TPos[0]);
 
-        if (Result.dist[0] > 0 || Result.dist[1] > 0)
+        if (Result.dist[0] != 0 || Result.dist[1] != 0)
         {
             retdat[rd].index[0] = WorkingIndices[Wind];
             retdat[rd].index[1] = WorkingIndices[Tind];

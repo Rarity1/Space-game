@@ -356,6 +356,31 @@ void Graphics::Update(Tracker::InstanceStruc& tInstance) {
 	curCamera.cmatrix = DirectX::XMMatrixLookToRH(XMLoadFloat3(curCamera.position), XMLoadFloat4(&curCamera.rotation), XMLoadFloat4(&curCamera.upDirection));
 	curCamera.posMtx->unlock();
 	UpdateConstantBuffers(curCamera.cmatrix, XMLoadFloat4x4(&fovPerspective), tInstance);
+
+	/*
+	frMutex.lock();
+	commandAllocator->Reset() >> chk;
+	commandList->Reset(commandAllocator.Get(), nullptr) >> chk;
+	for (auto& t : tInstance.tmodelLinkedObjects) {
+		for (auto& m : t.second) {
+			UpdateModel(m);
+		}
+	}
+	commandList->Close() >> chk;
+	{
+		ID3D12CommandList* const commandLists[] = { commandList.Get() };
+		commandQueue->ExecuteCommandLists(std::size(commandLists), commandLists);
+		// insert fence to detect when upload is complete 
+		commandQueue->Signal(fence.Get(), ++fenceValue) >> chk;
+		fence->SetEventOnCompletion(fenceValue, fenceEvent) >> chk;
+		if (WaitForSingleObject(fenceEvent, INFINITE) == WAIT_FAILED) {
+			GetLastError() >> chk;
+		}
+	}
+	frMutex.unlock();
+	*/
+
+
 }
 
 void Graphics::RenderFrame(Tracker::InstanceStruc& tInstance) {
@@ -396,8 +421,8 @@ void Graphics::RenderFrame(Tracker::InstanceStruc& tInstance) {
 
 	cframeBuffer.pCommandList->Close() >> chk;
 
+	//Fence to prevent backbuffer race conditions. 0 is valid though throws a warning in debug mode.
 	fenceValue = fence->GetCompletedValue();
-	//Something something prevent something idk
 	if (backBuffers[lastFrame]->fenceValue != fenceValue) {
 		fence->SetEventOnCompletion(backBuffers[lastFrame]->fenceValue, fenceEvent) >> chk;
 		WaitForSingleObject(fenceEvent, INFINITE);
@@ -542,10 +567,10 @@ void Graphics::CreateBuffers(Tracker::InstanceStruc& tInstance) {
 
 
 	//Need to rewrite this so that similar models can have CBV in order in memory.
-	for (auto& trackedObjects : tInstance.tmodelLinkedObjects) {
-		auto model = tInstance.pTracker->GetModel(trackedObjects.first);
+	for (auto& trackedModel : tInstance.tmodelLinkedObjects) {
+		auto model = tInstance.pTracker->GetModel(trackedModel.first);
 		// Describe and create a constant buffer view (CBV).
-		auto size = sizeof(Object::CBVData) + (256 - (sizeof(Object::CBVData) % 256));
+		auto size = (sizeof(Object::CBVData) * trackedModel.second.size()) + (256 - ((sizeof(Object::CBVData) * trackedModel.second.size()) % 256));
 		D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
 		cbvDesc.BufferLocation = model->cbvwriteBuffer->GetGPUVirtualAddress();
 		cbvDesc.SizeInBytes = size;
@@ -566,6 +591,7 @@ void Graphics::CreateBuffers(Tracker::InstanceStruc& tInstance) {
 	}
 }
 
+//Requires you to open and close command list
 void Graphics::UpdBuffer(RStorage::bmResource& model, Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList, Microsoft::WRL::ComPtr<ID3D12Device> pDevice, Microsoft::WRL::ComPtr<ID3D12CommandAllocator> commandAllocator, Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue) {
 	{
 		const auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
@@ -607,12 +633,23 @@ void Graphics::lModel(Object& obj, UINT umID) noexcept
 void Graphics::LoadResources(Tracker::InstanceStruc& tInstance)
 {
 	
-
+	frMutex.lock();
 	std::for_each(tInstance.tmodelLinkedObjects.begin(), tInstance.tmodelLinkedObjects.end(), [this](auto& e) {
 		for (auto& o : e.second) {
 			lModel(*o, e.first);
 		}
 	});
+
+	fenceValue = fence->GetCompletedValue();
+	{
+		int8_t fv = fenceValue + 1;
+		commandQueue->Signal(fence.Get(), fv);
+		if (fenceValue != fv) {
+			fence->SetEventOnCompletion(fv, fenceEvent) >> chk;
+			WaitForSingleObject(fenceEvent, INFINITE);
+		}
+	}
+
 
 	commandAllocator->Reset() >> chk;
 	commandList->Reset(commandAllocator.Get(), nullptr) >> chk;
@@ -623,13 +660,10 @@ void Graphics::LoadResources(Tracker::InstanceStruc& tInstance)
 	{
 		ID3D12CommandList* const commandLists[] = { commandList.Get() };
 		commandQueue->ExecuteCommandLists(std::size(commandLists), commandLists);
-		// insert fence to detect when upload is complete 
-		commandQueue->Signal(fence.Get(), ++fenceValue) >> chk;
-		fence->SetEventOnCompletion(fenceValue, fenceEvent) >> chk;
-		if (WaitForSingleObject(fenceEvent, INFINITE) == WAIT_FAILED) {
-			GetLastError() >> chk;
-		}
+		// Need a fence here. So that resources can be uploaded on the fly
+
 	}
+	frMutex.unlock();
 }
 
 void Graphics::UpdateLocalTransform(Object& bm)
@@ -660,58 +694,41 @@ void Graphics::UpdateModel(Object* bm) {
 	auto GlobITrans = XMMatrixInverse(nullptr, XMLoadFloat4x4(&bm->model->uData->ndata.matrix));
 	if (!std::strstr(bm->model->uData->bdata[0].name.c_str(), "placeholder"))
 	for (auto& b : bm->model->uData->bdata) {
-		//XMStoreFloat4x4(&b.finalTransform, XMLoadFloat4x4(&b.matrix) * XMLoadFloat4x4(&b.node->LocalTransform) * GlobITrans);
+		XMStoreFloat4x4(&b.finalTransform, XMLoadFloat4x4(&b.matrix) * XMLoadFloat4x4(&b.node->LocalTransform) * GlobITrans);
 	}
-	//auto& vdata = bm->model->uData->Vertdata;
-	//auto& idata = bm->model->uData->idata;
+	auto vdata = bm->model->uData->MappedVertices;
+	auto& idata = bm->model->uData->mIndex;
 	ReadXML::Vertex* mappedVertexData = nullptr;
 	bm->model->uvbuffer->Map(0, nullptr, reinterpret_cast<void**>(&mappedVertexData)) >> chk;
 	//Fix animations
-	/*for (auto& m : modelVect) {
-		//UpdateLocalTransform(m);
-		if (m.model->animate.load()) {
-			lModels->UpdBuffer(m, commandList, pDevice, commandAllocator, commandQueue);
-			m.model->animate.store(false);
-		}
-	}
-	if (std::size(bm->uData->bdata) > 0) {
-		auto tcount = 0;
+	UpdateLocalTransform(*bm);
+	using namespace DirectX;
+	if (bm->model->uData->bdata.size() > 0) {
 		for (auto v = 0; v < std::size(idata); v++) {
-			auto& weights = bm->uData->weights[v];
-			auto vd = vdata[tcount].verts[idata[v].index % 3].position;
-
-			XMFLOAT4 vf = XMFLOAT4{ vd.x,vd.y,vd.z, 1 };
+			auto& weights = bm->model->uData->weights[v];
+			auto vd = vdata[idata[v]][v%3].position;
+			
 			for (auto w = 0; w < std::size(weights.weight); w++) {
-				auto matrix = XMLoadFloat4x4(&bm->uData->bdata[weights.bIndex[w]].finalTransform) * weights.weight[w];
-				auto temp = XMVector3TransformNormal(XMLoadFloat4(&vf), (matrix));
-				XMStoreFloat4(&vf, temp);
+				XMStoreFloat3(&vd, XMVector3TransformNormal(XMLoadFloat3(&vd), (XMLoadFloat4x4(&bm->model->uData->bdata[weights.bIndex[w]].finalTransform) * weights.weight[w])));
 			}
-			vdata[tcount].verts[idata[v].index % 3].position.x += vf.x;
-			vdata[tcount].verts[idata[v].index % 3].position.y += vf.y;
-			vdata[tcount].verts[idata[v].index % 3].position.z += vf.z;
-			tcount += idata[v].index % 3 == 0 ? 1 : 0;
+			vdata[idata[v]][v % 3].position.x += vd.x;
+			vdata[idata[v]][v % 3].position.y += vd.y;
+			vdata[idata[v]][v % 3].position.z += vd.z;
+
 		}
 	}
-		for (auto i = 0; i < std::size(vdata); i++) {
-		//memcpy(&mappedVertexData[i], &vdata[i], sizeof(ReadXML::Vertex));
-	}
-	
-	*/
+	memcpy(mappedVertexData, vdata.data(), sizeof(ReadXML::Vertex) * idata.size());
+
 	
 
 
 	bm->model->uvbuffer->Unmap(0, nullptr);
+
+
+	UpdBuffer(*bm->model, commandList, pDevice, commandAllocator, commandQueue);
+
 }
 
-int Graphics::bIndex(std::vector<int> w, int bInd) {
-	int Index = 0;
-	for (auto i = 0; i < std::size(w); i++) {
-		if (w[i] == bInd) {
-			Index = i;
-		}
-	}
-	return Index;
-}
 
 void Graphics::CreateFrameResources() {
 	backBuffers.resize(0);
@@ -761,11 +778,15 @@ void Graphics::UpdateFrameResources()
 {
 	if (updateResolution.load()) {
 		frMutex.lock();
-		auto lastframe = cframeIndex;
 		fenceValue = fence->GetCompletedValue();
-		commandQueue->Signal(fence.Get(), fenceValue + 1);
-		fence->SetEventOnCompletion(fenceValue + 1, fenceEvent) >> chk;
-		WaitForSingleObject(fenceEvent, INFINITE);
+		{
+			int8_t fv = fenceValue + 1;
+			commandQueue->Signal(fence.Get(), fv);
+			if (fenceValue != fv) {
+				fence->SetEventOnCompletion(fv, fenceEvent) >> chk;
+				WaitForSingleObject(fenceEvent, INFINITE);
+			}
+		}
 
 		//Swapchain buffers wont resize until all buffers are unused.
 		for (auto& b : backBuffers) {
@@ -819,17 +840,19 @@ void Graphics::UpdateConstantBuffers(DirectX::FXMMATRIX view, DirectX::CXMMATRIX
 
 Graphics::~Graphics() {
 	//iGui Is not very graceful to shutdown. Need to close it first before graphics unload.
-	iGui.reset();
 	if (pDevice != nullptr) {
-		const UINT64 fencev = fenceValue;
-		const UINT64 lastCompletedFence = fence->GetCompletedValue();
-		commandQueue->Signal(fence.Get(), fenceValue);
-		fence->SetEventOnCompletion(fenceValue, fenceEvent) >> chk;
-		fenceValue++;
-		if (lastCompletedFence < fencev)
+		fenceValue = fence->GetCompletedValue();
 		{
-			GetLastError() >> chk;
+			int8_t fv = fenceValue + 1;
+			commandQueue->Signal(fence.Get(), fv);
+			if (fenceValue != fv) {
+				fence->SetEventOnCompletion(fv, fenceEvent) >> chk;
+				WaitForSingleObject(fenceEvent, INFINITE);
+			}
 		}
+
+		iGui.reset();
+		GetLastError() >> chk;
 		CloseHandle(fenceEvent);
 
 		backBuffers.resize(0);

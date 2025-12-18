@@ -214,12 +214,6 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
-    <None Include="..\OpenCL\ePhysics.cl">
-      <Filter>Resource Files\OpenCL</Filter>
-    </None>
-    <None Include="..\OpenCL\SphrKern.cl">
-      <Filter>Resource Files\OpenCL</Filter>
-    </None>
     <None Include="..\models\#01#cube.dae">
       <Filter>Resource Files\models</Filter>
     </None>
@@ -280,6 +274,12 @@
     </CopyFileToFolders>
     <CopyFileToFolders Include="..\shaders\VertexShader.hlsl">
       <Filter>Shaders</Filter>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="..\OpenCL\ePhysics.cl">
+      <Filter>Resource Files\OpenCL</Filter>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="..\OpenCL\SphrKern.cl">
+      <Filter>Resource Files\OpenCL</Filter>
     </CopyFileToFolders>
   </ItemGroup>
 </Project>

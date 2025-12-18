@@ -227,7 +227,7 @@ Physics::WORKINDI Physics::ProcCollide(Object& obj, Object& obj2,  DirectX::XMFL
             XMFLOAT4 bdirection = fDirection(objudat->bdata[WData[i][0]].sphere.Center, CollSp[1].Center);
             std::for_each(objudat->bdata[WData[i][0]].Indices.begin(), objudat->bdata[WData[i][0]].Indices.end(), [&objCheck1, &b1ind, i, &objudat, &bdirection, &MappedVert1](auto& e) {
                 if (!objCheck1[objudat->mIndex[e]].load()) {
-                    if (XMVector3GreaterOrEqual(XMVector3Dot(XMLoadFloat4(&bdirection), XMLoadFloat3(&MappedVert1[objudat->mIndex[e]][0].normal)), XMVectorZero())) {
+                    if (XMVector3Greater(XMVector3Dot(XMLoadFloat4(&bdirection), XMLoadFloat3(&MappedVert1[objudat->mIndex[e]][0].normal)), XMVectorZero())) {
                         objCheck1[objudat->mIndex[e]].store(true);
                         b1ind[i].emplace_back(objudat->mIndex[e]);
                     }
@@ -245,7 +245,7 @@ Physics::WORKINDI Physics::ProcCollide(Object& obj, Object& obj2,  DirectX::XMFL
 
             std::for_each(obj2udat->bdata[WData[i][1]].Indices.begin(), obj2udat->bdata[WData[i][1]].Indices.end(), [&objCheck2, &b2ind, i, &obj2udat, ibdirection, &MappedVert2](auto& e) {
                 if (!objCheck2[obj2udat->mIndex[e]].load()) {
-                    if (XMVector3GreaterOrEqual(XMVector3Dot(XMLoadFloat4(&ibdirection), XMLoadFloat3(&MappedVert2[obj2udat->mIndex[e]][0].normal)), XMVectorZero())) {
+                    if (XMVector3Greater(XMVector3Dot(XMLoadFloat4(&ibdirection), XMLoadFloat3(&MappedVert2[obj2udat->mIndex[e]][0].normal)), XMVectorZero())) {
                         objCheck2[obj2udat->mIndex[e]].store(true);
                         b2ind[i].emplace_back(obj2udat->mIndex[e]);
                     }
@@ -436,10 +436,16 @@ void Physics::pCollison(Tracker::InstanceStruc& tInstance) {
 
                         int coutn = 0;
                         for (auto& r : retdat) {
-                            if (r.dist[0] != 0 || r.dist[1] != 0) {
+                            if (r.dist[0] != 0 && r.dist[1] != 0) {
+                                _ASSERT(r.dist[1] != 69 && r.dist[0] != 69);
+
+                                //XMFLOAT3 isectDir;
+
+                                //XMStoreFloat3(&isectDir,XMVector3Cross(XMLoadFloat3(&obj.model->uData->MappedVertices[r.index[0]][0].normal), XMLoadFloat3(&obj2.model->uData->MappedVertices[r.index[1]][0].normal)));
 
                                 XMStoreFloat3(&MoveD1, (XMLoadFloat3(&MoveD1) + (XMLoadFloat3(&obj.model->uData->MappedVertices[r.index[0]][0].normal) * r.dist[0])));
                                 XMStoreFloat3(&MoveD2, (XMLoadFloat3(&MoveD2) + (XMLoadFloat3(&obj2.model->uData->MappedVertices[r.index[1]][0].normal) * r.dist[1])));
+
                                 /*
                                                         DebugMTX.lock();
                                 std::cout << "Model: " + obj.model->name + " Vert: " + std::to_string(r.index[0]) + " Pos: {" + std::to_string(obj.model->uData->MappedVertices[r.index[0]][r.index[0] % 3].position.x) + ", " +
