@@ -32,16 +32,13 @@ private:
     CD3DX12_CPU_DESCRIPTOR_HANDLE rtv;
     CD3DX12_CPU_DESCRIPTOR_HANDLE dsv;
     uint16_t uFID = 0;
-public:
-    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> pCommandList;
-    struct fResources{
-
-
-        //Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> pCbvSrvDescriptorHeap;
-
-    };
-    fResources localfResource;
     Microsoft::WRL::ComPtr<ID3D12CommandAllocator> commandAllocator;
+    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> pCommandList;
+    Microsoft::WRL::ComPtr<ID3D12CommandAllocator> imguicommandAllocator;
+    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> imguiCommandList;
+
+
+public:
     Microsoft::WRL::ComPtr<ID3D12CommandAllocator> bundleAllocator;
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> bundle;
     //std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> openbuffers;
@@ -58,7 +55,12 @@ public:
     
     void UpdateResolution(Graphics* Parent);
 
+    struct CMDListInfo {
+        CD3DX12_RECT* scissorRect;
+        CD3DX12_VIEWPORT* viewport;
+        Tracker::InstanceStruc* Instance;
+    };
 
-    void PopulateCommandList(CD3DX12_RECT& scissorRect, CD3DX12_VIEWPORT& viewport, Tracker::InstanceStruc& tInstance);
-
+    void PopulateCommandList(CMDListInfo& cmdLi);
+    CD3DX12_CPU_DESCRIPTOR_HANDLE GetRTV();
 };

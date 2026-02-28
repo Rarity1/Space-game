@@ -6,7 +6,8 @@
 //Rewrite using futures
 class DLL THREADS {
 private:
-
+	std::unique_ptr<THREADS> SubThreads;
+	uint8_t DepthIndex = 0;
 
 	struct werk {
 		//The ID of the thread this work is a grandchild of. Should be 0 unless this is a subchild of current Threads instance.
@@ -23,8 +24,7 @@ private:
 		//std::mutex wCountMTX;
 		//std::atomic<uint8_t> wCount = 0;
 	private:
-
-		inline uint8_t tPushWork(std::function<void()>& f);
+		inline uint8_t tPushWork(std::function<void()> f);
 		void exeWork();
 		void checkWork(unsigned int uWid);
 		std::thread::id tThreadID;
@@ -59,14 +59,17 @@ private:
 public:
 	struct WRef {
 		uint8_t uWid = 0;
+		uint8_t DepthIndex = 0;
 		THREADS::THREAD* Worker = nullptr;
 	};
-	THREADS(int cCount);
+	THREADS(int cCount, uint8_t Depth = 0);
 	~THREADS();
-	std::thread::id mParent;
-	std::unordered_map<std::thread::id, THREAD*> threadIDMap;
+
+	std::map<std::thread::id, THREAD*> threadIDMap;
 
 	inline WRef gPushWork(std::function<void()> f);
+	inline WRef gPushWork(std::function<void()>& f);
+
 	WRef gPushWork(std::vector<std::function<void()>>& f);
 	void gEndWork(WRef wref);
 	void gEndWork(std::vector<WRef>& wref);

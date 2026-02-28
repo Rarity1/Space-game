@@ -9,7 +9,7 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Dragon Space Engine Editor"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "DSE", "DSE\DSE.vcxproj", "{C8F09641-BDDE-4157-B9EF-C54446A86807}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ImGui", "ImGui\ImGui.vcxproj", "{CA98BD57-2889-4E73-A37D-7F3D633B383A}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ImGui v1.92.0", "ImGui\ImGui.vcxproj", "{CA98BD57-2889-4E73-A37D-7F3D633B383A}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

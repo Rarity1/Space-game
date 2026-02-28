@@ -28,8 +28,6 @@ imguid::imguid(HWND hWnd, ImGui_ImplDX12_InitInfo* DX12)
 
 	ImGui_ImplDX12_Init(DX12);
 
-
-
 }
 
 imguid::~imguid()
@@ -59,22 +57,36 @@ void imguid::imPrepare()
 
 // (Your code clears your framebuffer, renders your other stuff etc.)
 // Rendering
-void imguid::imPopulateCommand(ID3D12GraphicsCommandList* cmdLst)
+void imguid::imPopulateCommand(CD3DX12_CPU_DESCRIPTOR_HANDLE RTV, Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& pCbvSrvDescriptorHeap, ID3D12Resource* rtvResource, ID3D12GraphicsCommandList* commandList, ID3D12CommandAllocator* commandAllocator)
 {
 	//ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 0.00f);
-
+	commandAllocator->Reset();
+	commandList->Reset(commandAllocator, ((ImGui_ImplDX12_Data*)ImGui::GetIO().BackendRendererUserData)->pPipelineState);
+	{
+		auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+			rtvResource,
+			D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+		commandList->ResourceBarrier(1, &barrier);
+	}
 
 	// Render Dear ImGui graphics
 	//const float clear_color_with_alpha[4] = { clear_color.x * clear_color.w, clear_color.y * clear_color.w, clear_color.z * clear_color.w, clear_color.w };
 
 	//CD3DX12_CPU_DESCRIPTOR_HANDLE rtv(rtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart(), frameID, rtvDescriptorSize);
 	//cmdLst->ClearRenderTargetView(rtv, clear_color_with_alpha, 0, nullptr);
-	//cmdLst->OMSetRenderTargets(1, &rtv, FALSE, nullptr);
+	commandList->OMSetRenderTargets(1, &RTV, FALSE, nullptr);
 
-	//cmdLst->SetDescriptorHeaps(1, pCbvSrvDescriptorHeap.GetAddressOf());
+	commandList->SetDescriptorHeaps(1, pCbvSrvDescriptorHeap.GetAddressOf());
 
-	ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), cmdLst);
+	ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), commandList);
 
+	{
+		auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+			rtvResource,
+			D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
+		commandList->ResourceBarrier(1, &barrier);
+	}
+	commandList->Close();
 
 	// (Your code calls swapchain's Present() function)
 }

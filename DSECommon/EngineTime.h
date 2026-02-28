@@ -10,7 +10,7 @@ public:
 	double Peek()noexcept;
 	double Current() noexcept;
 	long long TimeLook() const;
-	std::chrono::high_resolution_clock::time_point last;
+	std::chrono::utc_clock::time_point last;
 
 private:
 	std::mutex clockMTX;

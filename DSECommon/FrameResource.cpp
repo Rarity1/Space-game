@@ -67,14 +67,16 @@ FrameResource::FrameResource(
 
 
     Parent->pDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&commandAllocator))>>chk;
+    Parent->pDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&imguicommandAllocator)) >> chk;
 
 
     //Command List
     Parent->pDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT,
         commandAllocator.Get(), nullptr, IID_PPV_ARGS(&pCommandList)) >> chk;
+    Parent->pDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, imguicommandAllocator.Get(), nullptr, IID_PPV_ARGS(&imguiCommandList)) >> chk;
     //NAME_D3D12_OBJECT(pCommandList);
     pCommandList->Close();
-
+    imguiCommandList->Close();
 
 }
 
@@ -143,8 +145,19 @@ void FrameResource::UpdateResolution(Graphics* Parent)
     }
 }
 
-void FrameResource::PopulateCommandList(CD3DX12_RECT& scissorRect, CD3DX12_VIEWPORT& viewport, Tracker::InstanceStruc& tInstance)
+void FrameResource::PopulateCommandList(CMDListInfo& cmdLi)
 {
+
+
+    commandAllocator->Reset() >> chk;
+    pCommandList->Reset(commandAllocator.Get(), pPipelineState.Get()) >> chk;
+
+    {
+        auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+           renderTarget.Get(),
+            D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+        pCommandList->ResourceBarrier(1, &barrier);
+    }
 
     pCommandList->SetGraphicsRootSignature(pRootSignature.Get());
 
@@ -154,8 +167,8 @@ void FrameResource::PopulateCommandList(CD3DX12_RECT& scissorRect, CD3DX12_VIEWP
     pCommandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 
 
-    pCommandList->RSSetViewports(1, &viewport);
-    pCommandList->RSSetScissorRects(1, &scissorRect);
+    pCommandList->RSSetViewports(1, cmdLi.viewport);
+    pCommandList->RSSetScissorRects(1, cmdLi.scissorRect);
 
 
 
@@ -175,27 +188,35 @@ void FrameResource::PopulateCommandList(CD3DX12_RECT& scissorRect, CD3DX12_VIEWP
         pCommandList->SetGraphicsRootDescriptorTable(2, pSamplerDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
         pCommandList->SetPipelineState(pPipelineState.Get());
 
-        //PIXBeginEvent(pCommandList.Get(), 0, "Draw everything");
 
-        //Try to Render by models not tracked objects. 
         UINT indexC = 0;
-        for (auto& tModels : tInstance.tmodelLinkedObjects) {
-            auto model = tInstance.pTracker->GetModel(tModels.first);
+        for (auto& tModels : cmdLi.Instance->tmodelLinkedObjects) {
+            auto model = cmdLi.Instance->pTracker->GetModel(tModels.first);
             pCommandList->IASetIndexBuffer(&model->ibuffView);
             pCommandList->IASetVertexBuffers(0, 1, &model->vbuffView);
             pCommandList->SetGraphicsRootDescriptorTable(0, model->cbvGpuHandle);
             pCommandList->SetGraphicsRootDescriptorTable(1, model->srvGpuHandle);
-            //Replace this with instanced viewbuffer
             pCommandList->DrawIndexedInstanced(model->uData->sIndex.size(), tModels.second.size(), 0, 0, 0);
 
 
         }
 
-        //PIXEndEvent(pCommandList.Get());
-
-
     }
-  
+    {
+        auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+            renderTarget.Get(),
+            D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
+        pCommandList->ResourceBarrier(1, &barrier);
+    }
+
+    pCommandList->Close() >> chk;
+
+
+}
+
+CD3DX12_CPU_DESCRIPTOR_HANDLE FrameResource::GetRTV()
+{
+    return rtv;
 }
 
 

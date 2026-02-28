@@ -1,13 +1,17 @@
 #include "Threads.h"
 
 
-//Sorting child processes sucks. Just use more instances if needing to multithread subfunctions 
-THREADS::THREADS(int cCount) {
+//Add more depth when doing recursive functions. Depth is amount of thread recursion - 1
+THREADS::THREADS(int cCount, uint8_t Depth) {
 	tCount = cCount;
-	mParent = std::this_thread::get_id();
+	DepthIndex = Depth;
 	for (UINT t = 0; t < tCount; t++) {
 		Threads[t] = new THREAD();
 		threadIDMap[Threads[t]->thread.get_id()] = Threads[t];
+	}
+	if (Depth > 0) {
+		SubThreads = std::make_unique<THREADS>(cCount, Depth - 1);
+		threadIDMap.insert(SubThreads->threadIDMap.begin(), SubThreads->threadIDMap.end());
 	}
 };
 
@@ -17,25 +21,97 @@ THREADS::~THREADS() {
 
 THREADS::WRef THREADS::gPushWork(std::function<void()> f)
 {
-	WRef Result{ 0 };
+	WRef Result{ 0, DepthIndex };
 	uint8_t least = 0;
 	uint8_t tInd = 0;
 	bool valid = false;
 	uint8_t twCount(0);
-	for (uint8_t i = 0; i < tCount; i++) {
-		twCount = Threads[i]->qSize.load();
-		twCount += Threads[i]->lWaiting.load();
-		if (twCount < least || !valid) {
+	if (threadIDMap.find(std::this_thread::get_id()) == threadIDMap.end()) {
+		for (uint8_t i = 0; i < tCount; i++) {
+			twCount = Threads[i]->qSize.load() + Threads[i]->lWaiting.load();
+			if (twCount < least || !valid) {
+				valid = true;
+				least = twCount;
+				tInd = i;
+			}
 
-			valid = true;
-			least = twCount;
-			tInd = i;
+			
+
+		}
+	}
+	else {
+		if (DepthIndex > 0) {
+			return SubThreads->gPushWork(std::move(f));
+		}
+		else {
+			//If this code runs just add more depth
+			/*
+			for (uint8_t i = 0; i < tCount; i++) {
+				bool test = threadIDMap[std::this_thread::get_id()] != Threads[i];
+				twCount = Threads[i]->qSize.load() + Threads[i]->lWaiting.load();
+				if ((twCount < least && test) || (!valid && test)) {
+					valid = true;
+					least = twCount;
+					tInd = i;
+				}
+			}
+			*/
+		}
+	}
+
+	//Process depth needed if this throws
+	_ASSERT(valid);
+	Threads[tInd]->cMut.lock();
+	Result.uWid = Threads[tInd]->tPushWork(std::move(f));
+	Threads[tInd]->cMut.unlock();
+	Result.Worker = Threads[tInd];
+	Threads[tInd]->cVariable.notify_one();
+
+
+	return Result;
+}
+
+THREADS::WRef THREADS::gPushWork(std::function<void()>& f)
+{
+	WRef Result{ 0, DepthIndex };
+	uint8_t least = 0;
+	uint8_t tInd = 0;
+	bool valid = false;
+	uint8_t twCount(0);
+	if (threadIDMap.find(std::this_thread::get_id()) == threadIDMap.end()) {
+		for (uint8_t i = 0; i < tCount; i++) {
+			twCount = Threads[i]->qSize.load() + Threads[i]->lWaiting.load();
+			if (twCount < least || !valid) {
+				valid = true;
+				least = twCount;
+				tInd = i;
+			}
+
+
+
+		}
+	}
+	else {
+		if (DepthIndex > 0) {
+			return SubThreads->gPushWork(std::move(f));
+		}
+		else {
+			//If this code runs just add more depth
+			for (uint8_t i = 0; i < tCount; i++) {
+				bool test = threadIDMap[std::this_thread::get_id()] != Threads[i];
+				twCount = Threads[i]->qSize.load() + Threads[i]->lWaiting.load();
+				if ((twCount < least && test) || (!valid && test)) {
+					valid = true;
+					least = twCount;
+					tInd = i;
+				}
+			}
 		}
 	}
 
 	_ASSERT(valid);
 	Threads[tInd]->cMut.lock();
-	Result.uWid = Threads[tInd]->tPushWork(f);
+	Result.uWid = Threads[tInd]->tPushWork(std::move(f));
 	Threads[tInd]->cMut.unlock();
 	Result.Worker = Threads[tInd];
 	Threads[tInd]->cVariable.notify_one();
@@ -51,24 +127,45 @@ THREADS::WRef THREADS::gPushWork(std::vector<std::function<void()>>& f)
 
 	std::function<void()> recur([&f]() {auto vect = std::move(f); auto iter = vect.begin(); recurBatch(vect, iter); });
 
-	WRef Result{ 0 };
+	WRef Result{ 0, DepthIndex };
 	uint8_t least = 0;
 	uint8_t tInd = 0;
 	bool valid = false;
-	auto thredid = std::this_thread::get_id();
-	uint8_t twCount = 0;
-	for (uint8_t i = 0; i < tCount; i++) {
-		twCount = Threads[i]->qSize.load();
-		twCount += Threads[i]->lWaiting.load();
-		if (twCount < least || !valid) {
+	uint8_t twCount(0);
+	if (threadIDMap.find(std::this_thread::get_id()) == threadIDMap.end()) {
+		for (uint8_t i = 0; i < tCount; i++) {
+			twCount = Threads[i]->qSize.load() + Threads[i]->lWaiting.load();
+			if (twCount < least || !valid) {
+				valid = true;
+				least = twCount;
+				tInd = i;
+			}
 
-			valid = true;
-			least = twCount;
-			tInd = i;
+
+
 		}
 	}
+	else {
+		if (DepthIndex > 0) {
+			return SubThreads->gPushWork(std::move(recur));
+		}
+		else {
+			//If this code runs just add more depth
+			for (uint8_t i = 0; i < tCount; i++) {
+				bool test = threadIDMap[std::this_thread::get_id()] != Threads[i];
+				twCount = Threads[i]->qSize.load() + Threads[i]->lWaiting.load();
+				if ((twCount < least && test) || (!valid && test)) {
+					valid = true;
+					least = twCount;
+					tInd = i;
+				}
+			}
+		}
+	}
+
+	_ASSERT(valid);
 	Threads[tInd]->cMut.lock();
-	Result.uWid = Threads[tInd]->tPushWork(recur);
+	Result.uWid = Threads[tInd]->tPushWork(std::move(recur));
 	Threads[tInd]->cMut.unlock();
 	Result.Worker = Threads[tInd];
 	Threads[tInd]->cVariable.notify_one();
@@ -120,7 +217,7 @@ THREADS::THREAD::~THREAD()
 
 
 //Currently ONLY for concurrent work. Do not push parent/child work. Erratic behavior expected if you do. Add checking for queue overflow. eg Give instructions to work distribution that queue is full of unfinished work
-uint8_t THREADS::THREAD::tPushWork(std::function<void()> &f) {
+uint8_t THREADS::THREAD::tPushWork(std::function<void()> f) {
 
 	//cMut.lock();
 	uint8_t result(Counter);
@@ -140,8 +237,10 @@ void THREADS::recurBatch(std::vector<std::function<void()>>& f, std::vector<std:
 {
 	if (i != f.end())
 	{
-		auto& funct = *i;
-		funct();
+		{
+			const auto & func = *i;
+			func();
+		}
 		recurBatch(f, ++i);
 	}
 }
@@ -164,19 +263,14 @@ void THREADS::THREAD::exeWork() {
 		//Run work
 		//auto time = std::chrono::duration <int, std::nano>(2000);
 		//bVariable.wait_for(tBuss, time, [this] {return lWorkCount > 0 || lWaiting.load() > 0 || !tRunning.load(); });
-
-		for (auto& i : localQ) {
-			if (lWorkCount > 0) {
-				tWork[i].Function();
-				tWork[i].uWorkMTX.lock();
-				tWork[i].Worked = true;
-				tWork[i].uWorkMTX.unlock();
-				--lWorkCount;
-			}
-			else {
-				break;
-			}
+		for (auto i = lWorkCount-1; i >= 0; i--) {
+			tWork[localQ[i]].Function();
+			tWork[localQ[i]].uWorkMTX.lock();
+			tWork[localQ[i]].Worked = true;
+			tWork[localQ[i]].uWorkMTX.unlock();
 		}
+
+		lWorkCount = 0;
 		qSize.store(0);
 
 		auto time = std::chrono::duration <int, std::nano>(2000);

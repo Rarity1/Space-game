@@ -7,8 +7,8 @@
 
 class DLL Physics {
 public:
-	Physics(EngineTime& timer, const int& UpdateRate);
-	~Physics() = default;
+	Physics(const int& UpdateRate);
+	~Physics();
 	void Update(Tracker::InstanceStruc& tInstance);
 	//Call if loaded models/tracked models changes
 	void trackM(Tracker::InstanceStruc& tInstance);
@@ -32,8 +32,6 @@ public:
 	tpsCounter ticker;
 private:
 	std::unique_ptr<THREADS> tMain;
-	std::unique_ptr<THREADS> tProcCollide;
-	std::unique_ptr<THREADS> tProcCollideSub;
 
 	THREADS::WRef lastWref;
 	unsigned int coreCount = 0;
@@ -51,7 +49,7 @@ private:
 
 	std::vector<collstruct> CollModels;
 	std::mutex cmMtx;
-	EngineTime& timer;
+	EngineTime Clock;
 	const int& urate;
 	float GConst = 0;
 	void cGravity(Object* obj);

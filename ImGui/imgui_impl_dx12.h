@@ -27,6 +27,36 @@
 #include <wrl/client.h>
 
 
+
+// DirectX12 data
+struct ImGui_ImplDX12_RenderBuffers;
+
+struct ImGui_ImplDX12_Texture
+{
+    ID3D12Resource* pTextureResource;
+    D3D12_CPU_DESCRIPTOR_HANDLE hFontSrvCpuDescHandle;
+    D3D12_GPU_DESCRIPTOR_HANDLE hFontSrvGpuDescHandle;
+
+    ImGui_ImplDX12_Texture() { memset((void*)this, 0, sizeof(*this)); }
+};
+
+
+
+// Buffers used during the rendering of a frame
+struct ImGui_ImplDX12_RenderBuffers
+{
+    ID3D12Resource* IndexBuffer;
+    ID3D12Resource* VertexBuffer;
+    int                 IndexBufferSize;
+    int                 VertexBufferSize;
+};
+
+struct VERTEX_CONSTANT_BUFFER_DX12
+{
+    float   mvp[4][4];
+};
+
+
 // Initialization data, for ImGui_ImplDX12_Init()
 struct ImGui_ImplDX12_InitInfo
 {
@@ -48,6 +78,30 @@ struct ImGui_ImplDX12_InitInfo
 #endif
 
     ImGui_ImplDX12_InitInfo()   { memset((void*)this, 0, sizeof(*this)); }
+};
+
+
+
+struct ImGui_ImplDX12_Data
+{
+    ImGui_ImplDX12_InitInfo* InitInfo;
+    ID3D12Device* pd3dDevice;
+    ID3D12RootSignature* pRootSignature;
+    ID3D12PipelineState* pPipelineState;
+    ID3D12CommandQueue* pCommandQueue;
+    bool                        commandQueueOwned;
+    DXGI_FORMAT                 RTVFormat;
+    DXGI_FORMAT                 DSVFormat;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> pd3dSrvDescHeap;
+    UINT                        numFramesInFlight;
+
+    ImGui_ImplDX12_RenderBuffers* pFrameResources;
+    UINT                        frameIndex;
+
+    ImGui_ImplDX12_Texture      FontTexture;
+    bool                        LegacySingleDescriptorUsed;
+
+    ImGui_ImplDX12_Data() { memset((void*)this, 0, sizeof(*this)); frameIndex = UINT_MAX; }
 };
 
 // Follow "Getting Started" link and check examples/ folder to learn about using backends!

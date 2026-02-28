@@ -14,12 +14,9 @@ void Object::Move(DirectX::XMFLOAT4 Dir, float Dist)
 
 void Object::CollReset()
 {
-	//READ ABOVE
-	//std::thread([this]() {
 	PhysicsUpdate.lock();
 	pDir.clear();
 	PhysicsUpdate.unlock();
-	//}).detach();
 }
 
 bool Object::CollCheck()
@@ -45,26 +42,28 @@ DirectX::XMFLOAT3 Object::UpdatePosition()
 	using namespace DirectX;
 	mPos.posMtx.lock();
 	mPos.lastposition = *mPos.position;
-	XMStoreFloat3(mPos.position, XMLoadFloat3(mPos.position) + XMLoadFloat4(&nDir));
+	XMStoreFloat3(mPos.position.get(), XMLoadFloat3(mPos.position.get()) + XMLoadFloat4(&nDir));
 	CollReset();
-	XMStoreFloat3(mPos.position, XMLoadFloat3(mPos.position) + XMLoadFloat4(&velDir) * (speed));
+	XMStoreFloat3(mPos.position.get(), XMLoadFloat3(mPos.position.get()) + XMLoadFloat4(&velDir) * (speed));
 	mPos.posMtx.unlock();
 
-	viewMtx.lock();
-	XMStoreFloat4x4(&vMatrix, XMMatrixRotationQuaternion(XMLoadFloat4(&mPos.rotation)) * XMMatrixTranslation(mPos.position->x, mPos.position->y, mPos.position->z));
-	viewMtx.unlock();
 	return mPos.lastposition;
 }
 
-UINT Tracker::getModelID(UINT UOID)
-{
 
-	return storage.getModelID(UOID);
+void Tracker::lModel(Object& obj, UINT umID) noexcept
+{
+	obj.model = storage->loadModel(umID);
+	obj.model->curTexture = storage->getTexture(obj.model->name);
+	obj.loadedModel = true;
 }
+
+
+
 
 RStorage::bmResource* Tracker::GetModel(UINT umID)
 {
-	return storage.GetMData(umID)->model;
+	return storage->GetModel(umID);
 }
 
 Tracker::InstanceStruc& Tracker::initInstance(uint16_t instanceID)
@@ -82,22 +81,22 @@ Tracker::InstanceStruc& Tracker::getInstance(uint16_t instanceID)
 	return objectInstances[instanceID];
 }
 
+//Need to be able to init an object not connected to an instance so that one object can be on multiple instances
+//also try to seperate object tracking between rendering and physics calculations
 Object* Tracker::initObject(InstanceStruc& oInstance, std::string textureName, UINT filebModelIndex, float mScale, float mMass, float mFriction, DirectX::XMFLOAT3 initPos, DirectX::XMFLOAT3 initRot, DirectX::XMFLOAT3 initVelDir, float initSpeed) {
 
-	//Impliment object tracking for real. Track per world(Doesnt have to be entire planet just local zeropoint.)
-	auto UOID = lastUOIDused.load();
-	storage.trackModelID(filebModelIndex, UOID);
+	auto UOID = idTracker->AllocID();
 
 	mapUOID[UOID] = std::make_unique<Object>(textureName,
-		//Move this elsewhere.
 		nullptr,
 		mScale, mMass, mFriction, initPos, initRot, initVelDir, initSpeed);
 	mapUOID[UOID]->UOID = UOID;
 
+	mapUOID[UOID]->CBVIndex = oInstance.tmodelLinkedObjects[filebModelIndex].size();
 	auto& result = oInstance.tmodelLinkedObjects[filebModelIndex].emplace_back(mapUOID[UOID].get());
 	oInstance.instancedCBVData[filebModelIndex] = nullptr;
+
 	oInstance.Count++;
-	lastUOIDused++;
 	return result;
 
 }

@@ -16,7 +16,7 @@ class DLL Graphics
 	friend class Engine;
 public:
 	struct thRect {
-		RECT wr;
+		RECT wr = {};
 		std::mutex Mtx;
 	};
 	Graphics(HWND& hWnd, thRect& WindowRect);
@@ -31,31 +31,27 @@ public:
 		DirectX::XMFLOAT4 forwardDirect = { 1,0,0,0 };
 		DirectX::XMMATRIX cmatrix;
 	};
+
+
 	//update graphics for a list of tracked objects. Preferably objects loaded in memory and meant to be rendered
-	void Update(Tracker::InstanceStruc& tInstance);
+	void Update(std::vector<std::pair<uint16_t, Tracker::InstanceStruc*>>& rInstances);
 
 
 	void CreateBuffers(Tracker::InstanceStruc& tInstance);
 	void UpdBuffer(RStorage::bmResource& bm, Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList, Microsoft::WRL::ComPtr<ID3D12Device> pDevice, Microsoft::WRL::ComPtr<ID3D12CommandAllocator> commandAllocator, Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue);
-
-	void lModel(Object& obj, UINT umID) noexcept;
-
-
 	void UpdateModel(Object* bm);
 	void RenderFrame(Tracker::InstanceStruc& tInstance);
 	void LoadResources(Tracker::InstanceStruc& tInstance);
 	void LoadPipeline();
 	void UpdateLocalTransform(Object& bm);
-	static void UpdateConstantBuffers(DirectX::FXMMATRIX view, DirectX::CXMMATRIX projection, Tracker::InstanceStruc& tInstance);
 private:
 	const UINT bufferCount = 3;
 	std::unique_ptr<imguid> iGui;
 	pCamera curCamera;
 	std::vector<std::string> loadbuff;
-	std::unique_ptr<RStorage> rStorage;
+
 	std::atomic<bool> updateResolution;
 	void UpdateFrameResources();
-	void CreateFrameResources();
 	std::condition_variable uFrameResource;
 	std::mutex frMutex;
 	ImGui_ImplDX12_InitInfo ImGuiInfo;
@@ -64,7 +60,7 @@ private:
 	float Min(float minimum, float number);
 	float RotateHelper(float& rNumber);
 	float timesincestart;
-	void RecurLTrans(ReadXML::Node* n, ReadXML::Node* P);
+	void RecurLTrans(ModelData::Node* n, ModelData::Node* P);
 	GErrors::CheckerToken chk;
 	//uint16_t& width;
 	//uint16_t& height;
@@ -140,7 +136,7 @@ private:
 			//Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> originHeap;
 		};
 		//std::unordered_map<uint64_t, handls> allocatedHandles;
-		std::unordered_map<SIZE_T, uint64_t> uidHndls;
+		//std::unordered_map<SIZE_T, uint64_t> uidHndls;
 
 		Microsoft::WRL::ComPtr<ID3D12Device9> pDevice;
 		uint64_t HeapHandleIncrement;
@@ -209,8 +205,6 @@ private:
 	std::unique_ptr<DescriptorHeapAllocator> objectAllocator;
 
 	
-	Microsoft::WRL::ComPtr<ID3D12CommandAllocator> imGuicommandAllocator;
 
-	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> imGuicommandList;
 
 };

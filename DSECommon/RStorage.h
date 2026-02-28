@@ -1,6 +1,6 @@
 #pragma once
 #include "CWin.h"
-#include "ReadXML.h"
+#include "ModelData.h"
 #include "GraphicsErrors.h"
 #include "text.h"
 #include <CL/opencl.hpp>
@@ -16,12 +16,18 @@ public:
 	//Do NOT copy.
 	struct bmResource {
 		bmResource() = default;
-		bmResource(UINT uemID, std::unique_ptr<ReadXML> uData, std::string& name):
-			umID(uemID),
-			uData(std::move(uData)),
-			name(name)
-		{};
-		~bmResource() {};
+		bmResource(UINT& uemID, ModelData euData, std::string& ename) {
+			umID = uemID;
+			uData = std::make_unique<ModelData>(std::move(euData));
+			name = ename;
+		};
+		bmResource(const bmResource& old) noexcept {
+			umID = old.umID;
+			uData = std::make_unique<ModelData>(*old.uData);
+			name = old.name;
+			clIndexBuff = old.clIndexBuff;
+			clIndexMap = old.clIndexMap;
+		};
 		bmResource(bmResource&& old) noexcept {
 			umID = std::move(old.umID);
 			uData = std::move(old.uData);
@@ -37,52 +43,22 @@ public:
 			clIndexBuff = std::move(old.clIndexBuff);
 			clIndexMap = std::move(old.clIndexMap);
 		};
-		bmResource& operator = (bmResource&& old) noexcept {
-			if (this != &old) {
-				umID = std::move(old.umID);
-				uData = std::move(old.uData);
-				name = std::move(old.name);
-				vbuffer = std::move(old.vbuffer);
-				ibuffer = std::move(old.ibuffer);
-				uvbuffer = std::move(old.uvbuffer);
-				uibuffer = std::move(old.uibuffer);
-				vbuffView = std::move(old.vbuffView);
-				ibuffView = std::move(old.ibuffView);
-				clBoneBuff = std::move(old.clBoneBuff);
-				clBuff = std::move(old.clBuff);
-				clIndexBuff = std::move(old.clIndexBuff);
-				clIndexMap = std::move(old.clIndexMap);
-			}
-			return *this;
-		}
-		bmResource(const bmResource&) { };
-		bmResource& operator=(const bmResource&) { return *this; };
-		/*
-		{
-
+		~bmResource() = default;
+		bmResource& operator=(const bmResource& old) {
 			umID = old.umID;
-			uData = std::make_unique<ReadXML>(*old.uData);
+			uData = std::make_unique<ModelData>(*old.uData);
 			name = old.name;
-			vbuffer = old.vbuffer;
-			ibuffer = old.ibuffer;
-			uvbuffer = old.uvbuffer;
-			uibuffer = old.uibuffer;
-			vbuffView = old.vbuffView;
-			ibuffView = old.ibuffView;
-			clBoneBuff = old.clBoneBuff;
-			clBuff = old.clBuff;
 			clIndexBuff = old.clIndexBuff;
 			clIndexMap = old.clIndexMap;
-		};
-		
-		*/
-		UINT umID;
-		std::unique_ptr<ReadXML> uData;
+			return *this;
+		}
+
+		UINT umID = 0;
+		std::unique_ptr<ModelData> uData;
 		std::string name;
 		//Instanced texture path and buffer.
 		std::filesystem::path curTexture;
 		Microsoft::WRL::ComPtr<ID3D12Resource> tbuffer;
-
 		Microsoft::WRL::ComPtr <ID3D12Resource> vbuffer;
 		Microsoft::WRL::ComPtr <ID3D12Resource> ibuffer;
 		Microsoft::WRL::ComPtr <ID3D12Resource> uvbuffer;
@@ -109,11 +85,8 @@ public:
 		std::filesystem::path modelPath;
 	};
 
-	
-	mData* GetMData(UINT umID);
-	bmResource* loadModel(mData& umData);
-	void trackModelID(UINT umID, UINT UOID);
-	UINT getModelID(UINT UOID);
+	bmResource* GetModel(UINT umID);
+	bmResource* loadModel(UINT umID);
 	std::filesystem::path getTexture(std::string name);
 
 

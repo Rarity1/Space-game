@@ -1,46 +1,41 @@
- #include "ReadXML.h"
+ #include "ModelData.h"
 
-ReadXML::ReadXML(std::string path, PARSE parse) :
-	file(path),
+ModelData::ModelData(std::string path, PARSE parse) :
 	Path(path)
 {
-	std::vector<char> buffer((std::istreambuf_iterator<char>(file)),
-		std::istreambuf_iterator<char>());
-	buffer.push_back('\0');
-	doc.parse<0>(&buffer[0]);
-	switch (parse) {
-	case MODEL:
-		ReadModel();
-		break; 
-	case DEFAULT:
-		break;
+
+	std::unique_ptr<rapidxml::xml_document<char>> doc = std::make_unique<rapidxml::xml_document<>>();
+	std::unique_ptr<std::vector<char>> buffer = std::make_unique<std::vector<char>>();
+	{
+		auto file = std::ifstream(Path);
+
+		buffer->append_range(std::vector<char>(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()));
+		buffer->push_back('\0');
 	}
+
+
+	ReadModel(std::move(doc), std::move(buffer));
 }
 
 
-
-
-int ReadXML::FindIndex(int Index)
+void ModelData::GetAllChildBones(Node& node, std::vector<Node*>& Parent)
 {
-	return Index;
-}
-
-
-void ReadXML::GetAllChildBones(Node* node, std::vector<Node*>* Parent)
-{
-	for (auto& n : node->children) {
-		Parent->emplace_back(n);
-		GetAllChildBones(n, &n->aChildren);
-		Parent->insert(Parent->end(), n->aChildren.begin(), n->aChildren.end());
+	for (auto& n : node.children) {
+		Parent.emplace_back(&n);
+		GetAllChildBones(n, n.aChildren);
+		Parent.insert(Parent.end(), n.aChildren.begin(), n.aChildren.end());
 	}
 		
 		
 }
 
-ReadXML::Node ReadXML::ChildNodeRead(rapidxml::xml_node<char>* node) {
-	ReadXML::Node mParent;
-	std::istringstream rawmatri(node->first_node("matrix")->value());
-	mParent.matrix = strToMatrix(rawmatri);
+ModelData::Node ModelData::ChildNodeRead(rapidxml::xml_node<char>* node) {
+	ModelData::Node mParent;
+	{
+		std::istringstream rawmatri(node->first_node("matrix")->value());
+		mParent.matrix = strToMatrix(rawmatri);
+	}
+
 	if (std::strcmp(node->first_attribute("type")->value(), "JOINT") == 0 && node->first_node("extra")->first_node("technique")->first_node("tip_x") != nullptr) {
 		float x;
 		std::stringstream(node->first_node("extra")->first_node("technique")->first_node("tip_x")->value()) >> x;
@@ -55,22 +50,22 @@ ReadXML::Node ReadXML::ChildNodeRead(rapidxml::xml_node<char>* node) {
 	for (auto tempnode = node->first_node("node"); tempnode; tempnode = tempnode->next_sibling()) {
 		if (tempnode != nullptr && tempnode->first_attribute("type") != nullptr) {
 			if (std::strcmp(tempnode->first_attribute("type")->value(), "JOINT") == 0) {
-				auto temp = new ReadXML::Node(ChildNodeRead(tempnode));
-				temp->name = tempnode->first_attribute("name")->value();
-				mParent.children.emplace_back(temp);
+				auto& temp = mParent.children.emplace_back(ChildNodeRead(tempnode));
+				temp.name = tempnode->first_attribute("name")->value();
 			}
 		}
 	}
 	mParent.numchild = std::size(mParent.children);
 	for (auto& n : mParent.children) {
-		mParent.numchild += n->numchild;
+		mParent.numchild += n.numchild;
 	}
 	return mParent;
 }
 
-void ReadXML::ReadModel()
+void ModelData::ReadModel(std::unique_ptr<rapidxml::xml_document<char>> doc, std::unique_ptr<std::vector<char>> buffer)
 {
-	auto tnode = doc.first_node();
+	doc->parse<0>(buffer->data());
+	auto tnode = doc->first_node();
 	int size = 0;
 	rapidxml::xml_node<char>* positions = nullptr;
 	rapidxml::xml_node<char>* pmap = nullptr;
@@ -231,7 +226,7 @@ void ReadXML::ReadModel()
 
 	}
 
-	GetAllChildBones(&ndata, &ndata.aChildren);
+	GetAllChildBones(ndata, ndata.aChildren);
 	ndata.name = "Armature";
 	{
 
@@ -379,7 +374,7 @@ void ReadXML::ReadModel()
 
 }
 
-float ReadXML::fDistance(DirectX::XMFLOAT3& pos1, DirectX::XMFLOAT3& pos2) {
+float ModelData::fDistance(DirectX::XMFLOAT3& pos1, DirectX::XMFLOAT3& pos2) {
 	DirectX::XMFLOAT4 Result{ 0,0,0,0 };
 	DirectX::XMFLOAT3 Dist{ 0,0,0 };
 	float d = 0;
@@ -389,7 +384,7 @@ float ReadXML::fDistance(DirectX::XMFLOAT3& pos1, DirectX::XMFLOAT3& pos2) {
 	return d;
 }
 
-DirectX::XMFLOAT4 ReadXML::fDirection(DirectX::XMFLOAT3& pos1, DirectX::XMFLOAT3& pos2) {
+DirectX::XMFLOAT4 ModelData::fDirection(DirectX::XMFLOAT3& pos1, DirectX::XMFLOAT3& pos2) {
 	using namespace DirectX;
 	DirectX::XMFLOAT4 Result{ 0,0,0,0 };
 	DirectX::XMFLOAT3 Dist{ 0,0,0 };
@@ -404,7 +399,7 @@ DirectX::XMFLOAT4 ReadXML::fDirection(DirectX::XMFLOAT3& pos1, DirectX::XMFLOAT3
 	return { 0,0,0,0 };
 }
 
-DirectX::XMFLOAT4X4 ReadXML::strToMatrix(std::istringstream& rawmatri) {
+DirectX::XMFLOAT4X4 ModelData::strToMatrix(std::istringstream& rawmatri) {
 	float m;
 	std::vector<float> tempfloats;
 	while (rawmatri >> m) {
@@ -507,18 +502,7 @@ DirectX::XMFLOAT4X4 ReadXML::strToMatrix(std::istringstream& rawmatri) {
 	return float4x4;
 }
 
-void ReadXML::DeleteChild(Node* node) {
-	if (std::size(node->children) > 0)
-		for (auto& n : node->children) {
-			DeleteChild(n);
-		}
-	else
-		delete node;
-}
 
-ReadXML::~ReadXML()
+ModelData::~ModelData()
 {
-	for (auto& n : ndata.children) {
-		DeleteChild(n);
-	}
 }

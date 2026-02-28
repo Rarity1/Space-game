@@ -669,8 +669,8 @@ CLOSEFORM TooClose(TRIANGLE Tri1, TRIANGLE Tri2, XMFLOAT3 TPos)
                 return Result;
             }
             //TriDist(WAPoint, WBPoint, WCPoint, TAPoint, TBPoint, TCPoint, TNorm, WNorm, WNormalScalar, TNormalScalar)
-            Result.dist[0] = 0.1;
-            Result.dist[1] = 0.1;
+            Result.dist[0] = 0.01;
+            Result.dist[1] = 0.01;
 
             // Project triangle vertices onto intersection line direction
 

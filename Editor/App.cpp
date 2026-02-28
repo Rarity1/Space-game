@@ -20,5 +20,4 @@ int App::Go() {
 
 void App::DoFrame() {
 	wnd->sEng->Update();
-	wnd->sEng->RenderI();
 }

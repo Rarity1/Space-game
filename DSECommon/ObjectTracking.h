@@ -20,19 +20,19 @@ public:
 
 	struct relposVect {
 		relposVect() :
-			position(new DirectX::XMFLOAT3(0, 0, 0)) {
+			position(std::make_unique<DirectX::XMFLOAT3>(0, 0, 0)) {
 		};
 		relposVect(DirectX::XMFLOAT3 initPos) :
-			position(new DirectX::XMFLOAT3(initPos)) {
+			position(std::make_unique<DirectX::XMFLOAT3>(initPos)) {
 		};
-		~relposVect() { delete position; };
+		~relposVect() = default;
 		relposVect(relposVect&& old) noexcept {
-			position = new DirectX::XMFLOAT3(*old.position);
+			position = std::move(old.position);
 			lastposition = std::move(old.lastposition);
 			rotation = std::move(old.rotation);
 		};
 		relposVect(const relposVect& old) {
-			position = new DirectX::XMFLOAT3(*old.position);
+			position = std::make_unique<DirectX::XMFLOAT3>(*old.position);
 			lastposition = old.lastposition;
 			rotation = old.rotation;
 		};
@@ -43,7 +43,7 @@ public:
 			return *this;
 		}
 
-		DirectX::XMFLOAT3* position;
+		std::unique_ptr<DirectX::XMFLOAT3> position;
 		DirectX::XMFLOAT3 lastposition = { 0,0,0 };
 		DirectX::XMFLOAT4 rotation{ 0,0,0,1 };
 		std::mutex posMtx;
@@ -54,113 +54,19 @@ public:
 		scale(mScale),
 		mass(mMass),
 		friction(mFriction),
-		velDir(),
-		speed(),
 		mPos(relposVect(initPos))
 	{
 	};
-	~Object() {};
-	Object(Object&& old) noexcept :
-		model(std::move(old.model)),
-		name(std::move(old.name)),
-		scale(std::move(old.scale)),
-		mass(std::move(old.mass)),
-		friction(std::move(old.friction)),
-		velDir(std::move(old.velDir)),
-		speed(std::move(old.speed)),
-		grav(std::move(old.grav)),
-		gravpull(std::move(old.gravpull)),
-		mworld(std::move(old.mworld)),
-		clPositionBuff(std::move(old.clPositionBuff)),
-		pDir(std::move(old.pDir)),
-		mPos(std::move(old.mPos))
-
-	{
-	}
-	Object& operator = (Object&& old) noexcept
-	{
-		model = std::move(old.model);
-		name = std::move(old.name);
-		scale = std::move(old.scale);
-		mass = std::move(old.mass);
-		friction = std::move(old.friction);
-		velDir = std::move(old.velDir);
-		speed = std::move(old.speed);
-		grav = std::move(old.grav);
-		gravpull = std::move(old.gravpull);
-		mworld = std::move(old.mworld);
-		clPositionBuff = std::move(old.clPositionBuff);
-		pDir = std::move(old.pDir);
-		mPos = std::move(old.mPos);
-		return *this;
-
-
-	};
-
-	Object(const Object& old)
-	{
-		/*
-				model = old.model;
-		name = old.name;
-		scale = old.scale;
-		mass = old.mass;
-		friction = old.friction;
-		velDir = old.velDir;
-		speed = old.speed;
-		grav = old.grav;
-		gravpull = old.gravpull;
-		mworld = old.mworld;
-		curTexture = old.curTexture;
-		clPositionBuff = old.clPositionBuff;
-		pDir = old.pDir;
-		tbuffer = old.tbuffer;
-		vMatrix = old.vMatrix;
-		mPos = old.mPos;
-		cbvwriteBuffer = old.cbvwriteBuffer;
-		cbvMatrix = old.cbvMatrix;
-		ptrCbvMatrix = std::addressof(cbvMatrix);
-		*/
-
-	}
+	~Object() = default;
 	bool operator==(const Object& comparison) {
-		if (this != &comparison) return false;
-		if (clPositionBuff != comparison.clPositionBuff)return false;
-		if (mPos.position != comparison.mPos.position) return false;
+		if (UOID != comparison.UOID) return false;
 		return true;
 	}
 	bool operator!=(const Object& comparison) {
-		if (this == &comparison) return false;
-		if (clPositionBuff == comparison.clPositionBuff)return false;
-		if (mPos.position == comparison.mPos.position) return false;
+		if (UOID == comparison.UOID) return false;
 		return true;
 	}
-	Object& operator = (const Object& old) {
-		return *this;
-		/*
-		 		model = old.model;
-		name = old.name;
-		scale = old.scale;
-		mass = old.mass;
-		friction = old.friction;
-		velDir = old.velDir;
-		speed = old.speed;
-		grav = old.grav;
-		gravpull = old.gravpull;
-		mworld = old.mworld;
-		curTexture = old.curTexture;
-		clPositionBuff = old.clPositionBuff;
-		pDir = old.pDir;
-		tbuffer = old.tbuffer;
-		vMatrix = old.vMatrix;
-		mPos = old.mPos;
-		cbvwriteBuffer = old.cbvwriteBuffer;
-		cbvMatrix = old.cbvMatrix;
-		ptrCbvMatrix = std::addressof(cbvMatrix);
-		 
-		 */
 
-		//return *this;
-	};
 	std::string name = "";
 
 
@@ -180,10 +86,9 @@ public:
 
 	std::vector<DirectX::XMFLOAT4> pDir;
 	void Move(DirectX::XMFLOAT4 Dir, float Dist = 1);
-	//Returns previous rotation matrix
-	DirectX::XMFLOAT4X4 Rotate(DirectX::XMFLOAT4X4& RotationMatrix);
 	void CollReset();
 	bool CollCheck();
+
 
 	//Returns last position before update
 	DirectX::XMFLOAT3 UpdatePosition();
@@ -192,24 +97,13 @@ public:
 	std::mutex PhysicsUpdate;
 
 	bool loadedModel = false;
-	//Replace with shared ptr to prevent memory leak. Shared because models can be used more than once
+
+	//This pointer is handled by rstorage
 	RStorage::bmResource* model;
 
 
+	UINT CBVIndex = 0;
 
-	 struct CBVData {
-		 __declspec(align(16)) DirectX::XMFLOAT4X4 cbvMatrix;
-		UINT Texture = 0;
-		//do not use
-		//UINT Padding[3];
-	};
-	//View Matrix
-	DirectX::XMFLOAT4X4 vMatrix;
-	std::mutex viewMtx;
-
-
-	//upload view matrix.
-	//Microsoft::WRL::ComPtr<ID3D12Resource> cbvwriteBuffer;
 	//Instanced buffer specific to object for physics calculations
 	cl::Buffer clPositionBuff;
 	
@@ -219,30 +113,82 @@ public:
 class DLL Tracker {
 	friend class Engine;
 public: 
+	struct CBVData {
+		__declspec(align(16)) DirectX::XMFLOAT4X4 cbvMatrix;
+		UINT Texture = 0;
+		//do not use
+		//UINT Padding[3];
+	};
 	struct InstanceStruc {
 		//umID to list of objects using that model
 		std::unordered_map<UINT, std::list<Object*>> tmodelLinkedObjects{};
-		std::unordered_map<UINT, Object::CBVData*> instancedCBVData;
+		std::unordered_map<UINT, CBVData*> instancedCBVData;
 		Tracker* pTracker = nullptr;
 		UINT Count;
 	};
 private:
-	RStorage& storage;
+	std::shared_ptr<RStorage> storage;
 	std::atomic<uint64_t> lastUOIDused = 0;
-	//UMID, tracked objs using model
+
 
 	//UOID to ptr storing that tracked object
 	std::unordered_map<uint16_t, InstanceStruc> objectInstances;
 	std::unordered_map<UINT, std::unique_ptr<Object>> mapUOID;
 public:
-	Tracker(RStorage& tstorage) :
-		storage(tstorage)
+	class IDAllocator {
+		uint64_t cIDCount = 0;
+		std::vector<uint64_t> FreeIDs;
+		std::unordered_map<uint64_t, bool> UsedIDs;
+		std::mutex IDMutex;
+	public:
+		IDAllocator(uint64_t IDCount = 1200) :
+			cIDCount(IDCount)
+		{
+			IDMutex.lock();
+			cIDCount = cIDCount == 0 ? 1 : cIDCount;
+			FreeIDs.reserve(cIDCount);
+			FreeIDs.resize(cIDCount);
+			std::iota(FreeIDs.begin(), FreeIDs.end(), 0);
+			std::reverse(FreeIDs.begin(), FreeIDs.end());
+			IDMutex.unlock();
+		}
+		~IDAllocator() = default;
+		uint64_t AllocID() {
+			IDMutex.lock();
+			uint64_t Result = FreeIDs.back();
+			FreeIDs.pop_back();
+			if (FreeIDs.size() <= cIDCount * 0.5) {
+				std::vector<uint64_t> extendIDs(cIDCount);
+				std::iota(extendIDs.begin(), extendIDs.end(), cIDCount);
+				std::reverse(extendIDs.begin(), extendIDs.end());
+				extendIDs.append_range(FreeIDs);
+				cIDCount = (cIDCount + cIDCount);
+				FreeIDs = std::move(extendIDs);
+			}
+			UsedIDs[Result] = true;
+			IDMutex.unlock();
+			return Result;
+		}
+		void FreeID(uint64_t& ID) {
+			IDMutex.lock();
+			if (UsedIDs.find(ID) != UsedIDs.end()) {
+				UsedIDs.erase(ID);
+				FreeIDs.push_back(ID);
+			}
+			IDMutex.unlock();
+		}
+	};
+	Tracker() :
+		storage(std::make_shared<RStorage>()),
+		idTracker(std::make_unique<Tracker::IDAllocator>())
 	{
 	};
 	~Tracker() {
 	};
+	void lModel(Object& obj, UINT umID) noexcept;
+
+	std::unique_ptr<IDAllocator> idTracker;
 	//Returns ID of current model given UOID(Unique Object ID)
-	UINT getModelID(UINT UOID);
 	RStorage::bmResource* GetModel(UINT umID);
 	InstanceStruc& initInstance(uint16_t instanceID);
 	InstanceStruc& getInstance(uint16_t instanceID);

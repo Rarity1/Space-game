@@ -7,7 +7,7 @@
 
 class DLL GErrors {
 public:
-	struct CheckerToken {
+	struct DLL CheckerToken {
 		CheckerToken() = default;
 		bool operator==(const CheckerToken& other) const = default;
 	};

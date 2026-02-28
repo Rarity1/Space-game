@@ -71,39 +71,7 @@
 // MinGW workaround, see #4594
 typedef decltype(D3D12SerializeRootSignature) *_PFN_D3D12_SERIALIZE_ROOT_SIGNATURE;
 
-// DirectX12 data
-struct ImGui_ImplDX12_RenderBuffers;
 
-struct ImGui_ImplDX12_Texture
-{
-    ID3D12Resource*             pTextureResource;
-    D3D12_CPU_DESCRIPTOR_HANDLE hFontSrvCpuDescHandle;
-    D3D12_GPU_DESCRIPTOR_HANDLE hFontSrvGpuDescHandle;
-
-    ImGui_ImplDX12_Texture()    { memset((void*)this, 0, sizeof(*this)); }
-};
-
-struct ImGui_ImplDX12_Data
-{
-    ImGui_ImplDX12_InitInfo*     InitInfo;
-    ID3D12Device*               pd3dDevice;
-    ID3D12RootSignature*        pRootSignature;
-    ID3D12PipelineState*        pPipelineState;
-    ID3D12CommandQueue*         pCommandQueue;
-    bool                        commandQueueOwned;
-    DXGI_FORMAT                 RTVFormat;
-    DXGI_FORMAT                 DSVFormat;
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> pd3dSrvDescHeap;
-    UINT                        numFramesInFlight;
-
-    ImGui_ImplDX12_RenderBuffers* pFrameResources;
-    UINT                        frameIndex;
-
-    ImGui_ImplDX12_Texture      FontTexture;
-    bool                        LegacySingleDescriptorUsed;
-
-    ImGui_ImplDX12_Data()       { memset((void*)this, 0, sizeof(*this)); frameIndex = UINT_MAX; }
-};
 
 // Backend data stored in io.BackendRendererUserData to allow support for multiple Dear ImGui contexts
 // It is STRONGLY preferred that you use docking branch with multi-viewports (== single Dear ImGui context + multiple windows) instead of multiple Dear ImGui contexts.
@@ -112,19 +80,9 @@ static ImGui_ImplDX12_Data* ImGui_ImplDX12_GetBackendData()
     return ImGui::GetCurrentContext() ? (ImGui_ImplDX12_Data*)ImGui::GetIO().BackendRendererUserData : nullptr;
 }
 
-// Buffers used during the rendering of a frame
-struct ImGui_ImplDX12_RenderBuffers
-{
-    ID3D12Resource*     IndexBuffer;
-    ID3D12Resource*     VertexBuffer;
-    int                 IndexBufferSize;
-    int                 VertexBufferSize;
-};
 
-struct VERTEX_CONSTANT_BUFFER_DX12
-{
-    float   mvp[4][4];
-};
+
+
 
 // Functions
 static void ImGui_ImplDX12_SetupRenderState(ImDrawData* draw_data, ID3D12GraphicsCommandList* command_list, ImGui_ImplDX12_RenderBuffers* fr)

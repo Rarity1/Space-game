@@ -4,9 +4,8 @@
 //#pragma OPENCL EXTENSION cl_khr_d3d11_sharing : enable
 
 
-Physics::Physics(EngineTime& Clock, const int& UpdateRate) :
+Physics::Physics(const int& UpdateRate) :
     GConst(6.67430 * pow(10, -11)),
-    timer(Clock),
     urate(UpdateRate)
 {
     coreCount = std::thread::hardware_concurrency();
@@ -49,30 +48,36 @@ Physics::Physics(EngineTime& Clock, const int& UpdateRate) :
     queue = cl::CommandQueue{ context, device };
     
     //Write something that can automatically assign child processess to new THREADS instance
-    tMain = std::make_unique<THREADS>(coreCount);
-    tProcCollide = std::make_unique<THREADS>(coreCount);
-    tProcCollideSub = std::make_unique<THREADS>(coreCount);
+    tMain = std::make_unique<THREADS>(coreCount, 2);
 
     clGetDeviceInfo(device.get(), CL_DEVICE_LOCAL_MEM_SIZE, sizeof(cl_ulong), &clLocalMemSize, 0);
+}
 
+Physics::~Physics()
+{
 }
 
 
 void Physics::Update(Tracker::InstanceStruc& tInstance) {
-    //DebugStream dbgStream;
-    //std::streambuf* oldBuf = std::cout.rdbuf(&dbgStream);
+
     
     CollModels.reserve((tInstance.Count ^ 2) / 2);
     //std::for_each(trackedObjects.begin(), trackedObjects.end(), [this](auto& m) {cGravity(&m); });
     pCollison(tInstance);
     pSpecReset();
-
-    DebugMTX.lock();
-    std::cout << "Current Tick: " + std::to_string(ticker.cGet()) << std::endl;
-    DebugMTX.unlock();
-
     ticker.incCount();
-    //std::cout.rdbuf(oldBuf);
+    if (Clock.Peek() >= 1.0) {
+        DebugStream dbgStream;
+        std::streambuf* oldBuf = std::cout.rdbuf(&dbgStream);
+        DebugMTX.lock();
+        std::cout << "Current avg. TPS: " + std::to_string(ticker.cGet()/ Clock.Mark()) << std::endl;
+        DebugMTX.unlock();
+        ticker.reset();
+        std::cout.rdbuf(oldBuf);
+    }
+
+
+
 }
 
 
@@ -83,7 +88,7 @@ void Physics::trackM(Tracker::InstanceStruc& tInstance) {
 
     for (auto& mTrack : tInstance.tmodelLinkedObjects) {
         for (auto& tObj : mTrack.second) {
-            tObj->model->clBuff = cl::Buffer(context, CL_MEM_READ_ONLY, sizeof(std::array<ReadXML::Vertex, 3>) * tObj->model->uData->MappedVertices.size());
+            tObj->model->clBuff = cl::Buffer(context, CL_MEM_READ_ONLY, sizeof(std::array<ModelData::Vertex, 3>) * tObj->model->uData->MappedVertices.size());
             tObj->clPositionBuff = cl::Buffer(context, CL_MEM_READ_WRITE, sizeof(DirectX::XMFLOAT3));
 
             std::vector<DirectX::XMFLOAT3> WBone;
@@ -96,7 +101,7 @@ void Physics::trackM(Tracker::InstanceStruc& tInstance) {
 
             queue.enqueueWriteBuffer(tObj->model->clBoneBuff, CL_FALSE, 0, sizeof(DirectX::XMFLOAT3) * std::size(WBone), WBone.data());
 
-            queue.enqueueWriteBuffer(tObj->model->clBuff, CL_FALSE, 0, sizeof(std::array<ReadXML::Vertex, 3>) * tObj->model->uData->MappedVertices.size(), tObj->model->uData->MappedVertices.data());
+            queue.enqueueWriteBuffer(tObj->model->clBuff, CL_FALSE, 0, sizeof(std::array<ModelData::Vertex, 3>) * tObj->model->uData->MappedVertices.size(), tObj->model->uData->MappedVertices.data());
         }
 
     }
@@ -223,7 +228,7 @@ Physics::WORKINDI Physics::ProcCollide(Object& obj, Object& obj2,  DirectX::XMFL
         b2ind[i].reserve(obj2udat->bdata[WData[i][1]].Indices.size());
 
 
-        refs1[i] = tProcCollideSub->gPushWork([&objudat, &objCheck1, &WData, &b1ind, i, &CollSp, &MappedVert1]() {
+        refs1[i] = tMain->gPushWork(std::move([&objudat, &objCheck1, &WData, &b1ind, i, &CollSp, &MappedVert1]() {
             XMFLOAT4 bdirection = fDirection(objudat->bdata[WData[i][0]].sphere.Center, CollSp[1].Center);
             std::for_each(objudat->bdata[WData[i][0]].Indices.begin(), objudat->bdata[WData[i][0]].Indices.end(), [&objCheck1, &b1ind, i, &objudat, &bdirection, &MappedVert1](auto& e) {
                 if (!objCheck1[objudat->mIndex[e]].load()) {
@@ -234,13 +239,13 @@ Physics::WORKINDI Physics::ProcCollide(Object& obj, Object& obj2,  DirectX::XMFL
 
                 }
             });
-        });
+        }));
 
         
 
 
 
-        refs2[i] = tProcCollideSub->gPushWork([&obj2udat, &objCheck2, &WData, &b2ind, i, &CollSp, &MappedVert2]() {
+        refs2[i] = tMain->gPushWork(std::move([&obj2udat, &objCheck2, &WData, &b2ind, i, &CollSp, &MappedVert2]() {
             XMFLOAT4 ibdirection = fDirection(obj2udat->bdata[WData[i][1]].sphere.Center, CollSp[0].Center);
 
             std::for_each(obj2udat->bdata[WData[i][1]].Indices.begin(), obj2udat->bdata[WData[i][1]].Indices.end(), [&objCheck2, &b2ind, i, &obj2udat, ibdirection, &MappedVert2](auto& e) {
@@ -252,7 +257,7 @@ Physics::WORKINDI Physics::ProcCollide(Object& obj, Object& obj2,  DirectX::XMFL
                 }
             });
             
-        });
+        }));
 
     }
 
@@ -266,12 +271,12 @@ Physics::WORKINDI Physics::ProcCollide(Object& obj, Object& obj2,  DirectX::XMFL
     
 
     for (auto i = 0; i < b1ind.size(); i++) {
-        tProcCollideSub->gEndWork(refs1[i]);
+        tMain->gEndWork(refs1[i]);
         WorkIndi1.append_range(b1ind[i]);
     }
 
     for (auto i = 0; i < b2ind.size(); i++) {
-        tProcCollideSub->gEndWork(refs2[i]);
+        tMain->gEndWork(refs2[i]);
         WorkIndi2.append_range(b2ind[i]);
     }
     
@@ -285,6 +290,8 @@ Physics::WORKINDI Physics::ProcCollide(Object& obj, Object& obj2,  DirectX::XMFL
     return Result;
 }
 
+
+//rewrite to only process loaded and tracked models
 void Physics::pCollison(Tracker::InstanceStruc& tInstance) {
 
     std::vector<THREADS::WRef> refs(tInstance.Count);
@@ -295,12 +302,13 @@ void Physics::pCollison(Tracker::InstanceStruc& tInstance) {
 
     auto tO = trackedObjects.begin();
     for (auto h = 0; h < refs.size(); h++) {
-        refs[h] = tMain->gPushWork([this, h, tO, &trackedObjects](){
+        refs[h] = tMain->gPushWork(std::move([this, h, tO, &trackedObjects](){
             using namespace DirectX;
             auto& obj = **tO;
+            if (!obj.loadedModel) return;
             XMFLOAT3 Pos1;
             obj.mPos.posMtx.lock();
-            XMStoreFloat3(&Pos1, XMLoadFloat3(obj.mPos.position));
+            XMStoreFloat3(&Pos1, XMLoadFloat3(obj.mPos.position.get()));
             auto sph1 = obj.model->uData->Sphere;
             obj.mPos.posMtx.unlock();
 
@@ -311,9 +319,11 @@ void Physics::pCollison(Tracker::InstanceStruc& tInstance) {
 
             for (auto& m : trackedObjects) {
                 if (*m != obj) {
+                    if (!m->loadedModel) break;
+
                     XMFLOAT3 Pos2;
                     m->mPos.posMtx.lock();
-                    XMStoreFloat3(&Pos2, XMLoadFloat3(m->mPos.position));
+                    XMStoreFloat3(&Pos2, XMLoadFloat3(m->mPos.position.get()));
                     auto sph2 = m->model->uData->Sphere;
                     m->mPos.posMtx.unlock();
                     auto tdist = fDirection(Pos1, Pos2);
@@ -327,7 +337,7 @@ void Physics::pCollison(Tracker::InstanceStruc& tInstance) {
             cmMtx.lock();
             if (CollModels.size() != 0) {
                 std::for_each(CollModels.begin(), CollModels.end(), [&lCheck, &LCollModels](auto& c) {
-                    for (auto l = 0; l < LCollModels.size(); l++) {
+                    for (auto l = 0; l < lCheck.size(); l++) {
                         if (lCheck[l]) {
                             if (LCollModels[l] == c) lCheck[l] = false;
                         }
@@ -360,13 +370,11 @@ void Physics::pCollison(Tracker::InstanceStruc& tInstance) {
 
             for (auto i = 0; i < wCollModels.size(); i++) {
 
-                refs[i] = tProcCollide->gPushWork([this, &wCollModels, i, &wSizes, &obj, &Pos1, &retdata]() {
+                refs[i] = tMain->gPushWork([this, &wCollModels, i, &wSizes, &obj, &Pos1, &retdata]() {
                     XMFLOAT3 MoveD1{ 0,0,0 };
                     XMFLOAT3 MoveD2{ 0,0,0 };
                     XMFLOAT3 Zero{ 0,0,0 };
                     auto tQueue = cl::CommandQueue{ context, devices.front() };
-                    _ASSERT(wCollModels.size() > 0);
-
                     auto& obj2 = *wCollModels[i].obj2;
                     XMFLOAT3 Pos2;
                     BoundingSphere sph2;
@@ -425,7 +433,7 @@ void Physics::pCollison(Tracker::InstanceStruc& tInstance) {
 
                         XMFLOAT3 Pos2;
                         obj2.mPos.posMtx.lock();
-                        XMStoreFloat3(&Pos2, XMLoadFloat3(obj2.mPos.position));
+                        XMStoreFloat3(&Pos2, XMLoadFloat3(obj2.mPos.position.get()));
                         auto sph2 = obj2.model->uData->Sphere;
                         obj2.mPos.posMtx.unlock();
 
@@ -512,20 +520,9 @@ void Physics::pCollison(Tracker::InstanceStruc& tInstance) {
 
 
             }
-            tProcCollide->gEndWork(refs);
+            tMain->gEndWork(refs);
 
-
-
-
-
-
-
-            for (auto i = 0; i < retdata.size(); i++) {
-               
-            }
-
-
-        });
+        }));
         tO++;
     };
     tMain->gEndWork(refs);

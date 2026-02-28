@@ -47,30 +47,26 @@ RStorage::RStorage()
 
 
 
-RStorage::mData* RStorage::GetMData(UINT umID) {
-	_ASSERT(AvailableModels.find(umID) != AvailableModels.end());
-	return &AvailableModels[umID];
-}
-
-RStorage::bmResource* RStorage::loadModel(mData& umData)
-{
-	if (AvailableModels[umData.umID].model == nullptr) {
-		//Need to count referenced myself inorder to delete them
-		LoadedModels.emplace(umData.umID, RStorage::bmResource(umData.umID, std::make_unique<ReadXML>(umData.modelPath.string(), ReadXML::PARSE::MODEL), umData.name));
-		AvailableModels[umData.umID].model = &LoadedModels[umData.umID];
+RStorage::bmResource* RStorage::GetModel(UINT umID) {
+	if (LoadedModels.find(umID) != LoadedModels.end()) {
+		return &LoadedModels[umID];
 	}
-	return AvailableModels[umData.umID].model;
+	else return nullptr;
 }
 
-void RStorage::trackModelID(UINT umID, UINT UOID)
+RStorage::bmResource* RStorage::loadModel(UINT umID)
 {
-	tmodelIndexMap[UOID] = umID;
+
+	_ASSERT(AvailableModels.find(umID) != AvailableModels.end());
+	auto& currentModel = AvailableModels[umID];
+	if (currentModel.model == nullptr) {
+		//Need to count referenced myself inorder to delete them
+		LoadedModels.emplace( umID, RStorage::bmResource(umID, ModelData(currentModel.modelPath.string(), ModelData::PARSE::MODEL), currentModel.name) );
+		currentModel.model = &LoadedModels[umID];
+	}
+	return AvailableModels[umID].model;
 }
 
-UINT RStorage::getModelID(UINT UOID)
-{
-	return tmodelIndexMap[UOID];
-}
 
 std::filesystem::path RStorage::getTexture(std::string name)
 {

@@ -14,8 +14,6 @@ public:
 	const int updaterate = 60;
 	void iLoad();
 	bool Update();
-	void RenderI();
-	bool engInit = true;
 	double engineTimeTaken = 0;
 	EngineTime& Clock;
 	std::unique_ptr<Physics> phyx;
@@ -73,7 +71,6 @@ public:
 
 	};
 	KeysPressed m_keysPressed;
-
 	struct Event {
 		unsigned short wPriority;
 		std::function<void()> wFunc;
@@ -92,26 +89,30 @@ private:
 	};
 	EngineTime updateClock;
 	EngineTime ucontrolClock;
+	std::vector<std::pair<uint16_t, Tracker::InstanceStruc*>> renderedInstances;
+	std::vector<std::pair<uint16_t, Tracker::InstanceStruc*>> processedInstances;
 
 	//Queues a function onto the event queue without running the function. Larger priority number = lower priority. 
 	void queueCommand(std::function<void()> Function, unsigned short Priority = 0);
 	std::vector<std::function<void()>>& getCQueue();
 	void enQueueEngineCommands();
-	double cspin = 0;
-	void UCampos();
+	int eventBusSync();
+	bool pauseLoop = false;
+	void EngineLoop();
+
 	DirectX::XMFLOAT3 rWorld(DirectX::XMFLOAT3 pos1);
 	DirectX::XMFLOAT3 dWorld(DirectX::XMFLOAT3 pos1);
 	DirectX::XMFLOAT3 cnWorld(DirectX::XMFLOAT3 pos1);
 	void OnKeyDown(unsigned char key);
 	void OnKeyUp(unsigned char key);
-	void mAniUpdate();
 	void UControls();
-	void cPlayermodel();
-	//sync view matrix with physics coords
-	void sPGraphics(Object& model);
 	void RotateCam(float Pitch = 0, float Yaw = 0, float Roll = 0);
-	//Fires all queued events/functions in order by priority
-	int eventBusSync();
+	void UCampos();
+	void cPlayermodel();
+	void mAniUpdate();
+	void uPosInstances();
+	void uPhysics();
+
 	std::mutex evBusLock;
 	Graphics& pGfx;
 	Object* plModel;
@@ -128,4 +129,9 @@ private:
 	double lastD = 0.0;
 	std::atomic<short int> queueCount;
 	std::list<Event> QueueList;
+
+	std::thread LoopThread;
+	std::condition_variable loopVariable;
+	std::unique_lock<std::mutex> loopLock;
+	std::mutex loopMutex;
 };
