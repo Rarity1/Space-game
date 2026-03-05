@@ -1,1 +1,10 @@
-{}
+{
+  "dependencies": [
+    "directx12-agility",
+    "directxmath",
+    "directxtk12",
+    "opencl",
+    "rapidxml",
+    "directx-dxc"
+  ]
+}

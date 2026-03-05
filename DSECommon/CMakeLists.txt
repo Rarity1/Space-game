@@ -1,0 +1,12 @@
+add_library(DSECommon SHARED Source/Engine.cpp Source/EngineTime.cpp Source/ePhysics.cpp Source/Exceptions.cpp Source/FrameResource.cpp Source/Graphics.cpp Source/GraphicsErrors.cpp Source/Input.cpp Source/Keyboard.cpp Source/ModelData.cpp Source/Mouse.cpp Source/ObjectTracking.cpp Source/RStorage.cpp Source/SrvAllocator.cpp Source/Threads.cpp)
+find_path(RAPIDXML_INCLUDE_DIRS "rapidxml/rapidxml.hpp")
+target_include_directories(DSECommon PUBLIC ${CMAKE_SOURCE_DIR}/DSECommon/Headers ${RAPIDXML_INCLUDE_DIRS})
+find_package(directx-headers CONFIG REQUIRED)
+find_package(directx12-agility CONFIG REQUIRED)
+find_package(directxmath CONFIG REQUIRED)
+find_package(directxtk12 CONFIG REQUIRED)
+find_package(OpenCL CONFIG REQUIRED)
+find_package(directx-dxc CONFIG REQUIRED)
+add_compile_definitions(DESCDLL=0 IMGUI_DISABLE_OBSOLETE_FUNCTIONS=0)
+
+target_link_libraries(DSECommon ImGui Microsoft::DirectXMath Microsoft::DirectXTK12 Microsoft::DirectX-Headers Microsoft::DirectX-Guids Microsoft::DirectX12-Agility Microsoft::DirectXShaderCompiler OpenCL::OpenCL)
