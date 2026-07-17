@@ -20,6 +20,9 @@
  ******************************************************************************************/
 #pragma once
 #include "CWin.h"
+#include <optional>
+#include <queue>
+#include <utility>
 
 
 class DLL Mouse

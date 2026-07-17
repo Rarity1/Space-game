@@ -1,4 +1,5 @@
 #include "Threads.h"
+#include <cassert>
 
 
 //Add more depth when doing recursive functions. Depth is amount of thread recursion - 1
@@ -60,7 +61,7 @@ THREADS::WRef THREADS::gPushWork(std::function<void()> f)
 	}
 
 	//Process depth needed if this throws
-	_ASSERT(valid);
+	assert(valid);
 	Threads[tInd]->cMut.lock();
 	Result.uWid = Threads[tInd]->tPushWork(std::move(f));
 	Threads[tInd]->cMut.unlock();
@@ -71,7 +72,7 @@ THREADS::WRef THREADS::gPushWork(std::function<void()> f)
 	return Result;
 }
 
-THREADS::WRef THREADS::gPushWork(std::function<void()>& f)
+inline THREADS::WRef THREADS::gPushWork(std::function<void()>& f)
 {
 	WRef Result{ 0, DepthIndex };
 	uint8_t least = 0;
@@ -109,7 +110,7 @@ THREADS::WRef THREADS::gPushWork(std::function<void()>& f)
 		}
 	}
 
-	_ASSERT(valid);
+	assert(valid);
 	Threads[tInd]->cMut.lock();
 	Result.uWid = Threads[tInd]->tPushWork(std::move(f));
 	Threads[tInd]->cMut.unlock();
@@ -122,7 +123,7 @@ THREADS::WRef THREADS::gPushWork(std::function<void()>& f)
 
 
 //Pushes batch of work onto single thread
-THREADS::WRef THREADS::gPushWork(std::vector<std::function<void()>>& f)
+inline THREADS::WRef THREADS::gPushWork(std::vector<std::function<void()>>& f)
 {
 
 	std::function<void()> recur([&f]() {auto vect = std::move(f); auto iter = vect.begin(); recurBatch(vect, iter); });
@@ -163,7 +164,7 @@ THREADS::WRef THREADS::gPushWork(std::vector<std::function<void()>>& f)
 		}
 	}
 
-	_ASSERT(valid);
+	assert(valid);
 	Threads[tInd]->cMut.lock();
 	Result.uWid = Threads[tInd]->tPushWork(std::move(recur));
 	Threads[tInd]->cMut.unlock();
@@ -222,7 +223,7 @@ uint8_t THREADS::THREAD::tPushWork(std::function<void()> f) {
 	//cMut.lock();
 	uint8_t result(Counter);
 	tWork[result].uWorkMTX.lock();
-	_ASSERT(tWork[result].Worked);
+	assert(tWork[result].Worked);
 	tWork[result].Function = std::move(f);
 	tWork[result].Worked = false;
 	tWork[result].uWorkMTX.unlock();
@@ -287,7 +288,7 @@ void THREADS::THREAD::checkWork(unsigned int uWid) {
 		cVariable.notify_one();
 		if (!waitCounter || !tRunning.load()) {
 			++lWaiting;
-			_ASSERT(!(lWaiting.load() == 0));
+			assert(!(lWaiting.load() == 0));
 			waitCounter = true;
 		}
 		return tWork[uWid].Worked || !tRunning.load();

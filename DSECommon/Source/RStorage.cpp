@@ -57,7 +57,7 @@ RStorage::bmResource* RStorage::GetModel(UINT umID) {
 RStorage::bmResource* RStorage::loadModel(UINT umID)
 {
 
-	_ASSERT(AvailableModels.find(umID) != AvailableModels.end());
+	assert(AvailableModels.find(umID) != AvailableModels.end());
 	auto& currentModel = AvailableModels[umID];
 	if (currentModel.model == nullptr) {
 		//Need to count referenced myself inorder to delete them

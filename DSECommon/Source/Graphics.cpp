@@ -1,19 +1,11 @@
 
 #include "Graphics.h"
 
-
-
-Graphics::Graphics(HWND& hWnd, thRect& WindowRect)
-	:
-	//width(w),
-	//height(h),
-	windowResolution(WindowRect),
-	hwnd(hWnd),
-	cframeIndex(0)
-{
+Graphics::Graphics(thRect &WindowRect)
+    : // width(w),
+      // height(h),
+      windowResolution(WindowRect), cframeIndex(0) {
 }
-
-
 
 float Graphics::Max(float number, float maximum)
 {
@@ -42,7 +34,7 @@ float Graphics::RotateHelper(float& rNumber)
 	return rNumber;
 }
 
-void Graphics::LoadPipeline() {
+void Graphics::LoadPipeline(HWND& hWnd) {
 	UINT dxgiFactoryFlags = 0;
 #if defined(_DEBUG)
 	Microsoft::WRL::ComPtr<ID3D12Debug> debugController0;
@@ -73,6 +65,14 @@ void Graphics::LoadPipeline() {
 	pDevice->CreateCommandQueue(&desc, IID_PPV_ARGS(&commandQueue)) >> chk;
 	NAME_D3D12_OBJECT(commandQueue);
 	
+	#ifdef _DEBUG
+	
+	pDevice.As(&D3DInfoQueue);
+	DWORD CallbackCookie;
+	D3DInfoQueue->RegisterMessageCallback((D3D12MessageFunc)GErrors::D3D12MessageCallback, D3D12_MESSAGE_CALLBACK_IGNORE_FILTERS, this, &CallbackCookie)>>chk;
+	
+	#endif
+
 	/*
 	DSTORAGE_QUEUE_DESC qdesc = {};
 	qdesc.SourceType = DSTORAGE_REQUEST_SOURCE_FILE;
@@ -97,7 +97,7 @@ void Graphics::LoadPipeline() {
 		sd.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
 		dxgiFactory->CreateSwapChainForHwnd(
 			commandQueue.Get(),
-			hwnd,
+			hWnd,
 			&sd,
 			nullptr,
 			nullptr,
@@ -106,7 +106,7 @@ void Graphics::LoadPipeline() {
 	}
 
 
-	dxgiFactory->MakeWindowAssociation(hwnd, DXGI_MWA_NO_ALT_ENTER) >> chk;
+	dxgiFactory->MakeWindowAssociation(hWnd, DXGI_MWA_NO_ALT_ENTER) >> chk;
 	cframeIndex = swapChain->GetCurrentBackBufferIndex();
 
 
@@ -146,7 +146,9 @@ void Graphics::LoadPipeline() {
 		sDesc.MipLODBias = 0;
 		//sDesc.MinLOD = 0;
 		//sDesc.MaxLOD = 100;
-		pDevice->CreateSampler(&sDesc, pSamplerDescriptorHeap->GetCPUDescriptorHandleForHeapStart());
+		D3D12_CPU_DESCRIPTOR_HANDLE temp;
+		pSamplerDescriptorHeap->GetCPUDescriptorHandleForHeapStart(&temp);
+		pDevice->CreateSampler(&sDesc, temp);
 	}
 
 
@@ -310,24 +312,27 @@ void Graphics::LoadPipeline() {
 	//ImGuiSetup req
 	//imHAllocator = std::make_shared<DescriptorHeapAllocator>(pDevice, 64);
 	objectAllocator = std::make_unique<DescriptorHeapAllocator>(pDevice);
-	
+	#ifndef IMGUI_DISABLE
+
 	ImGuiInfo.Device = pDevice.Get();
 	ImGuiInfo.CommandQueue = commandQueue.Get();
 	ImGuiInfo.NumFramesInFlight = bufferCount;
 	ImGuiInfo.RTVFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
+	#endif
 	//ImGuiInfo.SrvDescriptorHeap = imHAllocator->SrvDescHeap;
 	//std::function<void(D3D12_CPU_DESCRIPTOR_HANDLE*, D3D12_GPU_DESCRIPTOR_HANDLE*)> Alloc = std::bind(&DescriptorHeapAllocator::Alloc, imHAllocator, std::placeholders::_1, std::placeholders::_2);
 	std::function<void(D3D12_CPU_DESCRIPTOR_HANDLE*, D3D12_GPU_DESCRIPTOR_HANDLE*)> Alloc{[this](D3D12_CPU_DESCRIPTOR_HANDLE* cpuh, D3D12_GPU_DESCRIPTOR_HANDLE* gpuh){objectAllocator->Alloc(cpuh, gpuh);}};
 
 	//std::function<void(D3D12_CPU_DESCRIPTOR_HANDLE, D3D12_GPU_DESCRIPTOR_HANDLE)> Free = std::bind(&DescriptorHeapAllocator::Free, imHAllocator, std::placeholders::_1, std::placeholders::_2);
 	std::function<void(D3D12_CPU_DESCRIPTOR_HANDLE, D3D12_GPU_DESCRIPTOR_HANDLE)> Free{ [this](D3D12_CPU_DESCRIPTOR_HANDLE cpuh, D3D12_GPU_DESCRIPTOR_HANDLE gpuh) {objectAllocator->Free(cpuh, gpuh); }};
+#ifndef IMGUI_DISABLE
 
 	ImGuiInfo.SrvDescriptorAllocFn = Alloc;
 	ImGuiInfo.SrvDescriptorFreeFn = Free;
 
 
 	iGui = std::make_unique<imguid>(hwnd, &ImGuiInfo);
-
+#endif
 	backBuffers.resize(0);
 	windowResolution.Mtx.lock();
 	auto width = windowResolution.wr.right - windowResolution.wr.left;
@@ -424,10 +429,10 @@ void Graphics::RenderFrame(Tracker::InstanceStruc& tInstance) {
 		cframeBuffer.PopulateCommandList(cmdinfo);
 
 	}
-
+#ifndef IMGUI_DISABLE
 	iGui->imPrepare();
 	iGui->imPopulateCommand(cframeBuffer.GetRTV(), objectAllocator->DescHeap, cframeBuffer.renderTarget.Get(), cframeBuffer.imguiCommandList.Get(), cframeBuffer.imguicommandAllocator.Get());
-
+#endif
 
 	std::vector<ID3D12CommandList*> commandLists = { cframeBuffer.pCommandList.Get()
 		,cframeBuffer.imguiCommandList.Get()
@@ -450,16 +455,20 @@ void Graphics::RenderFrame(Tracker::InstanceStruc& tInstance) {
 
 
 void Graphics::CreateBuffers(Tracker::InstanceStruc& tInstance) {
+
 	DirectX::ResourceUploadBatch upload(pDevice.Get());
+
 	upload.Begin();
 
 	for (auto& trackedModel : tInstance.tmodelLinkedObjects) {
 		auto& model = *tInstance.pTracker->GetModel(trackedModel.first);
+		pDevice->GetDeviceRemovedReason() >> chk;
 		if (model.vbuffer == nullptr) {
 			UINT vbuffSize = model.uData->sIndex.size() * sizeof(ModelData::Vertex);
 			{
 				const CD3DX12_HEAP_PROPERTIES heapProps{ D3D12_HEAP_TYPE_DEFAULT };
 				const auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(vbuffSize);
+				
 				pDevice->CreateCommittedResource(
 					&heapProps,
 					D3D12_HEAP_FLAG_NONE,
@@ -474,7 +483,7 @@ void Graphics::CreateBuffers(Tracker::InstanceStruc& tInstance) {
 					.StrideInBytes = (UINT)sizeof(ModelData::Vertex)
 				};
 			}
-
+			pDevice->GetDeviceRemovedReason() >> chk;
 			{
 				const CD3DX12_HEAP_PROPERTIES heapProps{ D3D12_HEAP_TYPE_UPLOAD };
 				const auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(vbuffSize);
@@ -486,7 +495,7 @@ void Graphics::CreateBuffers(Tracker::InstanceStruc& tInstance) {
 					nullptr, IID_PPV_ARGS(&model.uvbuffer)
 				) >> chk;
 			}
-
+pDevice->GetDeviceRemovedReason() >> chk;
 			UINT ibuffSize = model.uData->sIndex.size() * sizeof(uint32_t);
 
 			{
@@ -506,7 +515,7 @@ void Graphics::CreateBuffers(Tracker::InstanceStruc& tInstance) {
 					.Format = DXGI_FORMAT_R32_UINT
 				};
 			}
-
+pDevice->GetDeviceRemovedReason() >> chk;
 			{
 				const CD3DX12_HEAP_PROPERTIES heapProps{ D3D12_HEAP_TYPE_UPLOAD };
 				const auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(ibuffSize);
@@ -518,6 +527,7 @@ void Graphics::CreateBuffers(Tracker::InstanceStruc& tInstance) {
 					nullptr, IID_PPV_ARGS(&model.uibuffer)
 				) >> chk;
 			}
+			pDevice->GetDeviceRemovedReason() >> chk;
 			{
 				{
 
@@ -535,8 +545,9 @@ void Graphics::CreateBuffers(Tracker::InstanceStruc& tInstance) {
 
 
 			}
+			pDevice->GetDeviceRemovedReason() >> chk;
 			UpdBuffer(model, commandList, pDevice, commandAllocator, commandQueue);
-
+pDevice->GetDeviceRemovedReason() >> chk;
 
 		}
 		if (model.cbvwriteBuffer != nullptr) {
@@ -572,6 +583,7 @@ void Graphics::CreateBuffers(Tracker::InstanceStruc& tInstance) {
 			else {
 				CreateDDSTextureFromMemory(pDevice.Get(), upload, missing_dds, missing_dds_size, model.tbuffer.ReleaseAndGetAddressOf()) >> chk;
 			}
+			pDevice->GetDeviceRemovedReason() >> chk;
 			{
 				D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
 				srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
@@ -583,6 +595,7 @@ void Graphics::CreateBuffers(Tracker::InstanceStruc& tInstance) {
 				pDevice->CreateShaderResourceView(model.tbuffer.Get(), &srvDesc, model.srvCpuHandle);
 			}
 		}
+		pDevice->GetDeviceRemovedReason() >> chk;
 	}
 	upload.End(commandQueue.Get());
 }
@@ -620,7 +633,7 @@ void Graphics::UpdBuffer(RStorage::bmResource& model, Microsoft::WRL::ComPtr<ID3
 
 void Graphics::LoadResources(Tracker::InstanceStruc& tInstance)
 {
-	
+	assert(pDevice->GetDeviceRemovedReason() == S_OK);
 	commandAllocator->Reset() >> chk;
 	commandList->Reset(commandAllocator.Get(), nullptr) >> chk;
 	CreateBuffers(tInstance);
@@ -664,7 +677,7 @@ void Graphics::UpdateModel(Object* bm) {
 	if (!std::strstr(bm->model->uData->bdata[0].name.c_str(), "placeholder"))
 	for (auto& b : bm->model->uData->bdata) {
 		XMStoreFloat4x4(&b.finalTransform, XMLoadFloat4x4(&b.matrix) * XMLoadFloat4x4(&b.node->LocalTransform) * GlobITrans);
-	}
+	};
 	auto vdata = bm->model->uData->MappedVertices;
 	auto& idata = bm->model->uData->mIndex;
 	ModelData::Vertex* mappedVertexData = nullptr;
@@ -760,8 +773,9 @@ Graphics::~Graphics() {
 				WaitForSingleObject(fenceEvent, INFINITE);
 			}
 		}
-
+		#ifndef IMGUI_DISABLE
 		iGui.reset();
+		#endif
 		GetLastError() >> chk;
 		CloseHandle(fenceEvent);
 

@@ -1,10 +1,11 @@
 #include "Engine.h"
 
 Engine::Engine(Graphics& gfx, Keyboard& kbd, EngineTime& clock):
+    Clock(clock),
 	pGfx(gfx),
     cWorld(0,0,0,0),
-    kbd(kbd),
-    Clock(clock)
+    kbd(kbd)
+
 {
     phyx = std::make_unique<Physics>(updaterate);
     tracker = std::make_unique<Tracker>();
@@ -51,8 +52,7 @@ void Engine::iLoad() {
 
 
     //end model tracking. begin resource upload.    
-    pGfx.LoadPipeline();
-
+   
     loopMutex.lock();
     pauseLoop = true;
     loopMutex.unlock();
@@ -107,7 +107,7 @@ bool Engine::Update()
 {
     UControls();
     ucontrolClock.Mark();
-    loopVariable.notify_one();
+    loopVariable.notify_all();
     mAniUpdate();
     //Update rendered instances every frame
     pGfx.Update(renderedInstances);
@@ -144,8 +144,8 @@ bool Engine::Update()
              // Figure this out
              using namespace DirectX;
 
-             XMStoreFloat3(&freeCamPos, XMLoadFloat4(&pGfx.curCamera.rotation) * (move->forward * updateClock.Peek()) + XMLoadFloat3(&freeCamPos));
-             XMStoreFloat3(&freeCamPos, XMVector3Transform(XMLoadFloat4(&pGfx.curCamera.rotation), XMMatrixRotationAxis(XMLoadFloat4(&pGfx.curCamera.upDirection), XMConvertToRadians(90.0f))) * (move->left * updateClock.Peek()) + XMLoadFloat3(&freeCamPos));
+             XMStoreFloat3(&freeCamPos, XMLoadFloat4(&pGfx.curCamera.rotation) * (float)(move->forward * updateClock.Peek()) + XMLoadFloat3(&freeCamPos));
+             XMStoreFloat3(&freeCamPos, XMVector3Transform(XMLoadFloat4(&pGfx.curCamera.rotation), XMMatrixRotationAxis(XMLoadFloat4(&pGfx.curCamera.upDirection), XMConvertToRadians(90.0f))) * (float)(move->left * updateClock.Peek()) + XMLoadFloat3(&freeCamPos));
 
          }
          if (move->movestop) {

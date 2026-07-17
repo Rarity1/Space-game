@@ -1,6 +1,6 @@
 #include "DLLGui.h"
 
-
+#ifndef IMGUI_DISABLE
 imguid::imguid(HWND hWnd, ImGui_ImplDX12_InitInfo* DX12)
 {
 	ImGui_ImplWin32_EnableDpiAwareness();
@@ -95,3 +95,4 @@ LRESULT imguid::ImGuiProcHndl(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
 	return ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam);
 }
+#endif

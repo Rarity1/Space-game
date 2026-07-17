@@ -1,19 +1,18 @@
 #include "EngineTime.h"
 
-
-
+#ifdef __GLIBCXX__
+#endif
 
 EngineTime::EngineTime()
 {
 	using namespace std::chrono;
 
-	last = utc_clock::now();
+	last = std::chrono::utc_clock::now();
 	Mark();
 }
 double EngineTime::Mark() noexcept
 {
 	using namespace std::chrono;
-
 
 	//std::unique_lock<std::mutex>uLock(clockMTX);
 	//auto old = frame;

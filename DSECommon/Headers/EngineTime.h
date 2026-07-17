@@ -1,6 +1,7 @@
 #pragma once
 #include "CWin.h"
 #include <chrono>
+#include <mutex>
 
 class DLL EngineTime
 {

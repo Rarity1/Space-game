@@ -5,3 +5,5 @@
 /out/build/x64-debug
 /.vs
 /vcpkg_installed
+/out
+compile_commands.json

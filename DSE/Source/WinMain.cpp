@@ -3,6 +3,8 @@
 #include <string>
 #include <sstream>
 
+import std;
+
 //Main Class
 int CALLBACK WinMain(
 	HINSTANCE hInstance,

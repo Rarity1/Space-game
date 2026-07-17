@@ -1,7 +1,8 @@
 #pragma once
 #include "CWin.h"
 #include "RStorage.h"
-
+#include <atomic>
+#include <numeric>
 
 
 
@@ -114,7 +115,7 @@ class DLL Tracker {
 	friend class Engine;
 public: 
 	struct CBVData {
-		__declspec(align(16)) DirectX::XMFLOAT4X4 cbvMatrix;
+		alignas(16) DirectX::XMFLOAT4X4 cbvMatrix;
 		UINT Texture = 0;
 		//do not use
 		//UINT Padding[3];

@@ -1,12 +1,20 @@
-add_library(DSECommon SHARED Source/Engine.cpp Source/EngineTime.cpp Source/ePhysics.cpp Source/Exceptions.cpp Source/FrameResource.cpp Source/Graphics.cpp Source/GraphicsErrors.cpp Source/Input.cpp Source/Keyboard.cpp Source/ModelData.cpp Source/Mouse.cpp Source/ObjectTracking.cpp Source/RStorage.cpp Source/SrvAllocator.cpp Source/Threads.cpp)
-find_path(RAPIDXML_INCLUDE_DIRS "rapidxml/rapidxml.hpp")
-target_include_directories(DSECommon PUBLIC ${CMAKE_SOURCE_DIR}/DSECommon/Headers ${RAPIDXML_INCLUDE_DIRS})
-find_package(directx-headers CONFIG REQUIRED)
-find_package(directx12-agility CONFIG REQUIRED)
-find_package(directxmath CONFIG REQUIRED)
-find_package(directxtk12 CONFIG REQUIRED)
-find_package(OpenCL CONFIG REQUIRED)
-find_package(directx-dxc CONFIG REQUIRED)
-add_compile_definitions(DESCDLL=0 IMGUI_DISABLE_OBSOLETE_FUNCTIONS=0)
+add_library(DSECommon SHARED Source/Engine.cpp Source/EngineTime.cpp Source/ePhysics.cpp Source/Exceptions.cpp Source/FrameResource.cpp Source/Graphics.cpp Source/GraphicsErrors.cpp Source/Keyboard.cpp Source/ModelData.cpp Source/Mouse.cpp Source/ObjectTracking.cpp Source/RStorage.cpp Source/SrvAllocator.cpp Source/Threads.cpp)
 
-target_link_libraries(DSECommon ImGui Microsoft::DirectXMath Microsoft::DirectXTK12 Microsoft::DirectX-Headers Microsoft::DirectX-Guids Microsoft::DirectX12-Agility Microsoft::DirectXShaderCompiler OpenCL::OpenCL)
+
+target_include_directories(DSECommon PUBLIC ${CMAKE_SOURCE_DIR}/DSECommon/Headers ${DXCHeaders})
+
+
+get_target_property(DLLNAME DSECommon RUNTIME_OUTPUT_NAME)
+add_compile_definitions(DESCDLL=0 IMGUI_DISABLE_OBSOLETE_FUNCTIONS=0 DLLNAME="${DLLNAME}")
+set_target_properties(DSECommon PROPERTIES COMPILE_TAGS "-save-temps")
+
+find_library(dxgi NAMES libdxgi.a REQUIRED CONFIG)
+find_library(dxguid NAMES libdxguid.a REQUIRED CONFIG)
+find_library(d3d12 NAMES libd3d12.a REQUIRED CONFIG)
+
+find_package(DirectXMath REQUIRED CONFIG)
+find_package(DirectX-Headers REQUIRED CONFIG)
+find_package(DirectXTK12 REQUIRED CONFIG)
+
+target_link_libraries(DSECommon rapidxml ImGui OpenCL::OpenCL OpenCL::Headers OpenCL::HeadersCpp dxgi dxguid d3d12 DirectXMath DirectXTK12 DirectX-Headers ${dxclibs}/dxcompiler.lib )
+#dxclib

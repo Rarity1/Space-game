@@ -1,4 +1,8 @@
  #include "ModelData.h"
+ #include <fstream>
+ #include <numeric>
+ #include <sstream>
+ #include <cstring>
 
 ModelData::ModelData(std::string path, PARSE parse) :
 	Path(path)
@@ -352,7 +356,7 @@ void ModelData::ReadModel(std::unique_ptr<rapidxml::xml_document<char>> doc, std
 		});
 		auto isize = b.Indices.size();
 		if (isize > 0) {
-			XMStoreFloat3(&b.sphere.Center, XMLoadFloat3(&pos) / isize);
+			XMStoreFloat3(&b.sphere.Center, XMLoadFloat3(&pos) / (float)isize);
 		}
 		b.smallsphere = b.sphere;
 

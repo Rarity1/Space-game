@@ -2,21 +2,22 @@
 #include "CWin.h"
 #include "FrameResource.h"
 #include "EngineTime.h"
+#include "GraphicsErrors.h"
 #include "ObjectTracking.h"
-#include "DLLGui.h"
+#include <directx/d3dx12.h>
+#include <dxgi1_6.h>
 #include <dxcapi.h>
 #include <DDSTextureLoader.h>
+#include <condition_variable>
 #include <ResourceUploadBatch.h>
+#include <memory>
+#include <windef.h>
+#include <wrl/client.h>
 
 
 
 
-#include <dxgi1_6.h>
-#include <D3Dcompiler.h>
-#pragma comment(lib,"d3d12.lib")
-#pragma comment(lib,"dxgi.lib")
-#pragma comment(lib,"dxguid.lib")
-#pragma comment(lib,"d3dcompiler.lib")
+
 
 
 class DLL Graphics
@@ -29,7 +30,7 @@ public:
 		RECT wr = {};
 		std::mutex Mtx;
 	};
-	Graphics(HWND& hWnd, thRect& WindowRect);
+	Graphics( thRect& WindowRect);
 	Graphics(const Graphics&) = delete;
 	Graphics& operator=(const Graphics&) = delete;
 	~Graphics();
@@ -52,11 +53,13 @@ public:
 	void UpdateModel(Object* bm);
 	void RenderFrame(Tracker::InstanceStruc& tInstance);
 	void LoadResources(Tracker::InstanceStruc& tInstance);
-	void LoadPipeline();
+	void LoadPipeline(HWND& hWnd);
 	void UpdateLocalTransform(Object& bm);
 private:
 	const UINT bufferCount = 3;
+	#ifndef IMGUI_DISABLE
 	std::unique_ptr<imguid> iGui;
+	#endif
 	pCamera curCamera;
 	std::vector<std::string> loadbuff;
 
@@ -64,19 +67,22 @@ private:
 	void UpdateFrameResources();
 	std::condition_variable uFrameResource;
 	std::mutex frMutex;
+	#ifndef IMGUI_DISABLE
 	ImGui_ImplDX12_InitInfo ImGuiInfo;
+	#endif
 	DirectX::XMFLOAT4X4 fovPerspective;
 	float Max(float number, float maximum);
 	float Min(float minimum, float number);
 	float RotateHelper(float& rNumber);
 	float timesincestart;
 	void RecurLTrans(ModelData::Node* n, ModelData::Node* P);
+	Microsoft::WRL::ComPtr<ID3D12InfoQueue1> D3DInfoQueue;
+	GErrors Errors;
 	GErrors::CheckerToken chk;
 	//uint16_t& width;
 	//uint16_t& height;
 
 	thRect& windowResolution;
-	HWND& hwnd;
 	CD3DX12_RECT scissorRect;
 	CD3DX12_VIEWPORT viewport;
 	static const bool UseBundles = true;
@@ -163,10 +169,11 @@ private:
 				pDevice->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&DescHeap));
 			}
 
-			D3D12_DESCRIPTOR_HEAP_DESC desc = DescHeap->GetDesc();
+			D3D12_DESCRIPTOR_HEAP_DESC desc;
+			DescHeap->GetDesc(&desc);
 			HeapType = desc.Type;
-			HeapStartCpu = DescHeap->GetCPUDescriptorHandleForHeapStart();
-			HeapStartGpu = DescHeap->GetGPUDescriptorHandleForHeapStart();
+			DescHeap->GetCPUDescriptorHandleForHeapStart(&HeapStartCpu);
+			DescHeap->GetGPUDescriptorHandleForHeapStart(&HeapStartGpu);
 			HeapHandleIncrement = pDevice->GetDescriptorHandleIncrementSize(HeapType);
 			FreeIndices.reserve(desc.NumDescriptors);
 			FreeIndices.resize(desc.NumDescriptors);
@@ -203,7 +210,7 @@ private:
 			//uidHndls.erase(out_cpu_desc_handle.ptr);
 			uint64_t cpu_idx = (out_cpu_desc_handle.ptr - HeapStartCpu.ptr) / HeapHandleIncrement;
 			uint64_t gpu_idx = (out_gpu_desc_handle.ptr - HeapStartGpu.ptr) / HeapHandleIncrement;
-			_ASSERT(cpu_idx == gpu_idx);
+			//_ASSERT(cpu_idx == gpu_idx);
 			//allocatedHandles.erase(cpu_idx);
 			FreeIndices.push_back(cpu_idx);
 		}

@@ -1,8 +1,9 @@
 #pragma once
 #include "CWin.h"
 #include <rapidxml/rapidxml.hpp>
-#include <DirectXCollision.h>
 #include <DirectXMath.h>
+#include <DirectXCollision.h>
+
 
 class DLL ModelData{
 public:

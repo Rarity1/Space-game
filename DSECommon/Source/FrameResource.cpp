@@ -1,4 +1,3 @@
-#pragma once
 #include "FrameResource.h"
 #include "Graphics.h"
 
@@ -8,22 +7,20 @@ FrameResource::FrameResource(
     Graphics* Parent,
     uint16_t puFID
 ):
-    uFID(puFID),
-    fenceValue(0),
     rtvDescriptorHeap(Parent->rtvDescriptorHeap),
     dsvDescriptorHeap(Parent->dsvDescriptorHeap),
     pPipelineState(Parent->pPipelineState),
     pRootSignature(Parent->pRootSignature),
     pSamplerDescriptorHeap(Parent->pSamplerDescriptorHeap),
-    pCbvSrvDescriptorHeap(Parent->objectAllocator->DescHeap)
+    pCbvSrvDescriptorHeap(Parent->objectAllocator->DescHeap),
+    uFID(puFID),
+    fenceValue(0)
 {
 
     rtvDescriptorSize = Parent->rtvDescriptorSize;
     samplerDescriptorSize = Parent->pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
-
-    rtv = CD3DX12_CPU_DESCRIPTOR_HANDLE(rtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart(), uFID, rtvDescriptorSize);
-    dsv = CD3DX12_CPU_DESCRIPTOR_HANDLE(dsvDescriptorHeap->GetCPUDescriptorHandleForHeapStart(), uFID, Parent->pDevice->GetDescriptorHandleIncrementSize(
-        D3D12_DESCRIPTOR_HEAP_TYPE_DSV));
+    rtv = CD3DX12_CPU_DESCRIPTOR_HANDLE(*rtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart(&rtv), uFID, rtvDescriptorSize);
+    dsv = CD3DX12_CPU_DESCRIPTOR_HANDLE(*dsvDescriptorHeap->GetCPUDescriptorHandleForHeapStart(&dsv), uFID, Parent->pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV));
     Parent->swapChain->GetBuffer(uFID, IID_PPV_ARGS(&renderTarget)) >> chk;
     Parent->pDevice->CreateRenderTargetView(renderTarget.Get(), nullptr, rtv);
     //DSV
@@ -185,11 +182,9 @@ void FrameResource::PopulateCommandList(CMDListInfo& cmdLi)
 
         pCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-        pCommandList->SetGraphicsRootDescriptorTable(2, pSamplerDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
+        pCommandList->SetGraphicsRootDescriptorTable(2, *pSamplerDescriptorHeap->GetGPUDescriptorHandleForHeapStart(&grdt));
         pCommandList->SetPipelineState(pPipelineState.Get());
 
-
-        UINT indexC = 0;
         for (auto& tModels : cmdLi.Instance->tmodelLinkedObjects) {
             auto model = cmdLi.Instance->pTracker->GetModel(tModels.first);
             pCommandList->IASetIndexBuffer(&model->ibuffView);

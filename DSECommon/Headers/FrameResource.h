@@ -3,8 +3,9 @@
 #include "RStorage.h"
 #include "ObjectTracking.h"
 
+class Graphics;
 
-#define NAME_D3D12_OBJECT(x) SetName((x).Get(), L#x)
+#define NAME_D3D12_OBJECT(x) SetName((x).Get(), (wchar_t*)#x)
 inline void SetName(ID3D12Object* pObject, LPCWSTR name)
 {
     pObject->SetName(name);
@@ -31,6 +32,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> depthBuffer;
     CD3DX12_CPU_DESCRIPTOR_HANDLE rtv;
     CD3DX12_CPU_DESCRIPTOR_HANDLE dsv;
+    D3D12_GPU_DESCRIPTOR_HANDLE grdt;
     uint16_t uFID = 0;
     Microsoft::WRL::ComPtr<ID3D12CommandAllocator> commandAllocator;
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> pCommandList;

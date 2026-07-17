@@ -19,6 +19,9 @@
 ******************************************************************************************/
 #pragma once
 #include "CWin.h"
+#include <bitset>
+#include <optional>
+#include <queue>
 
 class DLL Keyboard
 {

@@ -1,17 +1,20 @@
 #include "GraphicsErrors.h"
+#include <format>
+#include <ranges>
+#include <string>
 
 
 
-void operator>>(GErrors::HrGrabber g, GErrors::CheckerToken)
+void operator>>(GErrors::HrGrabber Grabber, GErrors::CheckerToken)
 {
-	if (FAILED(g.hr)) {
+	if (FAILED(Grabber.hr)) {
 		// get error description as narrow string with crlf removed
 		char* pMsgBuf = nullptr;
 		// windows will allocate memory for err string and make our pointer point to it
-		const DWORD nMsgLen = FormatMessage(
+		FormatMessage(
 			FORMAT_MESSAGE_ALLOCATE_BUFFER |
 			FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-			nullptr, g.hr, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+			nullptr, Grabber.hr, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
 			reinterpret_cast<LPSTR>(&pMsgBuf), 0, nullptr
 		);
 
@@ -25,10 +28,9 @@ void operator>>(GErrors::HrGrabber g, GErrors::CheckerToken)
 			std::ranges::views::filter([](char c) {return c != '\r'; }) |
 			std::ranges::to<std::basic_string>();
 		
-		throw std::runtime_error{
-			std::format("Error: {}\n   {}({})",
-				errorString, g.loc.file_name(), g.loc.line())
-		};
+		printf("ERROR: %s %s %u\n",
+				errorString.c_str(), Grabber.loc.file_name(), Grabber.loc.line());
+		throw errorString;
 	}
 };
 

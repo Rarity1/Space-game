@@ -1,7 +1,10 @@
 #pragma once
-#include "EngineTime.h"
 #include "CWin.h"
-#include "Exceptions.h"
+#include <functional>
+#include <thread>
+#include <condition_variable>
+#include <map>
+#include "EngineTime.h"
 
 //Rewrite using futures
 class DLL THREADS {

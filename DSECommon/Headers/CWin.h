@@ -17,16 +17,14 @@
 *	You should have received a copy of the GNU General Public License					  *
 *	along with The Chili Direct3D Engine.  If not, see <http://www.gnu.org/licenses/>.    *
 ******************************************************************************************/
-#pragma once
 
 // target Windows 7 or later
-#define _WIN32_WINNT 0x0601
-#include <sdkddkver.h>
+
 // The following #defines disable a bunch of unused windows stuff. If you 
 // get weird errors when trying to do some windows stuff, try removing some
 // (or all) of these defines (it will increase build time though).
 #ifndef FULL_WINTARD
-#define WIN32_LEAN_AND_MEAN
+/*
 #define NOGDICAPMASKS
 #define NOSYSMETRICS
 #define NOMENUS
@@ -59,12 +57,19 @@
 #define NOPROXYSTUB
 #define NOIMAGE
 #define NOTAPE
+*/
 #endif
-
 #define NOMINMAX
-
 #define STRICT
+#pragma once
 
+#include <windows.h>
+#include <string>
+#include <vector>
+#include <array>
+#include <memory>
+#include <cstdint>
+#include <sdkddkver.h>
 
 #ifdef DESCDLL
 #define DLL __declspec( dllexport )
@@ -83,30 +88,62 @@
 #endif
 #endif
 
-#include <sstream>
-#include <utility>
 #include <wrl.h>
-#include <exception>
-#include <string>
-#include <source_location>
+#include <Support/Errorcodes.h>
 
-#include <fstream>
 
-#include <iostream>
-#include <cmath>
-#include <mutex>
-#include <functional>
-#include <numbers>
-#include <numeric>
-#include <ranges>
-#include <memory>
-#include <map>
-#include <queue>
-#include <bitset>
-#include <optional>
-#include <random>
-#include <filesystem>
 
-#include <complex>
+#ifdef __MINGW32__
+constexpr uint8_t nybble_from_hex(char c) {
+  return ((c >= '0' && c <= '9')
+              ? (c - '0')
+              : ((c >= 'a' && c <= 'f')
+                     ? (c - 'a' + 10)
+                     : ((c >= 'A' && c <= 'F') ? (c - 'A' + 10)
+                                               : /* Should be an error */ -1)));
+}
+
+constexpr uint8_t byte_from_hex(char c1, char c2) {
+  return nybble_from_hex(c1) << 4 | nybble_from_hex(c2);
+}
+
+constexpr uint8_t byte_from_hexstr(const char str[2]) {
+  return nybble_from_hex(str[0]) << 4 | nybble_from_hex(str[1]);
+}
+
+constexpr GUID guid_from_string(const char str[37]) {
+  return GUID{static_cast<uint32_t>(byte_from_hexstr(str)) << 24 |
+                  static_cast<uint32_t>(byte_from_hexstr(str + 2)) << 16 |
+                  static_cast<uint32_t>(byte_from_hexstr(str + 4)) << 8 |
+                  byte_from_hexstr(str + 6),
+              static_cast<uint16_t>(
+                  static_cast<uint16_t>(byte_from_hexstr(str + 9)) << 8 |
+                  byte_from_hexstr(str + 11)),
+              static_cast<uint16_t>(
+                  static_cast<uint16_t>(byte_from_hexstr(str + 14)) << 8 |
+                  byte_from_hexstr(str + 16)),
+              {byte_from_hexstr(str + 19), byte_from_hexstr(str + 21),
+               byte_from_hexstr(str + 24), byte_from_hexstr(str + 26),
+               byte_from_hexstr(str + 28), byte_from_hexstr(str + 30),
+               byte_from_hexstr(str + 32), byte_from_hexstr(str + 34)}};
+}
+
+#define CROSS_PLATFORM_UUIDOF(interface, spec)                                 \
+  struct interface;                                                            \
+  template <> inline constexpr const GUID &__mingw_uuidof<interface>() {       \
+    static const IID _IID = guid_from_string(spec);                            \
+    return _IID;                                                               \
+}
+
+#endif
+
+
+
+
+#ifndef CROSS_PLATFORM_UUIDOF
+// Warning: This macro exists in WinAdapter.h as well
+#define CROSS_PLATFORM_UUIDOF(interface, spec)                                 \
+  struct __declspec(uuid(spec)) interface;
+#endif
 
 

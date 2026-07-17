@@ -2,117 +2,85 @@
 
 
 
-Window::WindowClass Window::WindowClass::wndClass;
-
-Window::WindowClass::WindowClass() :
-	hInst(GetModuleHandle(nullptr))
-{
-	WNDCLASSEX wc = {
-		.cbSize = sizeof(wc),
-		.style = CS_HREDRAW | CS_VREDRAW,
-		.lpfnWndProc = HandleMsgSetup,
-		.cbClsExtra = 0,
-		.cbWndExtra = 0,
-		.hInstance = hInst,
-		.hIcon = static_cast<HICON>(LoadImage(
-		hInst, MAKEINTRESOURCE(IDI_ICON1),
-		IMAGE_ICON, 32, 32, 0
-	)),
-		.hCursor = nullptr,
-		.hbrBackground = CreateSolidBrush(0),
-		.lpszMenuName = nullptr,
-		.lpszClassName = GetName(),
-		.hIconSm = static_cast<HICON>(LoadImage(
-		hInst, MAKEINTRESOURCE(IDI_ICON1),
-		IMAGE_ICON, 16, 16, 0
-	))
+static Window * Context;
+class StaticFunc{
+	friend class Window;
+	static LRESULT Function(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam){
+		return Context->HandleMsg(hWnd, msg, wParam, lParam);
 	};
+};
 
-	RegisterClassEx(&wc);
-}
+Window::Window(uint16_t w, uint16_t h, const char *name, HINSTANCE hInstance)
+    : width(w), height(h) {
 
-Window::WindowClass::~WindowClass()
-{
-	UnregisterClassA(wndClassName, GetInstance());
-}
+  std::unique_lock loc(winWait);
 
-const char* Window::WindowClass::GetName() noexcept
-{
-	return wndClassName;
-}
+  auto Name = "WEEEE";
+  // calculate window size based on desired client region size
+  WindowRect.wr = RECT{0, 0, width, height};
+  pGfx = std::make_unique<Graphics>(WindowRect);
+  // create window & get hWnd
+  Context = this;
+  WNDCLASSEX wc = {
+      .cbSize = sizeof(wc),
+      .style = CS_HREDRAW | CS_VREDRAW,
+      .lpfnWndProc = StaticFunc::Function,
+      .cbClsExtra = 0,
+      .cbWndExtra = 0,
+      .hInstance = hInstance,
+      .hIcon = static_cast<HICON>(LoadImage(
+          hInstance, MAKEINTRESOURCE(IDI_ICON1), IMAGE_ICON, 32, 32, 0)),
+      .hCursor = nullptr,
+      .hbrBackground = CreateSolidBrush(0),
+      .lpszMenuName = nullptr,
+      .lpszClassName = Name,
+      .hIconSm = static_cast<HICON>(LoadImage(
+          hInstance, MAKEINTRESOURCE(IDI_ICON1), IMAGE_ICON, 16, 16, 0))};
+  assert(RegisterClassEx(&wc));
+  auto WindowStyle = WS_MINIMIZEBOX | WS_SYSMENU | WS_CAPTION | WS_VISIBLE;
+  AdjustWindowRect(&WindowRect.wr, WindowStyle, FALSE);
+  hWnd = CreateWindow(Name, "Game Window", WindowStyle, CW_USEDEFAULT, CW_USEDEFAULT,
+                   WindowRect.wr.right - WindowRect.wr.left,
+                   WindowRect.wr.bottom - WindowRect.wr.top, nullptr, nullptr,
+                   GetModuleHandle(NULL), this);
 
-HMODULE Window::WindowClass::GetInstance() noexcept
-{
-	return wndClass.hInst;
-}
 
-Window::Window(uint16_t w, uint16_t h, const char* name, std::atomic<bool>& Alive)
-	:
-	width(w),
-	height(h)
-{
-	windowThread = std::thread([this, name, &Alive] {
-		std::unique_lock loc(winWait);
-		auto WindowStyle = WS_MINIMIZEBOX | WS_SYSMENU | WS_CAPTION | WS_VISIBLE ;
-		// calculate window size based on desired client region size
-		WindowRect.wr = RECT{ 0, 0, width, height };
-		AdjustWindowRect(&WindowRect.wr, WindowStyle, FALSE);
+  (ShowWindow(hWnd, SW_SHOWDEFAULT));
+  UpdateWindow(hWnd);
+  pGfx->LoadPipeline(hWnd);
+  sEng = std::make_unique<Engine>(*pGfx, kbd, clock);
 
-		pGfx = std::make_unique<Graphics>(hWnd, WindowRect);
-		sEng = std::make_unique<Engine>(*pGfx, kbd, clock);
+  // newly created windows start off as hidden
 
+  std::atomic<bool> Alive(true);
+  loc.unlock();
+  std::unique_lock exelock(upLock);
+  sEng->iLoad();
 
-		// create window & get hWnd
-		hWnd = CreateWindow(
-			WindowClass::GetName(),
-			name,
-			WindowStyle,
-			CW_USEDEFAULT, CW_USEDEFAULT, WindowRect.wr.right - WindowRect.wr.left, WindowRect.wr.bottom - WindowRect.wr.top,
-			nullptr, nullptr, WindowClass::GetInstance(), this
-		);
-
-		// newly created windows start off as hidden
-		ShowWindow(hWnd, SW_SHOWDEFAULT);
-		UpdateWindow(hWnd);
-
-		Alive.store(true);
-		loc.unlock();
-		winReady.notify_all();
-		exeWinLoop(Alive);
-	
-	});
-
+  // Move Message processing to own thread
+  while (Alive.load()) {
+    // windowTimer.notify_all();
+    // windowTimer.wait(exelock);
+    sEng->Update();
+    if (ProcessMessages() == WM_QUIT) {
+      Alive.store(false);
+    }
+  }
+  exelock.unlock();
 }
 
 Window::~Window()
 {
-	windowThread.join();
+	//windowThread.join();
 	pGfx.reset();
 	DestroyWindow(hWnd);
 }
 
 void Window::SetTitle(const std::string& title)
 {
-	if (SetWindowTextA(hWnd, title.c_str()) == 0)
-	{
-		throw CHWND_LAST_EXCEPT();
-	}
-}
-void Window::Update() {
-
-	windowTimer.notify_all();
-
+	assert(SetWindowTextA(hWnd, title.c_str()) == 0);
 }
 
-void Window::exeWinLoop(std::atomic<bool>& Alive) {
-	std::unique_lock exelock(upLock);
-	while (Alive.load()) {
-		windowTimer.wait(exelock);
-		if (ProcessMessages() == WM_QUIT) {
-			Alive.store(false); 
-		}
-	}
-}
 
 std::optional<WPARAM> Window::ProcessMessages() {
 	MSG msg = tagMSG{ nullptr, WM_NULL };
@@ -130,28 +98,6 @@ std::optional<WPARAM> Window::ProcessMessages() {
 }
 
 
-LRESULT CALLBACK Window::HandleMsgSetup(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
-{
-	//Use create parameter passed in from CreateWindow() to store the class pointer for the window.
-	if (msg == WM_NCCREATE)
-	{
-		//Extract PTR to window class from creation data
-		const CREATESTRUCT* const pCreate = reinterpret_cast<CREATESTRUCT*>(lParam);
-		Window* const pWnd = static_cast<Window*>(pCreate->lpCreateParams);
-		//Set the WinAPI-managed user data to store ptr to window class
-		SetWindowLongPtr(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(pWnd));
-		//Set message proc to normal (non-setup) handler now that setup is finished
-		SetWindowLongPtr(hWnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(&HandleMsgThunk));
-		//Forward message to window class handler
-		return pWnd->HandleMsg(hWnd, msg, wParam, lParam);
-	}
-}
-LRESULT CALLBACK Window::HandleMsgThunk(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
-{
-	//Retrieve ptr to window class
-	//Forward message to window class handler
-	return reinterpret_cast<Window*>(GetWindowLongPtr(hWnd, GWLP_USERDATA))->HandleMsg(hWnd, msg, wParam, lParam);
-}
 LRESULT Window::HandleMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
 
@@ -165,6 +111,7 @@ LRESULT Window::HandleMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	case WM_DESTROY:
 		PostQuitMessage(0);
 		return 0;
+
 	case WM_KILLFOCUS:
 		kbd.ClearState();
 		break;
@@ -253,59 +200,10 @@ LRESULT Window::HandleMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		break;
 		//End Mouse Messaging
 	}
-
 	}
+	#ifndef IMGUI_DISABLE
 	pGfx->iGui->ImGuiProcHndl(hWnd, msg, wParam, lParam);
+	#endif
 	return DefWindowProc(hWnd, msg, wParam, lParam);
 }
 
-//Window Exception
-std::string Window::Exception::TranslateErrorCode(HRESULT hr) noexcept
-{
-	char* pMsgBuf = nullptr;
-	// windows will allocate memory for err string and make our pointer point to it
-	const DWORD nMsgLen = FormatMessage(
-		FORMAT_MESSAGE_ALLOCATE_BUFFER |
-		FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-		nullptr, hr, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-		reinterpret_cast<LPSTR>(&pMsgBuf), 0, nullptr
-	);
-	// 0 string length returned indicates a failure
-	if (nMsgLen == 0)
-	{
-		return "Unidentified error code";
-	}
-	// copy error string from windows-allocated buffer to std::string
-	std::string errorString = pMsgBuf;
-	// free windows buffer
-	LocalFree(pMsgBuf);
-	return errorString;
-}
-Window::HrException::HrException(HRESULT hr, int line, const char* file) noexcept
-	:
-	Exception(line, file),
-	hr(hr)
-{
-}
-const char* Window::HrException::what() const noexcept
-{
-	std::ostringstream oss;
-	oss << GetType() << '\n'
-		<< "[Error Code] 0x" << std::hex << std::uppercase << GetErrorCode() << '\n'
-		<< "[Description] " << GetErrorDescription() << '\n'
-		<< GetOriginString();
-	whatBuffer = oss.str();
-	return whatBuffer.c_str();
-}
-const char* Window::HrException::GetType() const noexcept
-{
-	return "Demo Window Exception";
-}
-HRESULT Window::HrException::GetErrorCode() const noexcept
-{
-	return hr;
-}
-std::string Window::HrException::GetErrorDescription() const noexcept
-{
-	return Exception::TranslateErrorCode(hr);
-}

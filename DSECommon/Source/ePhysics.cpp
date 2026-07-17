@@ -1,22 +1,23 @@
 #include "ePhysics.h"
-
-
+#include <fstream>
+#include <Exceptions.h>
 //#pragma OPENCL EXTENSION cl_khr_d3d11_sharing : enable
 
 
 Physics::Physics(const int& UpdateRate) :
-    GConst(6.67430 * pow(10, -11)),
-    urate(UpdateRate)
+    urate(UpdateRate),
+    GConst(6.67430 * pow(10, -11))
+
 {
     coreCount = std::thread::hardware_concurrency();
     std::vector<cl::Platform> platforms;
     cl::Platform::get(&platforms);
 
-    _ASSERT(platforms.size() > 0);
+    assert(platforms.size() > 0);
     auto& platform = platforms.front();
     platform.getDevices(CL_DEVICE_TYPE_GPU, &devices);
 
-    _ASSERT(devices.size() > 0);
+    assert(devices.size() > 0);
 
     auto& device = devices.front();
     auto vendor = device.getInfo<CL_DEVICE_VENDOR>();
@@ -29,8 +30,8 @@ Physics::Physics(const int& UpdateRate) :
 
 
     //Replace this with something that works in release
-    _ASSERT(phys ? true : false);
-    _ASSERT(sphr ? true : false);
+    assert(phys ? true : false);
+    assert(sphr ? true : false);
 
     std::string p(std::istreambuf_iterator<char>{phys}, {});
     std::string s(std::istreambuf_iterator<char>{sphr}, {});
@@ -42,7 +43,7 @@ Physics::Physics(const int& UpdateRate) :
     //Add error checking here
     //Sphere.build({ device });
     auto error = FullColl.build({ device });
-    _ASSERT(error == CL_SUCCESS);
+    assert(error == CL_SUCCESS);
 
 
     queue = cl::CommandQueue{ context, device };
@@ -200,8 +201,8 @@ Physics::WORKINDI Physics::ProcCollide(Object& obj, Object& obj2,  DirectX::XMFL
     
     int indexCount1 = 0;
     int indexCount2 = 0;
-    std::vector<std::vector<int>> b1ind(WData.size(), {});
-    std::vector<std::vector<int>> b2ind(WData.size(), {});
+    std::vector<std::vector<int>> b1ind(WData.size());
+    std::vector<std::vector<int>> b2ind(WData.size());
     std::vector<UINT> offset1(WData.size());
     std::vector<UINT> offset2(WData.size());
     std::vector<std::atomic<bool>> objCheck1(objudat->MappedVertices.size());
@@ -417,16 +418,16 @@ void Physics::pCollison(Tracker::InstanceStruc& tInstance) {
 
 
 
-                        size_t wsize[2] = { WorkIndi.wWorkCount, WorkIndi.tWorkCount };
-                        size_t offsize[2] = { 0, WorkIndi.wWorkCount };
+                        size_t wsize[2] = { (size_t)WorkIndi.wWorkCount, (size_t)WorkIndi.tWorkCount };
+                        size_t offsize[2] = { 0, (size_t)WorkIndi.wWorkCount };
                         auto error = CL_SUCCESS;
 
                         error = clEnqueueNDRangeKernel(tQueue.get(), kerns.get(), 2, offsize, wsize, nullptr, 0, NULL, NULL);
-                        _ASSERT(error == CL_SUCCESS);
+                        assert(error == CL_SUCCESS);
 
                         tQueue.finish();
                         error = tQueue.enqueueReadBuffer(rbuffer, CL_TRUE, 0, sizeof(RETURNDATA) * retdata[i].size(), retdata[i].data());
-                        _ASSERT(error == CL_SUCCESS);
+                        assert(error == CL_SUCCESS);
                         tQueue.finish();
                         auto& retdat = retdata[i];
                         auto& obj2 = *wCollModels[i].obj2;
@@ -445,7 +446,7 @@ void Physics::pCollison(Tracker::InstanceStruc& tInstance) {
                         int coutn = 0;
                         for (auto& r : retdat) {
                             if (r.dist[0] != 0 && r.dist[1] != 0) {
-                                _ASSERT(r.dist[1] != 69 && r.dist[0] != 69);
+                                assert(r.dist[1] != 69 && r.dist[0] != 69);
 
                                 //XMFLOAT3 isectDir;
 
@@ -502,8 +503,8 @@ void Physics::pCollison(Tracker::InstanceStruc& tInstance) {
                             massScal1 = massScal1 < 0.00001 ? 0 : massScal1;
                             massScal2 = massScal2 < 0.00001 ? 0 : massScal2;
 
-                            XMStoreFloat3(&MoveD1, (XMLoadFloat3(&MoveD1) / coutn) * massScal2);
-                            XMStoreFloat3(&MoveD2, (XMLoadFloat3(&MoveD2) / coutn) * massScal1);
+                            XMStoreFloat3(&MoveD1, (XMLoadFloat3(&MoveD1) / (float)coutn) * massScal2);
+                            XMStoreFloat3(&MoveD2, (XMLoadFloat3(&MoveD2) / (float)coutn) * massScal1);
 
                             XMFLOAT3 Zero(0, 0, 0);
 

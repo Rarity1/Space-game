@@ -2,9 +2,5 @@ add_library(ImGui SHARED Source/DLLGui.cpp Source/imgui.cpp Source/imgui_demo.cp
 target_include_directories(ImGui PUBLIC ${CMAKE_SOURCE_DIR}/ImGui/Headers)
 add_compile_definitions(DESCGDLL=0 IMGUI_DISABLE_OBSOLETE_FUNCTIONS=0)
 
-find_package(directx-headers CONFIG REQUIRED)
-find_package(directx12-agility CONFIG REQUIRED)
-find_package(directxmath CONFIG REQUIRED)
-find_package(directxtk12 CONFIG REQUIRED)
 
-target_link_libraries(ImGui Microsoft::DirectXMath Microsoft::DirectXTK12 Microsoft::DirectX-Headers Microsoft::DirectX-Guids Microsoft::DirectX12-Agility)
+target_link_libraries(ImGui dxgi d3d12 DirectX-Headers DirectXMath DirectX-Guids DirectXTK12)

@@ -1,6 +1,7 @@
 #pragma once
 #include "CWin.h"
-
+#include <string>
+#include <iostream>
 
 class DLL Exceptions : public std::exception
 {
@@ -27,4 +28,16 @@ public:
 		}
 		return c;
 	}
+};
+
+class DLL HrException : public Exceptions {
+public:
+  HrException(HRESULT hr, int line, const char *file) noexcept;
+  const char *what() const noexcept override;
+  const char *GetType() const noexcept override;
+  HRESULT GetErrorCode() const noexcept;
+  std::string GetErrorDescription() const noexcept;
+  std::string TranslateErrorCode(HRESULT hr) const noexcept;
+private:
+  HRESULT hr;
 };

@@ -2,7 +2,7 @@
 #include "imgui.h"
 #include "imgui_impl_win32.h"
 #include "imgui_impl_dx12.h"
-#include <directx/d3dx12.h>
+
 #include <wrl/client.h>
 #include <vector>
 
@@ -11,9 +11,8 @@
 #else
 #define DLLG __declspec( dllimport )
 #endif
-
+#ifndef IMGUI_DISABLE
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
-
 
 class DLLG imguid {
 public:
@@ -24,3 +23,4 @@ public:
 	LRESULT ImGuiProcHndl(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 };
 
+#endif

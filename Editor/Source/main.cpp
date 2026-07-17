@@ -1,16 +1,18 @@
+
 #include "Window.h"
-#include "App.h"
-#include <string>
-#include <sstream>
+#include <libloaderapi.h>
+#include <minwindef.h>
 
 
-
-int gameMain(HINSTANCE hInstance,
+//Main Class
+#if defined(_WIN32)
+int CALLBACK WinMain(HINSTANCE hInstance,
 	HINSTANCE hPrevInstance,
 	LPSTR lpCmdLine,
-	int nCmdShow) {
+	int nCmdShow){
 	try {
-		return App{}.Go();
+		Window APP(1920, 1080, "Game Window", hInstance);
+		return 0;
 	}
 	catch (const Exceptions& e)
 	{
@@ -26,30 +28,18 @@ int gameMain(HINSTANCE hInstance,
 	}
 	return -1;
 }
-
-//Main Class
-#ifdef _WIN32
-int CALLBACK WinMain(HINSTANCE hInstance,
-	HINSTANCE hPrevInstance,
-	LPSTR lpCmdLine,
-	int nCmdShow) {
-	return gameMain(hInstance,
-		hPrevInstance,
-		lpCmdLine,
-		nCmdShow);
-}
 #else
 
-int CALLBACK main(
-	HINSTANCE hInstance,
-	HINSTANCE hPrevInstance,
-	LPSTR lpCmdLine,
-	int nCmdShow)
+int main(int argc, char* argv[])
 {
-	return gameMain(hInstance,
-		hPrevInstance,
-		lpCmdLine,
-		nCmdShow);
+try{
+	return App{}.Go();
+}catch(const Exceptions& e){
+		MessageBoxA(nullptr, e.what(), "Standard Exception", MB_OK | MB_ICONEXCLAMATION);
+}catch (...){
+		MessageBoxA(nullptr, "No details available", "Unknown Exception", MB_OK | MB_ICONEXCLAMATION);
+}
+return -1;
 }
 #endif // _WIN32
 
