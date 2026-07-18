@@ -20,8 +20,9 @@ public:
 	Window(const Window&) = delete;
 	Window& operator=(const Window&) = delete;
 	void SetTitle(const std::string& title);
-	std::optional<WPARAM> ProcessMessages();
 private:
+  	std::atomic<bool> Alive = true;
+	MSG msg = tagMSG{ nullptr, WM_NULL };
 	std::mutex upLock;
 	std::mutex downLock;
 	bool waitbl = false;

@@ -26,7 +26,6 @@
 			"problemMatcher": [],
 			"detail": "CMake build task",
 			"dependsOn": [
-				"Configure Debug"
 			]
 		}
 	]

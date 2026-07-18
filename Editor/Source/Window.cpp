@@ -1,4 +1,5 @@
 #include "Window.h"
+#include <windows.h>
 
 
 
@@ -52,20 +53,20 @@ Window::Window(uint16_t w, uint16_t h, const char *name, HINSTANCE hInstance)
 
   // newly created windows start off as hidden
 
-  std::atomic<bool> Alive(true);
+
   loc.unlock();
   std::unique_lock exelock(upLock);
   sEng->iLoad();
+  std::thread UpdateThread([this](){while(Alive.load())sEng->Update();});
+  while (GetMessage(&msg, NULL, 0, 0)) {
+    // Translate Message will post auxilliary WM_CHAR messages from key msgs
+    TranslateMessage(&msg);
+    DispatchMessage(&msg);
+  }
+      Alive.store(false);
 
   // Move Message processing to own thread
-  while (Alive.load()) {
-    // windowTimer.notify_all();
-    // windowTimer.wait(exelock);
-    sEng->Update();
-    if (ProcessMessages() == WM_QUIT) {
-      Alive.store(false);
-    }
-  }
+  UpdateThread.join();
   exelock.unlock();
 }
 
@@ -82,20 +83,7 @@ void Window::SetTitle(const std::string& title)
 }
 
 
-std::optional<WPARAM> Window::ProcessMessages() {
-	MSG msg = tagMSG{ nullptr, WM_NULL };
-	while (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {
-		//Translate Message will post auxilliary WM_CHAR messages from key msgs
-		if (msg.message == WM_QUIT) {
-			return msg.message;
-		}
 
-		TranslateMessage(&msg);
-		DispatchMessage(&msg);
-
-	}
-	return msg.message;
-}
 
 
 LRESULT Window::HandleMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
