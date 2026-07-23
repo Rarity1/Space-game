@@ -1,43 +1,40 @@
 {
-    "version": 9,
-    "cmakeMinimumRequired": {
-        "major": 4,
-        "minor": 2,
-        "patch": 1
-    },
-    "configurePresets": [
-        {
-            "name": "debug",
-            "displayName": "G++",
-            "description": "",
-            "generator": "Ninja",
-            "binaryDir": "${sourceDir}/out/build/${presetName}",
-            "cacheVariables": {
-                "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}",
-                "CMAKE_C_COMPILER": "C:\\msys64\\ucrt64\\bin\\gcc.exe",
-                "CMAKE_CXX_COMPILER": "C:\\msys64\\ucrt64\\bin\\g++.exe",
-                "CMAKE_CXX_FLAGS": "-DIMGUI_DISABLE=1 -D_DEBUG=1 -D_WIN32_WINNT=0x0A00 -DNTDDI_VERSION=0x0A000007",
-                "CMAKE_BUILD_TYPE": "Debug",
-                "CMAKE_PROJECT_INCLUDE": "${sourceDir}/cmake/PredefinedParams.cmake;",
-                "DXHEADERS_INSTALL":"true",
-                "SPIRV_BUILD_TESTS": "OFF",
-                "HLSL_INCLUDE_TESTS": "OFF",
-                "LLVM_INCLUDE_TESTS": "OFF",
-                "LLVM_ENABLE_EH": "OFF",
-                "LLVM_ENABLE_RTTI": "OFF",
-                "BUILD_TESTING": "OFF",
-                "CMAKE_EXPORT_COMPILE_COMMANDS": true
-            }
-        }
-    ],
-    "buildPresets": [
-        {
-            "name": "Debug",
-            "description": "Debug with g++",
-            "configurePreset": "debug",
-            "targets": [
-                "Editor"
-            ]
-        }
-    ]
+   "version": 9,
+   "cmakeMinimumRequired": {
+      "major": 4,
+      "minor": 2,
+      "patch": 1
+   },
+   "configurePresets": [
+      {
+         "name": "debug",
+         "displayName": "G++",
+         "description": "",
+         "generator": "Ninja",
+         "binaryDir": "${sourceDir}/out/build/${presetName}",
+         "cacheVariables": {
+            "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}",
+            "CMAKE_C_COMPILER": "C:\\msys64\\ucrt64\\bin\\gcc.exe",
+            "CMAKE_CXX_COMPILER": "C:\\msys64\\ucrt64\\bin\\g++.exe",
+            "CMAKE_CXX_FLAGS": "-mcrtdll=ucrt -D_DEBUG=1 -D_WIN32_WINNT=0x0A00 -DNTDDI_VERSION=0x0A000007",
+            "CMAKE_BUILD_TYPE": "Debug",
+            "CMAKE_PROJECT_INCLUDE": "${sourceDir}/cmake/PredefinedParams.cmake;",
+            "DXHEADERS_INSTALL": "true",
+            "SPIRV_BUILD_TESTS": "OFF",
+            "HLSL_INCLUDE_TESTS": "OFF",
+            "BUILD_TESTING": "OFF",
+            "CMAKE_EXPORT_COMPILE_COMMANDS": true
+         }
+      }
+   ],
+   "buildPresets": [
+      {
+         "name": "Debug",
+         "description": "Debug with g++",
+         "configurePreset": "debug",
+         "targets": [
+            "Editor"
+         ]
+      }
+   ]
 }

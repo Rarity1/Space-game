@@ -6,7 +6,7 @@ struct PSInput
 Texture2D simpleTexture : register(t0);
 SamplerState ssampler : register(s0);
 
-float4 main(PSInput input) : SV_TARGET
+float4 PSmain(PSInput input) : SV_TARGET
 {
 
    return simpleTexture.Sample(ssampler, input.texPos);

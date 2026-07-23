@@ -2,11 +2,12 @@
 
 Engine::Engine(Graphics& gfx, Keyboard& kbd, EngineTime& clock):
     Clock(clock),
-	pGfx(gfx),
+	  pGfx(gfx),
     cWorld(0,0,0,0),
     kbd(kbd)
 
 {
+    
     phyx = std::make_unique<Physics>(updaterate);
     tracker = std::make_unique<Tracker>();
     tMain = std::make_unique<THREADS>((int)std::thread::hardware_concurrency());
@@ -21,7 +22,7 @@ Engine::Engine(Graphics& gfx, Keyboard& kbd, EngineTime& clock):
 //Initial load of the engine. 
 void Engine::iLoad() {
 
-
+    pGfx.LoadPipeline();
     //begin model tracking. load a gd default world mf
     //Player model needs to be set.
     //Make a better way of setting player model. 
@@ -36,7 +37,7 @@ void Engine::iLoad() {
 
     for (auto i = 0; i < 20; i++) {
         float p = i * 2;
-        //tracker->initObject(tracker->getInstance(cTrackedInstance), "untitled", 2, 1, 200, 0.3, DirectX::XMFLOAT3{ 12 + p,0,138 });
+        tracker->initObject(tracker->getInstance(cTrackedInstance), "untitled", 2, 1, 200, 0.3, DirectX::XMFLOAT3{ 12 + p,0,138 });
     }
 
     for (auto i = 0; i < 10; i++) {

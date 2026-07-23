@@ -3,7 +3,7 @@
 	"tasks": [
 		{
 			"type": "shell",
-			"label": "Configure Debug",
+			"label": "configure",
 			"command": "${env:SHELL}",
 			"args": [
 				"cmake",
@@ -20,13 +20,29 @@
 			"args": [
 				"cmake",
 				"--build",
-				"./out/build/Debug"
+				"./out/build/debug"
 			],
 			"group": "build",
 			"problemMatcher": [],
 			"detail": "CMake build task",
 			"dependsOn": [
 			]
-		}
+		},
+      {
+			"type": "shell",
+			"label": "Install",
+			"command": "${env:SHELL}",
+			"args": [
+				"cmake",
+				"--install",
+				"${cwd}/out/build/debug"
+			],
+         "dependsOn": [
+            "Build Debug"
+			],
+			"problemMatcher": [],
+			"detail": "CMake Install task"
+		},
+
 	]
 }

@@ -66,7 +66,6 @@ Index of this file:
 #endif
 #include "imconfig.h"
 
-#ifndef IMGUI_DISABLE
 
 //-----------------------------------------------------------------------------
 // [SECTION] Header mess
@@ -4114,5 +4113,3 @@ typedef ImFontAtlasRect ImFontAtlasCustomRect;
 #include "imgui_user.h"
 #endif
 #endif
-
-#endif // #ifndef IMGUI_DISABLE

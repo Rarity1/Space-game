@@ -1,14 +1,14 @@
 #pragma once
 
+#include <CWin.h>
 #include <DSMouse.h>
 #include <DSKeyboard.h>
 #include <EngineTime.h>
-#include <Graphics.h>
-#include <GraphicsErrors.h>
-#include <Engine.h>
 #include <Exceptions.h>
+#include <condition_variable>
+#include <minwindef.h>
 #include <winnt.h>
-
+#include "Engine.h"
 
 //Window Class
 class Window {
@@ -29,11 +29,12 @@ private:
 	std::condition_variable windowTimer;
 	std::condition_variable appTimer;
 	LRESULT HandleMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+  std::function<LRESULT(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)> ImGuiHnd = [](HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam){return DefWindowProc(hWnd, msg, wParam, lParam);};
 	Keyboard kbd;
 	EngineTime clock;
 	Mouse mouse;
 	std::mutex winWait;
-	Graphics::thRect WindowRect;
+	thRect WindowRect;
 	uint16_t width;
 	uint16_t height;
 	std::unique_ptr<Graphics> pGfx;

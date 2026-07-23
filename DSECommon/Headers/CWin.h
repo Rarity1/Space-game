@@ -23,6 +23,7 @@
 // The following #defines disable a bunch of unused windows stuff. If you 
 // get weird errors when trying to do some windows stuff, try removing some
 // (or all) of these defines (it will increase build time though).
+
 #ifndef FULL_WINTARD
 /*
 #define NOGDICAPMASKS
@@ -62,7 +63,6 @@
 #define NOMINMAX
 #define STRICT
 #pragma once
-
 #include <windows.h>
 #include <string>
 #include <vector>
@@ -88,10 +88,20 @@
 #endif
 #endif
 
+//#define IMGUI_DISABLE
+
 #include <wrl.h>
+#ifdef _USEDXC
 #include <Support/Errorcodes.h>
+#endif
 
+#include <mutex>
 
+struct thRect {
+    bool Updated = false;
+    RECT wr = {};
+    std::mutex Mtx;
+};
 
 #ifdef __MINGW32__
 constexpr uint8_t nybble_from_hex(char c) {

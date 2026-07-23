@@ -8,10 +8,10 @@
             "name": "(GDB)Debug",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/out/build/debug/game/Editor.exe", 
+            "program": "${workspaceFolder}/out/game/Editor.exe", 
             "args": [],
             "stopAtEntry": false,
-            "cwd": "${workspaceFolder}/out/build/debug/game",
+            "cwd": "${workspaceFolder}/out/game",
             "externalConsole": false,
             "avoidWindowsConsoleRedirection": true,
             "filterStderr": true,
@@ -31,7 +31,7 @@
                     "ignoreFailures": false
                 }
             ],
-            "preLaunchTask": "Build Debug"
+            "preLaunchTask": "Install"
         }
 
     ]

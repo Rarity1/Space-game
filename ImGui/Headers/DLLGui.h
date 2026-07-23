@@ -1,8 +1,9 @@
 #pragma once
+#include "CWin.h"
+#include <directx/d3dx12.h>
 #include "imgui.h"
 #include "imgui_impl_win32.h"
 #include "imgui_impl_dx12.h"
-
 #include <wrl/client.h>
 #include <vector>
 

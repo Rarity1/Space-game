@@ -1,5 +1,5 @@
 #include "Window.h"
-#include <windows.h>
+#include <cassert>
 
 
 
@@ -16,10 +16,9 @@ Window::Window(uint16_t w, uint16_t h, const char *name, HINSTANCE hInstance)
 
   std::unique_lock loc(winWait);
 
-  auto Name = "WEEEE";
   // calculate window size based on desired client region size
   WindowRect.wr = RECT{0, 0, width, height};
-  pGfx = std::make_unique<Graphics>(WindowRect);
+  
   // create window & get hWnd
   Context = this;
   WNDCLASSEX wc = {
@@ -34,36 +33,39 @@ Window::Window(uint16_t w, uint16_t h, const char *name, HINSTANCE hInstance)
       .hCursor = nullptr,
       .hbrBackground = CreateSolidBrush(0),
       .lpszMenuName = nullptr,
-      .lpszClassName = Name,
+      .lpszClassName = name,
       .hIconSm = static_cast<HICON>(LoadImage(
           hInstance, MAKEINTRESOURCE(IDI_ICON1), IMAGE_ICON, 16, 16, 0))};
   assert(RegisterClassEx(&wc));
   auto WindowStyle = WS_MINIMIZEBOX | WS_SYSMENU | WS_CAPTION | WS_VISIBLE;
   AdjustWindowRect(&WindowRect.wr, WindowStyle, FALSE);
-  hWnd = CreateWindow(Name, "Game Window", WindowStyle, CW_USEDEFAULT, CW_USEDEFAULT,
+  hWnd = CreateWindow(name, name, WindowStyle, CW_USEDEFAULT, CW_USEDEFAULT,
                    WindowRect.wr.right - WindowRect.wr.left,
                    WindowRect.wr.bottom - WindowRect.wr.top, nullptr, nullptr,
                    GetModuleHandle(NULL), this);
+   GetClientRect(hWnd, &WindowRect.wr);
 
-
-  (ShowWindow(hWnd, SW_SHOWDEFAULT));
+  ShowWindow(hWnd, SW_SHOWDEFAULT);
   UpdateWindow(hWnd);
-  pGfx->LoadPipeline(hWnd);
+  pGfx = std::make_unique<Graphics>(WindowRect, hWnd);
   sEng = std::make_unique<Engine>(*pGfx, kbd, clock);
 
+  ImGuiHnd = [this](HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam){return pGfx->iGui->ImGuiProcHndl(hWnd, msg, wParam, lParam);};
   // newly created windows start off as hidden
-
 
   loc.unlock();
   std::unique_lock exelock(upLock);
   sEng->iLoad();
-  std::thread UpdateThread([this](){while(Alive.load())sEng->Update();});
+  std::thread UpdateThread([this]() {
+    while (Alive.load())
+      sEng->Update();
+  });
   while (GetMessage(&msg, NULL, 0, 0)) {
     // Translate Message will post auxilliary WM_CHAR messages from key msgs
     TranslateMessage(&msg);
     DispatchMessage(&msg);
   }
-      Alive.store(false);
+  Alive.store(false);
 
   // Move Message processing to own thread
   UpdateThread.join();
@@ -81,9 +83,6 @@ void Window::SetTitle(const std::string& title)
 {
 	assert(SetWindowTextA(hWnd, title.c_str()) == 0);
 }
-
-
-
 
 
 LRESULT Window::HandleMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
@@ -107,9 +106,9 @@ LRESULT Window::HandleMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	case WM_SIZING:
 	case WM_SIZE:
 		WindowRect.Mtx.lock();
-		GetClientRect(hWnd, &WindowRect.wr);
+		//GetClientRect(hWnd, &WindowRect.wr);
+      //WindowRect.Updated = true;
 		WindowRect.Mtx.unlock();
-		pGfx->updateResolution.store(true);
 
 		break;
 	//Keyboard Messages
@@ -190,8 +189,8 @@ LRESULT Window::HandleMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	}
 	}
 	#ifndef IMGUI_DISABLE
-	pGfx->iGui->ImGuiProcHndl(hWnd, msg, wParam, lParam);
+  ImGuiHnd(hWnd, msg, wParam, lParam);
 	#endif
-	return DefWindowProc(hWnd, msg, wParam, lParam);
+  return DefWindowProc(hWnd, msg, wParam, lParam);
 }
 

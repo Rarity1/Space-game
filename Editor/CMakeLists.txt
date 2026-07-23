@@ -12,6 +12,6 @@ else()
 message(STATUS "Unknown Operating System")
 endif()
 
-target_include_directories(Editor PUBLIC ${CMAKE_SOURCE_DIR}/Editor/Headers)
-target_link_options(Editor PRIVATE ${SUBSYSTEM_LINKER_OPTIONS})
+target_include_directories(Editor PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/Headers)
+#target_link_options(Editor PRIVATE ${SUBSYSTEM_LINKER_OPTIONS})
 target_link_libraries(Editor DSECommon)

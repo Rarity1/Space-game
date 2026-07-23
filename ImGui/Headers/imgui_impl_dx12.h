@@ -20,7 +20,6 @@
 
 #pragma once
 #include "imgui.h"      // IMGUI_IMPL_API
-#ifndef IMGUI_DISABLE
 #include <dxgiformat.h> // DXGI_FORMAT
 #include <d3d12.h>      // D3D12_CPU_DESCRIPTOR_HANDLE
 #include <functional>
@@ -132,5 +131,3 @@ struct ImGui_ImplDX12_RenderState
     ID3D12Device*               Device;
     ID3D12GraphicsCommandList*  CommandList;
 };
-
-#endif // #ifndef IMGUI_DISABLE

@@ -24,7 +24,7 @@ cbuffer cbuffer0 : register(b0)
     CBVData cbvData[819];
 };
 
-PSInput main(VSInput input)
+PSInput VSmain(VSInput input)
 {
     PSInput result;
     
