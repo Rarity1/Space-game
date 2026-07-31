@@ -2,8 +2,7 @@
 #include "CWin.h"
 #include "RStorage.h"
 #include "ObjectTracking.h"
-
-class Graphics;
+#include <dxgi1_6.h>
 
 #define NAME_D3D12_OBJECT(x) SetName((x).Get(), (wchar_t*)#x)
 inline void SetName(ID3D12Object* pObject, LPCWSTR name)
@@ -13,56 +12,56 @@ inline void SetName(ID3D12Object* pObject, LPCWSTR name)
 
 class FrameResource
 {
-    friend class Graphics;
 private:
     GErrors::CheckerToken chk;
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& rtvDescriptorHeap;
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& dsvDescriptorHeap;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState>& pPipelineState;
-    Microsoft::WRL::ComPtr<ID3D12RootSignature>& pRootSignature;
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& pSamplerDescriptorHeap;
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& pCbvSrvDescriptorHeap;
-    Microsoft::WRL::ComPtr<ID3D12Resource> renderTarget;
-    UINT rtvDescriptorSize;
-    //UINT pCbvSrvDescriptorHeapSize;
-    UINT samplerDescriptorSize;
-    //uint8_t uFrID = 0;
-    //CD3DX12_RECT scissorRect;
-    //CD3DX12_VIEWPORT viewport;
+    ID3D12PipelineState* pPipelineState = nullptr;
+    ID3D12RootSignature* pRootSignature = nullptr;
     Microsoft::WRL::ComPtr<ID3D12Resource> depthBuffer;
-    CD3DX12_CPU_DESCRIPTOR_HANDLE rtv;
-    CD3DX12_CPU_DESCRIPTOR_HANDLE dsv;
-    D3D12_GPU_DESCRIPTOR_HANDLE grdt;
-    uint16_t uFID = 0;
+    CD3DX12_CPU_DESCRIPTOR_HANDLE RenderTargetView;
+    CD3DX12_CPU_DESCRIPTOR_HANDLE DepthStencilView;
+    ;
+    uint8_t uFID = 0;
     Microsoft::WRL::ComPtr<ID3D12CommandAllocator> commandAllocator;
-    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> pCommandList;
-    Microsoft::WRL::ComPtr<ID3D12CommandAllocator> imguicommandAllocator;
-    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> imguiCommandList;
-
-
 public:
+    Microsoft::WRL::ComPtr<ID3D12Resource> renderTarget;
+    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> pCommandList;
+    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> imguiCommandList;
+    Microsoft::WRL::ComPtr<ID3D12CommandAllocator> imguicommandAllocator;
+
     Microsoft::WRL::ComPtr<ID3D12CommandAllocator> bundleAllocator;
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> bundle;
     //std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> openbuffers;
     //std::vector<DirectX::XMFLOAT4X4*> cbvbuff;
     uint8_t fenceValue;
+    struct Pipeline {
+      thRect& windowResolution;
+      ID3D12Device9* pDevice;
+      IDXGISwapChain4* swapChain;
+      ID3D12PipelineState* pPipelineState;
+      ID3D12RootSignature* pRootSignature;
+      DescriptorHeapAllocator* objectAllocator;
+    };
     FrameResource(
-        Graphics* Parent,
-        uint16_t uFID
+        Pipeline& PipeLine,
+        uint8_t& puFID,
+        CD3DX12_CPU_DESCRIPTOR_HANDLE rtv,
+        CD3DX12_CPU_DESCRIPTOR_HANDLE dsv
     );
     ~FrameResource();
 
     //void InitBundle(Microsoft::WRL::ComPtr<ID3D12Device>  pDevice, Microsoft::WRL::ComPtr < ID3D12PipelineState> pPso1,
     //    UINT frameResourceIndex, Microsoft::WRL::ComPtr <ID3D12DescriptorHeap> pCbvSrvDescriptorHeap, UINT cbvSrvDescriptorSize, Microsoft::WRL::ComPtr < ID3D12DescriptorHeap> pSamplerDescriptorHeap, UINT samplerDescriptorSize, Microsoft::WRL::ComPtr < ID3D12RootSignature> pRootSignature, std::vector<RStorage::eResource>& models);
     
-    void UpdateResolution(Graphics* Parent);
+    void UpdateResolution(Pipeline& PipeLine);
 
     struct CMDListInfo {
-        CD3DX12_RECT* scissorRect;
-        CD3DX12_VIEWPORT* viewport;
-        Tracker::InstanceStruc* Instance;
+
     };
 
-    void PopulateCommandList(CMDListInfo& cmdLi);
+    void PopulateCommandList(CD3DX12_RECT* scissorRect,
+        CD3DX12_VIEWPORT* viewport,
+        Tracker::Instance& Instance, 
+        std::vector<ID3D12DescriptorHeap*>& ppHeaps, 
+        D3D12_GPU_DESCRIPTOR_HANDLE& SamplerHeapGpuHandle);
     CD3DX12_CPU_DESCRIPTOR_HANDLE GetRTV();
 };

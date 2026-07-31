@@ -1,4 +1,5 @@
 #include "Window.h"
+#include "Engine.h"
 #include <cassert>
 
 
@@ -47,12 +48,14 @@ Window::Window(uint16_t w, uint16_t h, const char *name, HINSTANCE hInstance)
 
   ShowWindow(hWnd, SW_SHOWDEFAULT);
   UpdateWindow(hWnd);
-  pGfx = std::make_unique<Graphics>(WindowRect, hWnd);
-  sEng = std::make_unique<Engine>(*pGfx, kbd, clock);
 
+  sEng = std::make_unique<Engine>( kbd, clock, WindowRect, hWnd);
+  pGfx = sEng->pGfx.get();
+
+  #ifndef IMGUI_DISABLE
   ImGuiHnd = [this](HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam){return pGfx->iGui->ImGuiProcHndl(hWnd, msg, wParam, lParam);};
   // newly created windows start off as hidden
-
+  #endif
   loc.unlock();
   std::unique_lock exelock(upLock);
   sEng->iLoad();
@@ -75,7 +78,8 @@ Window::Window(uint16_t w, uint16_t h, const char *name, HINSTANCE hInstance)
 Window::~Window()
 {
 	//windowThread.join();
-	pGfx.reset();
+  ImGuiHnd = [](HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam){return DefWindowProc( hWnd,  msg,  wParam,  lParam);};
+	sEng.reset();
 	DestroyWindow(hWnd);
 }
 

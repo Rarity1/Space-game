@@ -1,4 +1,5 @@
 #pragma once
+#include "RStorage.h"
 #include "ePhysics.h"
 #include "Graphics.h"
 #include "EngineTime.h"
@@ -8,17 +9,24 @@
 
 class DLL Engine {
 	friend class App;
+  friend class Window;
 public:
-	Engine(Graphics& gfx, Keyboard& kbd, EngineTime& clock);
+	Engine(Keyboard& kbd, EngineTime& clock, thRect &WindowRect, HWND &hWnd);
 	~Engine();
 	const int updaterate = 60;
 	void iLoad();
 	bool Update();
 	double engineTimeTaken = 0;
 	EngineTime& Clock;
+  std::unique_ptr<THREADS> tMain;
+  std::unique_ptr<RStorage> storage;
+  std::unique_ptr<Tracker> pTracker;
+  Tracker& tracker;	
 	std::unique_ptr<Physics> phyx;
-	std::unique_ptr<THREADS> tMain;
-	std::unique_ptr<Tracker> tracker;
+  std::unique_ptr<Graphics> pGfx;
+  Graphics& rGfx;
+	Object* plModel;
+
 	struct KeysPressed
 	{
 		//Rename to actions
@@ -89,8 +97,6 @@ private:
 	};
 	EngineTime updateClock;
 	EngineTime ucontrolClock;
-	std::vector<std::pair<uint16_t, Tracker::InstanceStruc*>> renderedInstances;
-	std::vector<std::pair<uint16_t, Tracker::InstanceStruc*>> processedInstances;
 
 	//Queues a function onto the event queue without running the function. Larger priority number = lower priority. 
 	void queueCommand(std::function<void()> Function, unsigned short Priority = 0);
@@ -114,8 +120,8 @@ private:
 	void uPhysics();
 
 	std::mutex evBusLock;
-	Graphics& pGfx;
-	Object* plModel;
+
+
 	DirectX::XMFLOAT4 cWorld;
 	DirectX::XMFLOAT4 nWorld;
 
@@ -134,4 +140,8 @@ private:
 	std::condition_variable loopVariable;
 	std::unique_lock<std::mutex> loopLock;
 	std::mutex loopMutex;
+
+
+
+
 };

@@ -16,7 +16,10 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 #set(CMAKE_CXX_SCAN_FOR_MODULES ON)
 #set(CMAKE_LIBRARY_PATH "C:\\msys64\\ucrt64\\lib")
 
-
+if(NOT CMAKE_BUILD_TYPE)
+  message("DEBUG BUILD")
+  set(CMAKE_BUILD_TYPE Debug)
+endif()
 
 project ("Space Game")
 
@@ -50,10 +53,11 @@ include_directories("${CMAKE_CURRENT_SOURCE_DIR}/slang/include/")
 find_library(slang NAMES "slang.lib" PATHS ${CMAKE_CURRENT_SOURCE_DIR}/slang/lib/ REQUIRED CONFIG)
 find_library(dxcompiler NAMES "dxcompiler.lib" PATHS ${dxclibs} REQUIRED CONFIG)
 find_library(DirectX-Guids NAMES libdxguid.a PATHS "C:\\msys64\\ucrt64\\lib" REQUIRED CONFIG)
-#find_library(dxgi NAMES libdxgi.a REQUIRED CONFIG)
-#find_library(dxguid NAMES libdxguid.a REQUIRED CONFIG)
-#find_library(d3d12 NAMES libd3d12.a REQUIRED CONFIG)
-#find_library(vulkan NAMES libvulkan-1.dll.a REQUIRED CONFIG)
+find_library(dxgi NAMES libdxgi.a PATHS "C:\\msys64\\ucrt64\\lib" REQUIRED CONFIG)
+#add_idl(dxgidebug NAMES dxgidebug.idl REQUIRED CONFIG)
+find_library(dxguid NAMES libdxguid.a PATHS "C:\\msys64\\ucrt64\\lib" REQUIRED CONFIG)
+find_library(d3d12 NAMES libd3d12.a PATHS "C:\\msys64\\ucrt64\\lib" REQUIRED CONFIG)
+#find_library(vulkan NAMES libvulkan-1.dll.a PATHS "C:\\msys64\\ucrt64\\lib" REQUIRED CONFIG)
 
 find_package(DirectXMath REQUIRED CONFIG)
 find_package(DirectX-Headers REQUIRED CONFIG)

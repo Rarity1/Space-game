@@ -45,6 +45,7 @@ THREADS::WRef THREADS::gPushWork(std::function<void()> f)
 			return SubThreads->gPushWork(std::move(f));
 		}
 		else {
+      assert(false);
 			//If this code runs just add more depth
 			/*
 			for (uint8_t i = 0; i < tCount; i++) {

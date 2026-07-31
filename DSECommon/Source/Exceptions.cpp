@@ -76,18 +76,39 @@ const char* HrException::what() const noexcept
 		<< "[Error Code] 0x" << std::hex << std::uppercase << GetErrorCode() << '\n'
 		<< "[Description] " << GetErrorDescription() << '\n'
 		<< GetOriginString();
-	whatBuffer = oss.str();
-	return whatBuffer.c_str();
+        whatBuffer = oss.str();
+        return whatBuffer.c_str();
 }
-const char* HrException::GetType() const noexcept
-{
-	return "Demo Window Exception";
+const char *HrException::GetType() const noexcept {
+  return "Demo Window Exception";
 }
-HRESULT HrException::GetErrorCode() const noexcept
-{
-	return hr;
+HRESULT HrException::GetErrorCode() const noexcept { return hr; }
+std::string HrException::GetErrorDescription() const noexcept {
+  return TranslateErrorCode(hr);
 }
-std::string HrException::GetErrorDescription() const noexcept
-{
-	return TranslateErrorCode(hr);
+
+
+
+
+std::vector<std::string> tsPrintBuffer::Buffer = {{""}};
+std::vector<std::string> tsPrintBuffer::Format = {{""}};
+std::mutex tsPrintBuffer::bufferLock;
+void tsPrintBuffer::PrintFBuffered() {
+  bufferLock.lock();
+  auto b = Buffer.begin();
+  for(auto f : Format){
+    printf(f.c_str(), b->c_str());
+    b++;
+  }
+  
+  fflush(stdout);
+  Format =  {{""}};
+  Buffer =  {{""}};
+  bufferLock.unlock();
+}
+void tsPrintBuffer::QueuePrintF(std::string format, std::vector<std::string> str) {
+  bufferLock.lock();
+  Buffer.append_range(str);
+  Format.emplace_back(format);
+  bufferLock.unlock();
 }

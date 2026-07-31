@@ -47,14 +47,11 @@ RStorage::RStorage()
 
 
 
-RStorage::bmResource* RStorage::GetModel(UINT umID) {
-	if (LoadedModels.find(umID) != LoadedModels.end()) {
-		return &LoadedModels[umID];
-	}
-	else return nullptr;
+RStorage::bmResource& RStorage::GetModel(umID umID) {
+return LoadedModels[umID];
 }
 
-RStorage::bmResource* RStorage::loadModel(UINT umID)
+RStorage::bmResource* RStorage::loadModel(umID umID)
 {
 
 	assert(AvailableModels.find(umID) != AvailableModels.end());

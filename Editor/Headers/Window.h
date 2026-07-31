@@ -37,7 +37,7 @@ private:
 	thRect WindowRect;
 	uint16_t width;
 	uint16_t height;
-	std::unique_ptr<Graphics> pGfx;
+	Graphics* pGfx;
 	std::unique_ptr<Engine> sEng;
 	std::thread windowThread;
 	HWND hWnd;

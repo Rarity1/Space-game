@@ -96,9 +96,9 @@
 #endif
 
 #include <mutex>
-
+#include <atomic>
 struct thRect {
-    bool Updated = false;
+    std::atomic<bool> Updated;
     RECT wr = {};
     std::mutex Mtx;
 };
@@ -137,23 +137,18 @@ constexpr GUID guid_from_string(const char str[37]) {
                byte_from_hexstr(str + 28), byte_from_hexstr(str + 30),
                byte_from_hexstr(str + 32), byte_from_hexstr(str + 34)}};
 }
-
+/*
+#ifndef CROSS_PLATFORM_UUIDOF
 #define CROSS_PLATFORM_UUIDOF(interface, spec)                                 \
   struct interface;                                                            \
-  template <> inline constexpr const GUID &__mingw_uuidof<interface>() {       \
+  template <> inline const GUID &__mingw_uuidof<interface>() {       \
     static const IID _IID = guid_from_string(spec);                            \
     return _IID;                                                               \
 }
-
 #endif
 
+*/
 
-
-
-#ifndef CROSS_PLATFORM_UUIDOF
-// Warning: This macro exists in WinAdapter.h as well
-#define CROSS_PLATFORM_UUIDOF(interface, spec)                                 \
-  struct __declspec(uuid(spec)) interface;
 #endif
 
 

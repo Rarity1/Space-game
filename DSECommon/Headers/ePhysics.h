@@ -1,17 +1,19 @@
 #pragma once
+#include "ModelData.h"
+#include "RStorage.h"
 #include "Threads.h"
-#include "ObjectTracking.h"
 #include <CL/opencl.hpp>
+#include <DirectXCollision.h>
 
 
-
-class DLL Physics {
+class Object;
+class Tracker;
+class Physics {
 public:
-	Physics(const int& UpdateRate);
+	Physics(const int& UpdateRate, class Tracker& Tracker);
 	~Physics();
-	void Update(Tracker::InstanceStruc& tInstance);
-	//Call if loaded models/tracked models changes
-	void trackM(Tracker::InstanceStruc& tInstance);
+	void Update();
+	
 	struct tpsCounter {
 	public:
 		tpsCounter() {
@@ -32,7 +34,7 @@ public:
 	tpsCounter ticker;
 private:
 	std::unique_ptr<THREADS> tMain;
-
+  Tracker& Tracker;
 	THREADS::WRef lastWref;
 	unsigned int coreCount = 0;
 	static float fDistance(DirectX::XMFLOAT3& pos1, DirectX::XMFLOAT3& pos2);
@@ -56,8 +58,9 @@ private:
 	int bIndex(std::vector<int> w, int bInd);
 	void CalProportionalSpeed(DirectX::XMFLOAT4& VelDir1, DirectX::XMFLOAT4& VelDir2, float& VSpeed1, float& VSpeed2, float& Mass1, float& Mass2);
 	//Main Collision function
-	void pCollison(Tracker::InstanceStruc& tInstance);
+	void pCollison(umID instanceID);
 	void pSpecReset();
+  bool QueueCLBuffer(Object& obj);
 
 	std::vector<std::thread> collisionThreads;
 	std::vector<std::thread> distanceThreads = {};
@@ -80,7 +83,18 @@ private:
 		std::vector<cl_int> Indices{};
 	};
 	 WORKINDI ProcCollide(Object& obj, Object& obj2, DirectX::XMFLOAT3& objpos, DirectX::XMFLOAT3& obj2pos, DirectX::XMFLOAT4& dir, float& dist);
-	std::mutex phyxBusy;
+  std::function<void()> CheckVertexDirection(std::vector<int> &Result,
+    ModelData &objudat, std::vector<std::atomic<bool>> &IndexChecked,
+    unsigned short &localWorkData, 
+    DirectX::BoundingSphere &CollSp,
+    std::vector<std::array<ModelData::Vertex, 3>> &Vertices);
+
+ std::function<void()> CheckVertexDirection(std::vector<int> &Result,
+    ModelData &objudat, std::vector<bool> &IndexChecked,
+    unsigned short &localWorkData, 
+    DirectX::BoundingSphere &CollSp,
+    std::vector<std::array<ModelData::Vertex, 3>> &Vertices);
+  std::mutex phyxBusy;
 	std::atomic<bool> Updated;
 ;
 

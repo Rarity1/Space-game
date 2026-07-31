@@ -22,9 +22,8 @@ typedef struct XMFLOAT3
 }
 XMFLOAT3;
 
-static XMFLOAT3 Zero = {0.0,0.0,0.0 };
-//Accuracy seems to be somewhere between 0.01 and 0.001 not amazing but good enough I guess
-static double epsilon = 0.005;
+__constant static XMFLOAT3 Zero = {0.0,0.0,0.0};
+__constant static double epsilon = 0.005;
 
 typedef enum
 {

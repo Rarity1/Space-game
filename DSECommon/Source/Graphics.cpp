@@ -1,41 +1,48 @@
-
+#include <DDSTextureLoader.h>
+#include <DirectXMath.h>
+#include <ResourceUploadBatch.h>
 #include "Graphics.h"
-#include <cstddef>
-#include <cstdlib>
-#include <cstring>
-#include <directx/d3dx12.h>
-#include <filesystem>
+#include "GraphicsErrors.h"
+#include "ObjectTracking.h"
+
+#include <cstdint>
+#include <cstdio>
 #include <fstream>
-#include <memory>
-#include <slang.h>
+#include <functional>
 #include <winnt.h>
-#include <wrl/client.h>
 
-#define __USESLANG //We using slang to compile shaders
+EXTERN_C const GUID local_DXGI_DEBUG_ALL = {
+    0xe48ae283,
+    0xda80,
+    0x490b,
+    {0x87, 0xe6, 0x43, 0xe9, 0xa9, 0xcf, 0xda, 0x08}};
 
-
-Graphics::Graphics(thRect &WindowRect, HWND &hWnd)
+Graphics::Graphics(thRect &WindowRect, HWND &hWnd, Tracker& oTracker)
     : // width(w),
       // height(h),
-      hWnd(hWnd), windowResolution(WindowRect), cframeIndex(0) {
-
+      oTracker(oTracker),
+      hWnd(hWnd), 
+      windowResolution(WindowRect), 
+      PipelinePtrs(WindowRect),
+      cframeIndex(0) {
   // XMStoreFloat4x4(&fovPerspective,
   // DirectX::XMMatrixPerspectiveFovRH(DirectX::XM_PIDIV2,
   // float(windowResolution.wr.right - windowResolution.wr.left) /
   // float(windowResolution.wr.bottom - windowResolution.wr.top), 0.1f,
   // 100000.0f));
+
   windowResolution.Mtx.lock();
-  auto &width = windowResolution.wr.right;
-  auto &height = windowResolution.wr.bottom;
   scissorRect =
-      CD3DX12_RECT(0, 0, width > 0 ? width : 8, height > 0 ? height : 8);
-  viewport = CD3DX12_VIEWPORT(0.f, 0.f, width > 0 ? width : 8,
-                              height > 0 ? height : 8);
+      CD3DX12_RECT(0, 0, windowResolution.wr.right, windowResolution.wr.bottom);
+  viewport = CD3DX12_VIEWPORT(0.f, 0.f, windowResolution.wr.right,
+                              windowResolution.wr.bottom);
   windowResolution.Mtx.unlock();
-  XMStoreFloat4x4(
-      &fovPerspective,
-      DirectX::XMMatrixPerspectiveFovRH(
-          DirectX::XM_PIDIV2, float(width) / float(height), 0.1f, 1000000.0f));
+    float fov90Deg = DirectX::XM_PIDIV2;
+    float aspectRatio = float(windowResolution.wr.right) / float(windowResolution.wr.bottom);
+    float nearplane = 0;
+  FovPerspectiveRHInfinite(fovPerspective, fov90Deg, aspectRatio, nearplane);
+
+
   // scissorRect = CD3DX12_RECT(0, 0, windowResolution.wr.right,
   // windowResolution.wr.bottom); viewport = CD3DX12_VIEWPORT(0.f, 0.f,
   // windowResolution.wr.right, windowResolution.wr.bottom);
@@ -50,18 +57,23 @@ Graphics::Graphics(thRect &WindowRect, HWND &hWnd)
 #endif
   // Create D3d12 Device & dxgi factory
   CreateDXGIFactory2(dxgiFactoryFlags, IID_PPV_ARGS(&dxgiFactory)) >> chk;
-  dxgiFactory->MakeWindowAssociation(hWnd, DXGI_MWA_NO_ALT_ENTER) >> chk;
   D3D12CreateDevice(nullptr, D3D_FEATURE_LEVEL_12_2, IID_PPV_ARGS(&pDevice)) >>
       chk;
   NAME_D3D12_OBJECT(pDevice);
 
   // RTV descriptors and buffer references
-  dsvDescriptorSize =
-      pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
-  rtvDescriptorSize =
-      pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 #ifdef _DEBUG
   pDevice.As(&D3DInfoQueue);
+  DXGIDebug = LoadLibraryA("dxgidebug.dll");
+  GetLastError() >> chk;
+  typedef HRESULT(WINAPI * DXGIGetDebugInterfaceProc)(REFIID, void **);
+  DXGIGetDebugInterfaceProc GetDBG = (DXGIGetDebugInterfaceProc)GetProcAddress(
+      DXGIDebug, "DXGIGetDebugInterface");
+  typedef GUID(WINAPI DXGI_DEBUG_ALLdll);
+  assert(GetDBG);
+  GetDBG(IID_PPV_ARGS(&DXGIInfoQueue)) >> chk;
+  chk = GErrors::CheckerToken([this]() { dxgichk(); });
+
   DWORD CallbackCookie;
   D3DInfoQueue->RegisterMessageCallback(
       (D3D12MessageFunc)GErrors::D3D12MessageCallback,
@@ -75,7 +87,7 @@ Graphics::Graphics(thRect &WindowRect, HWND &hWnd)
   pDevice->CreateCommandQueue(&desc, IID_PPV_ARGS(&commandQueue)) >> chk;
   NAME_D3D12_OBJECT(commandQueue);
 
-  #ifdef __USESLANG
+#ifdef __USESLANG
   slang::createGlobalSession(&slangGlobalDesc, gSession.writeRef()) >> chk;
   {
     slang::TargetDesc Shaders[1];
@@ -89,32 +101,60 @@ Graphics::Graphics(thRect &WindowRect, HWND &hWnd)
     sDesc.defaultMatrixLayoutMode = SLANG_MATRIX_LAYOUT_COLUMN_MAJOR;
     gSession->createSession(sDesc, iSession.writeRef()) >> chk;
   }
-  #endif
+#endif // using slang
+
+
+  // Command Allocator
+  pDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,
+                                  IID_PPV_ARGS(&commandAllocator)) >>
+      chk;
+  NAME_D3D12_OBJECT(commandAllocator);
+  // Command List
+  pDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT,
+                             commandAllocator.Get(), nullptr,
+                             IID_PPV_ARGS(&commandList)) >>
+      chk;
+  NAME_D3D12_OBJECT(commandList);
+
+  // Close the command list so it can be reset at top of draw loop
+  commandList->Close() >> chk;
+
+  // Fence
+  pDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence)) >> chk;
+  NAME_D3D12_OBJECT(fence);
+
+  // Fence signalling event
+  fenceEvent = CreateEventW(nullptr, FALSE, FALSE, nullptr);
+  if (!fenceEvent) {
+    throw std::runtime_error("Failed to create fence event");
+  }
 }
 
-float Graphics::Max(float number, float maximum) {
-  float rtrn = number;
-  if (number > maximum) {
-    rtrn = maximum;
+void Graphics::dxgichk() {
+  auto nummsgs = DXGIInfoQueue->GetNumStoredMessages(local_DXGI_DEBUG_ALL);
+  for (int i = 0; i < nummsgs; i++) {
+    SIZE_T messageLength = 0;
+    HRESULT hr = DXGIInfoQueue->GetMessage(local_DXGI_DEBUG_ALL, i, NULL,
+                                           &messageLength);
+    if (hr == S_FALSE) {
+
+      // Allocate space and get the message.
+      DXGI_INFO_QUEUE_MESSAGE *pMessage =
+          (DXGI_INFO_QUEUE_MESSAGE *)malloc(messageLength);
+      hr = DXGIInfoQueue->GetMessage(local_DXGI_DEBUG_ALL, i, pMessage,
+                                     &messageLength);
+
+      // Do something with the message and free it
+      if (hr == S_OK) {
+
+        printf("DXGI: %s\n", pMessage->pDescription);
+        fflush(stdout);
+        free(pMessage);
+      }
+    }
   }
-  return rtrn;
-}
-float Graphics::Min(float minimum, float number) {
-  float rtrn = number;
-  if (number < minimum) {
-    rtrn = minimum;
-  }
-  return rtrn;
-}
-float Graphics::RotateHelper(float &rNumber) {
-  if (rNumber > Max(rNumber, DirectX::XM_2PI)) {
-    return 0;
-  }
-  if (rNumber < Min(-DirectX::XM_2PI, rNumber)) {
-    return 0;
-  }
-  return rNumber;
-}
+  DXGIInfoQueue->ClearStoredMessages(local_DXGI_DEBUG_ALL);
+};
 
 void Graphics::LoadPipeline() {
   // DStorageGetFactory(IID_PPV_ARGS(&pStorage)) >> chk;
@@ -130,12 +170,27 @@ void Graphics::LoadPipeline() {
   */
 
   // Swap Chain Creation
-  {
+  if (!swapChain) {
+    DXGI_SWAP_CHAIN_DESC1 SwapChainDesc = {};
+    SwapChainDesc.BufferCount = bufferCount;
+    SwapChainDesc.Width = 0;
+    SwapChainDesc.Height = 0;
+    SwapChainDesc.Format = SwapChainFormat;
+    SwapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+    SwapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+    SwapChainDesc.SampleDesc.Count = 1;
+    SwapChainDesc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
+    HRESULT result = dxgiFactory->CreateSwapChainForHwnd(
+        commandQueue.Get(), hWnd, &SwapChainDesc, nullptr, nullptr,
+        (IDXGISwapChain1 **)swapChain.GetAddressOf());
+    result >> chk;
+  } else {
+    swapChain->Release();
     DXGI_SWAP_CHAIN_DESC1 sd = {};
     sd.BufferCount = bufferCount;
-    sd.Width = 0;
-    sd.Height = 0;
-    sd.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    sd.Width = windowResolution.wr.right;
+    sd.Height = windowResolution.wr.bottom;
+    sd.Format = SwapChainFormat;
     sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
     sd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
     sd.SampleDesc.Count = 1;
@@ -173,29 +228,6 @@ void Graphics::LoadPipeline() {
     pDevice->CreateSampler(&sDesc, temp);
   }
 
-  // Command Allocator
-  pDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,
-                                  IID_PPV_ARGS(&commandAllocator)) >>
-      chk;
-
-  // Command List
-  pDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT,
-                             commandAllocator.Get(), nullptr,
-                             IID_PPV_ARGS(&commandList)) >>
-      chk;
-  NAME_D3D12_OBJECT(commandList);
-
-  // Close the command list so it can be reset at top of draw loop
-  commandList->Close() >> chk;
-
-  // Fence
-  pDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence)) >> chk;
-
-  // Fence signalling event
-  fenceEvent = CreateEventW(nullptr, FALSE, FALSE, nullptr);
-  if (!fenceEvent) {
-    throw std::runtime_error("Failed to create fence event");
-  }
 
   // Root signaling
   {
@@ -206,7 +238,6 @@ void Graphics::LoadPipeline() {
                    D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
     ranges[2].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER, 1, 0, 0,
                    D3D12_DESCRIPTOR_RANGE_FLAG_NONE);
-
     CD3DX12_ROOT_PARAMETER1 rootParameters[3]{};
     rootParameters[0].InitAsDescriptorTable(1, &ranges[0],
                                             D3D12_SHADER_VISIBILITY_VERTEX);
@@ -214,7 +245,7 @@ void Graphics::LoadPipeline() {
                                             D3D12_SHADER_VISIBILITY_PIXEL);
     rootParameters[2].InitAsDescriptorTable(1, &ranges[2],
                                             D3D12_SHADER_VISIBILITY_PIXEL);
-
+    
     const D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
         D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
 
@@ -255,9 +286,15 @@ void Graphics::LoadPipeline() {
   Slang::ComPtr<slang::IBlob> psShaderblob;
   Slang::ComPtr<slang::ISession> vsiSession;
   Slang::ComPtr<slang::ISession> psiSession;
-  vsShaderblob = CompileShaderSlang(pathVss,  "VSmain", SLANG_STAGE_VERTEX);
+  vsShaderblob = CompileShaderSlang(pathVss, "VSmain", SLANG_STAGE_VERTEX);
   psShaderblob = CompileShaderSlang(pathPss, "PSmain", SLANG_STAGE_PIXEL);
 #endif
+
+
+
+  pipelineStateStream.RootSignature = pRootSignature.Get();
+  pipelineStateStream.PrimitiveTopologyType =
+      D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
 
   // Input layout for shaders
   D3D12_INPUT_ELEMENT_DESC inputLayout[] = {
@@ -270,33 +307,31 @@ void Graphics::LoadPipeline() {
       {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT,
        D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
   };
-
-  pipelineStateStream.RootSignature = pRootSignature.Get();
   pipelineStateStream.InputLayout = {inputLayout, (UINT)std::size(inputLayout)};
-  pipelineStateStream.PrimitiveTopologyType =
-      D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-// Set compiled shaders for dx pipeline
-#ifndef __USESLANG //this is stupid
-  pipelineStateStream.VS =
-      CD3DX12_SHADER_BYTECODE(vsShaderblob->GetBufferPointer(), vsShaderblob->GetBufferSize());
-  pipelineStateStream.PS =
-      CD3DX12_SHADER_BYTECODE(psShaderblob->GetBufferPointer(), psShaderblob->GetBufferSize());
+// Link Compiled shaders into pipeline state
+#ifndef __USESLANG // this is stupid
+  pipelineStateStream.VS = CD3DX12_SHADER_BYTECODE(
+      vsShaderblob->GetBufferPointer(), vsShaderblob->GetBufferSize());
+  pipelineStateStream.PS = CD3DX12_SHADER_BYTECODE(
+      psShaderblob->GetBufferPointer(), psShaderblob->GetBufferSize());
 #else
-  pipelineStateStream.VS =
-      CD3DX12_SHADER_BYTECODE(vsShaderblob->getBufferPointer(), vsShaderblob->getBufferSize());
-  pipelineStateStream.PS =
-      CD3DX12_SHADER_BYTECODE(psShaderblob->getBufferPointer(), psShaderblob->getBufferSize());
+  pipelineStateStream.VS = CD3DX12_SHADER_BYTECODE(
+      vsShaderblob->getBufferPointer(), vsShaderblob->getBufferSize());
+  pipelineStateStream.PS = CD3DX12_SHADER_BYTECODE(
+      psShaderblob->getBufferPointer(), psShaderblob->getBufferSize());
 #endif
+
   pipelineStateStream.DSVFormat = DXGI_FORMAT_D32_FLOAT;
   pipelineStateStream.RTVFormats = {
-      .RTFormats{DXGI_FORMAT_R8G8B8A8_UNORM},
+      .RTFormats{SwapChainFormat},
       .NumRenderTargets = 1,
   };
-  const D3D12_PIPELINE_STATE_STREAM_DESC pipelineStateStreamDesc = {
+
+  //create the pipeline state
+  D3D12_PIPELINE_STATE_STREAM_DESC pipelineStateStreamDesc = {
       sizeof(PipelineStateStream), &pipelineStateStream};
   pDevice->CreatePipelineState(&pipelineStateStreamDesc,
-                               IID_PPV_ARGS(&pPipelineState)) >>
-      chk;
+                               IID_PPV_ARGS(&pPipelineState)) >> chk;
   NAME_D3D12_OBJECT(pPipelineState);
 
   // ImGuiSetup req
@@ -307,7 +342,7 @@ void Graphics::LoadPipeline() {
   ImGuiInfo.Device = pDevice.Get();
   ImGuiInfo.CommandQueue = commandQueue.Get();
   ImGuiInfo.NumFramesInFlight = bufferCount;
-  ImGuiInfo.RTVFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
+  ImGuiInfo.RTVFormat = SwapChainFormat;
   // ImGuiInfo.SrvDescriptorHeap = imHAllocator->SrvDescHeap;
   // std::function<void(D3D12_CPU_DESCRIPTOR_HANDLE*,
   // D3D12_GPU_DESCRIPTOR_HANDLE*)> Alloc =
@@ -333,73 +368,48 @@ void Graphics::LoadPipeline() {
   ImGuiInfo.SrvDescriptorFreeFn = Free;
   iGui = std::make_unique<imguid>(hWnd, &ImGuiInfo);
 #endif
-  backBuffers.resize(0);
 
-  // rtv Descriptor heap
-  {
-    D3D12_DESCRIPTOR_HEAP_DESC dsc = {};
-    dsc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
-    dsc.NumDescriptors = bufferCount;
-    pDevice->CreateDescriptorHeap(&dsc, IID_PPV_ARGS(&rtvDescriptorHeap)) >>
-        chk;
-  }
-  // DSV des heap
-  {
-    const D3D12_DESCRIPTOR_HEAP_DESC desc = {
-        .Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV,
-        .NumDescriptors = bufferCount,
-    };
-    pDevice->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&dsvDescriptorHeap)) >>
-        chk;
-  }
-
-  for (uint8_t i = 0; i < bufferCount; i++) {
-    backBuffers.emplace_back(std::make_unique<FrameResource>(this, i));
-
-    // pFrameResource.InitBundle(pDevice.Get(), pipelineState.Get(), i,
-    // srvDescriptorHeap.Get(), srvDescriptorSize, samplerDescriptorHeap.Get(),
-    // samplerDescriptorSize, rootSignature.Get(), modelVect);
-  }
+  PipelinePtrs.pDevice = pDevice.Get();
+  PipelinePtrs.swapChain = swapChain.Get();
+  PipelinePtrs.pPipelineState = pPipelineState.Get();
+  PipelinePtrs.pRootSignature = pRootSignature.Get();
+  PipelinePtrs.objectAllocator = objectAllocator.get();
 }
 
-void Graphics::Update(
-    std::vector<std::pair<uint16_t, Tracker::InstanceStruc *>> &rInstances) {
+void Graphics::Update() {
   UpdateFrameResources();
 
-  curCamera.posMtx->lock();
+  curCamera.posMtx.lock();
   curCamera.cmatrix = DirectX::XMMatrixLookToRH(
       XMLoadFloat3(curCamera.position), XMLoadFloat4(&curCamera.rotation),
       XMLoadFloat4(&curCamera.upDirection));
-  curCamera.posMtx->unlock();
+  curCamera.posMtx.unlock();
 
   using namespace DirectX;
-  std::for_each(rInstances.begin(), rInstances.end(), [this](auto tInstance) {
-    for (auto &tmodel : tInstance.second->tmodelLinkedObjects) {
+  for(auto& tInstance : oTracker.GetActiveInstances()){
+    for (auto &tmodel : tInstance->GetRenderObjects()) {
       for (auto &trackedModel : tmodel.second) {
-        auto cbvData = tInstance.second->instancedCBVData[tmodel.first];
-        trackedModel->mPos.posMtx.lock();
+        auto& rModel = *(RenderedObject*)trackedModel;
+        auto& cbvData = tInstance->GetCBVPtr(tmodel.first)[rModel.CBVIndex];
+        auto& Rotation = rModel.mPos.GetRotation();
+        auto& Position = rModel.mPos.Get();
         XMStoreFloat4x4(
-            &cbvData[trackedModel->CBVIndex].cbvMatrix,
+            &cbvData.cbvMatrix,
             XMMatrixTranspose(
                 XMMatrixRotationQuaternion(
-                    XMLoadFloat4(&trackedModel->mPos.rotation)) *
-                XMMatrixTranslation(trackedModel->mPos.position->x,
-                                    trackedModel->mPos.position->y,
-                                    trackedModel->mPos.position->z) *
+                    XMLoadFloat4(&Rotation)) *
+                XMMatrixTranslation(Position.x,
+                                    Position.y,
+                                    Position.z) *
                 curCamera.cmatrix * XMLoadFloat4x4(&fovPerspective)));
-        trackedModel->mPos.posMtx.unlock();
       }
     }
-  });
+  };
 }
 
-void Graphics::RenderFrame(Tracker::InstanceStruc &tInstance) {
+void Graphics::RenderFrame() {
 
-  // frMutex.lock();
-  // uFrameResource.wait(loc, [this] {return !.load(); });
-
-  auto &cframeBuffer = *backBuffers[swapChain->GetCurrentBackBufferIndex()];
-
+  
   if (backBuffers[cframeIndex]->fenceValue !=
       (uint8_t)fence->GetCompletedValue()) {
     fence->SetEventOnCompletion(backBuffers[cframeIndex]->fenceValue,
@@ -408,21 +418,26 @@ void Graphics::RenderFrame(Tracker::InstanceStruc &tInstance) {
     WaitForSingleObject(fenceEvent, INFINITE);
   }
 
-  {
-    FrameResource::CMDListInfo cmdinfo{&scissorRect, &viewport, &tInstance};
 
-    cframeBuffer.PopulateCommandList(cmdinfo);
-  }
-#ifndef IMGUI_DISABLE
   iGui->imPrepare();
+  auto &cframeBuffer = *backBuffers[swapChain->GetCurrentBackBufferIndex()];
+  
+    
+#ifndef IMGUI_DISABLE
   iGui->imPopulateCommand(cframeBuffer.GetRTV(), objectAllocator->DescHeap,
                           cframeBuffer.renderTarget.Get(),
                           cframeBuffer.imguiCommandList.Get(),
                           cframeBuffer.imguicommandAllocator.Get());
 #endif
-
+  std::vector<ID3D12DescriptorHeap*> ppHeaps = {objectAllocator->DescHeap.Get(), pSamplerDescriptorHeap.Get()};
+  D3D12_GPU_DESCRIPTOR_HANDLE SamplerHeapGpuHandle;
+  pSamplerDescriptorHeap->GetGPUDescriptorHandleForHeapStart(&SamplerHeapGpuHandle);
+  for(auto instance : oTracker.GetActiveInstances()){
+    cframeBuffer.PopulateCommandList(&scissorRect, &viewport, *instance, ppHeaps, SamplerHeapGpuHandle);
+  }
+//COmmand list order DOES matter. First in first out.
   std::vector<ID3D12CommandList *> commandLists = {
-      cframeBuffer.pCommandList.Get(), cframeBuffer.imguiCommandList.Get()};
+       cframeBuffer.pCommandList.Get(), cframeBuffer.imguiCommandList.Get()};
 
   cframeBuffer.fenceValue = (uint8_t)fence->GetCompletedValue() + 1;
   commandQueue->ExecuteCommandLists(commandLists.size(), commandLists.data());
@@ -433,15 +448,13 @@ void Graphics::RenderFrame(Tracker::InstanceStruc &tInstance) {
   cframeIndex = swapChain->GetCurrentBackBufferIndex();
   // Vsync off. add toggle here for changing vsync
   swapChain->Present(0, 512) >> chk;
-
-  // frMutex.unlock();
 }
 
-void Graphics::CreateBuffers(Tracker::InstanceStruc &tInstance) {
+void Graphics::CreateBuffers(Tracker::Instance &tInstance) {
   DirectX::ResourceUploadBatch upload(pDevice.Get());
   upload.Begin();
-  for (auto &trackedModel : tInstance.tmodelLinkedObjects) {
-    auto &model = *tInstance.pTracker->GetModel(trackedModel.first);
+  for (auto &trackedModel : tInstance.GetRenderObjects()) {
+    auto &model = tInstance.pTracker.GetModel(trackedModel.first);
     if (model.vbuffer == nullptr) {
       UINT vbuffSize = model.uData->sIndex.size() * sizeof(ModelData::Vertex);
       {
@@ -521,8 +534,8 @@ void Graphics::CreateBuffers(Tracker::InstanceStruc &tInstance) {
       model.cbvwriteBuffer.Reset();
     }
     UINT size =
-        (sizeof(Tracker::CBVData) * trackedModel.second.size()) +
-        (256 - ((sizeof(Tracker::CBVData) * trackedModel.second.size()) % 256));
+        (sizeof(CBVData) * trackedModel.second.size()) +
+        (256 - ((sizeof(CBVData) * trackedModel.second.size()) % 256));
     {
       const CD3DX12_HEAP_PROPERTIES heapProps{D3D12_HEAP_TYPE_UPLOAD};
       const auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(size);
@@ -536,7 +549,7 @@ void Graphics::CreateBuffers(Tracker::InstanceStruc &tInstance) {
     model.cbvwriteBuffer->Map(
         0, &readRange,
         reinterpret_cast<void **>(
-            std::addressof(tInstance.instancedCBVData[trackedModel.first]))) >>
+            tInstance.GetCBVPtrtoPtr(trackedModel.first))) >>
         chk;
     {
       D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
@@ -612,7 +625,7 @@ void Graphics::UpdBuffer(
   }
 }
 
-void Graphics::LoadResources(Tracker::InstanceStruc &tInstance) {
+void Graphics::LoadResources(Tracker::Instance &tInstance) {
   commandAllocator->Reset() >> chk;
   commandList->Reset(commandAllocator.Get(), nullptr) >> chk;
   CreateBuffers(tInstance);
@@ -626,7 +639,7 @@ void Graphics::LoadResources(Tracker::InstanceStruc &tInstance) {
   }
 }
 
-void Graphics::UpdateLocalTransform(Object &bm) {
+void Graphics::UpdateLocalTransform(RenderedObject &bm) {
   using namespace DirectX;
   if (std::strstr(bm.model->uData->bdata[0].name.c_str(), "placeholder"))
     return;
@@ -654,7 +667,7 @@ void Graphics::RecurLTrans(ModelData::Node *n, ModelData::Node *P) {
 }
 
 // Fix model updates
-void Graphics::UpdateModel(Object *bm) {
+void Graphics::UpdateModel(RenderedObject *bm) {
   auto GlobITrans =
       XMMatrixInverse(nullptr, XMLoadFloat4x4(&bm->model->uData->ndata.matrix));
   if (!std::strstr(bm->model->uData->bdata[0].name.c_str(), "placeholder"))
@@ -698,6 +711,7 @@ void Graphics::UpdateModel(Object *bm) {
   UpdBuffer(*bm->model, commandList, pDevice, commandAllocator, commandQueue);
 }
 
+#ifndef __USESLANG
 Slang::ComPtr<IDxcBlob> Graphics::CompileShader(std::string ShaderSrc,
                                                 std::wstring CompileVersion,
                                                 std::wstring EntryPoint) {
@@ -758,9 +772,10 @@ Slang::ComPtr<IDxcBlob> Graphics::CompileShader(std::string ShaderSrc,
       chk;
   return Shaderblob;
 }
-Slang::ComPtr<slang::IBlob>
-Graphics::CompileShaderSlang(std::string ShaderSrc,
-                             std::string EntryPoint, SlangStage stage) {
+#else
+Slang::ComPtr<slang::IBlob> Graphics::CompileShaderSlang(std::string ShaderSrc,
+                                                         std::string EntryPoint,
+                                                         SlangStage stage) {
   using namespace slang;
   // Get slang to work somehow
   Slang::ComPtr<slang::IBlob> Result;
@@ -773,15 +788,16 @@ Graphics::CompileShaderSlang(std::string ShaderSrc,
   std::string SrcString = ifsBuffer.str();
   Slang::ComPtr<slang::IModule> Module;
   Module = iSession->loadModuleFromSourceString(
-      EntryPoint.c_str(), ShaderSrc.c_str(), SrcString.c_str(), diag.writeRef());
+      EntryPoint.c_str(), ShaderSrc.c_str(), SrcString.c_str(),
+      diag.writeRef());
   if (diag) {
     printf("ERROR: %s /n", (const char *)diag->getBufferPointer());
     fflush(stdout);
   }
 
   Slang::ComPtr<slang::IEntryPoint> vsEntry;
-  Module->findAndCheckEntryPoint(EntryPoint.c_str(), stage,
-                                   vsEntry.writeRef(), diag.writeRef());
+  Module->findAndCheckEntryPoint(EntryPoint.c_str(), stage, vsEntry.writeRef(),
+                                 diag.writeRef());
   if (diag) {
     printf("ERROR: %s /n", (const char *)diag->getBufferPointer());
     fflush(stdout);
@@ -811,11 +827,68 @@ Graphics::CompileShaderSlang(std::string ShaderSrc,
   }
   return Result;
 }
+#endif
+
+void Graphics::FovPerspectiveRHInfinite(DirectX::XMFLOAT4X4& fovOutput, float& fovRadians, float& aspect, float& nearClip){
+  
+  uint32_t wrap = 0;
+  wrap += -1;
+  auto e = 1/((float)wrap);
+  float focallength = 1/fovRadians*2;
+  DirectX::XMFLOAT4X4 Result{
+    focallength, 0,0,0,
+    0,focallength*aspect, 0,0,
+    0,0, e-(1-nearClip), (e-2)*(1-nearClip),
+    0,0,-1,0
+  };
+  fovOutput = Result;
+}
 
 void Graphics::UpdateFrameResources() {
-  windowResolution.Mtx.lock();
+  if (backBuffers.size() < bufferCount) {
+    rtvDescriptorHeap.Reset();
+    {
+      D3D12_DESCRIPTOR_HEAP_DESC dsc = {};
+      dsc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
+      dsc.NumDescriptors = bufferCount;
+      pDevice->CreateDescriptorHeap(&dsc, IID_PPV_ARGS(&rtvDescriptorHeap)) >>
+          chk;
+    }
+    dsvDescriptorHeap.Reset();
+    // Depth Stencil view Descriptor heap
+    {
+      const D3D12_DESCRIPTOR_HEAP_DESC desc = {
+          .Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV,
+          .NumDescriptors = bufferCount,
+      };
+      pDevice->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&dsvDescriptorHeap)) >>
+          chk;
+    }
+
+    CD3DX12_CPU_DESCRIPTOR_HANDLE temprtv;
+    rtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart(&temprtv);
+    CD3DX12_CPU_DESCRIPTOR_HANDLE tempdsv;
+    dsvDescriptorHeap->GetCPUDescriptorHandleForHeapStart(&tempdsv);
+    auto RtvSize = pDevice->GetDescriptorHandleIncrementSize(
+        D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+    auto DsvSize = pDevice->GetDescriptorHandleIncrementSize(
+        D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
+    backBuffers.resize(0);
+    for (uint8_t uFID = 0; uFID < bufferCount; uFID++) {
+
+      backBuffers.emplace_back(std::make_unique<FrameResource>(
+          PipelinePtrs, uFID,
+          CD3DX12_CPU_DESCRIPTOR_HANDLE(temprtv, uFID, RtvSize),
+          CD3DX12_CPU_DESCRIPTOR_HANDLE(tempdsv, uFID, DsvSize)));
+      // pFrameResource.InitBundle(pDevice.Get(), pipelineState.Get(), i,
+      // srvDescriptorHeap.Get(), srvDescriptorSize,
+      // samplerDescriptorHeap.Get(), samplerDescriptorSize,
+      // rootSignature.Get(), modelVect);
+    }
+  }
+
   if (windowResolution.Updated) {
-    // frMutex.lock();
+  windowResolution.Mtx.lock();
     fenceValue = fence->GetCompletedValue();
     {
       int8_t fv = fenceValue + 1;
@@ -830,34 +903,24 @@ void Graphics::UpdateFrameResources() {
     for (auto &b : backBuffers) {
       b->renderTarget.Reset();
     }
-    windowResolution.Mtx.lock();
 
-    auto width = windowResolution.wr.right - windowResolution.wr.left;
-    auto height = windowResolution.wr.bottom - windowResolution.wr.top;
-    width = width > 0 ? width : 8;
-    height = height > 0 ? height : 8;
-
-    swapChain->ResizeBuffers(bufferCount, width, height,
-                             DXGI_FORMAT_R8G8B8A8_UNORM,
+    swapChain->ResizeBuffers(bufferCount, windowResolution.wr.right, windowResolution.wr.bottom,
+                             DXGI_FORMAT_UNKNOWN,
                              DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING) >>
         chk;
-    scissorRect = CD3DX12_RECT(0, 0, width, height);
-    viewport = CD3DX12_VIEWPORT(0.f, 0.f, width, height);
-    XMStoreFloat4x4(&fovPerspective,
-                    DirectX::XMMatrixPerspectiveFovRH(
-                        DirectX::XM_PIDIV2, float(width) / float(height), 0.1f,
-                        1000000.0f));
+    scissorRect = CD3DX12_RECT(0, 0, windowResolution.wr.right, windowResolution.wr.bottom );
+    viewport = CD3DX12_VIEWPORT(0.f, 0.f, windowResolution.wr.right, windowResolution.wr.bottom );
+    float fov90Deg = DirectX::XM_PIDIV2;
+    float aspectRatio = float(windowResolution.wr.right) / float(windowResolution.wr.bottom);
+    float nearplane = 0.f;
+    FovPerspectiveRHInfinite(fovPerspective, fov90Deg, aspectRatio, nearplane);
 
     for (auto &b : backBuffers) {
-      b->UpdateResolution(this);
+      b->UpdateResolution(PipelinePtrs);
     }
     windowResolution.Mtx.unlock();
-
-    // frMutex.unlock();
-
-    // uFrameResource.notify_all();
   }
-  windowResolution.Mtx.unlock();
+
 }
 
 Graphics::~Graphics() {

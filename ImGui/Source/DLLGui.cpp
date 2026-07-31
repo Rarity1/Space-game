@@ -40,11 +40,11 @@ imguid::~imguid()
 // (Your code process and dispatch Win32 messages)
 void imguid::imPrepare()
 {
-
 	bool show_demo_window = true;
 // Start the Dear ImGui frame
 	ImGui_ImplDX12_NewFrame();
 	ImGui_ImplWin32_NewFrame();
+       
 	ImGui::NewFrame();
 	
 	

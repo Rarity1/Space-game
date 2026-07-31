@@ -1,7 +1,5 @@
 #pragma once
 #include "CWin.h"
-#include <string>
-#include <iostream>
 
 class DLL Exceptions : public std::exception
 {
@@ -19,17 +17,6 @@ protected:
 	mutable std::string whatBuffer;
 };
 
-class DebugStream : public std::streambuf {
-public:
-	virtual int overflow(int c = EOF) {
-		if (c != EOF) {
-			char buf[] = { static_cast<char>(c), '\0' };
-			OutputDebugStringA(buf);
-		}
-		return c;
-	}
-};
-
 class DLL HrException : public Exceptions {
 public:
   HrException(HRESULT hr, int line, const char *file) noexcept;
@@ -38,6 +25,17 @@ public:
   HRESULT GetErrorCode() const noexcept;
   std::string GetErrorDescription() const noexcept;
   std::string TranslateErrorCode(HRESULT hr) const noexcept;
+
 private:
   HRESULT hr;
+};
+
+class tsPrintBuffer {
+  static std::vector<std::string> Buffer;
+  static std::vector<std::string> Format;
+  static std::mutex bufferLock;
+  public:
+
+  static void PrintFBuffered();
+  static void QueuePrintF(std::string format, std::vector<std::string> str);
 };
