@@ -1,0 +1,48 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"type": "shell",
+			"label": "configure",
+			"command": "${env:SHELL}",
+			"args": [
+				"cmake",
+				"--preset",
+				"debug"
+			],
+			"problemMatcher": [],
+			"detail": "CMake configure task"
+		},
+		{
+			"type": "shell",
+			"label": "Build Debug",
+			"command": "${env:SHELL}",
+			"args": [
+				"cmake",
+				"--build",
+				"./out/build/debug"
+			],
+			"group": "build",
+			"problemMatcher": [],
+			"detail": "CMake build task",
+			"dependsOn": [
+			]
+		},
+      {
+			"type": "shell",
+			"label": "Install",
+			"command": "${env:SHELL}",
+			"args": [
+				"cmake",
+				"--install",
+				"${cwd}/out/build/debug"
+			],
+         "dependsOn": [
+            "Build Debug"
+			],
+			"problemMatcher": [],
+			"detail": "CMake Install task"
+		},
+
+	]
+}
