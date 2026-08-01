@@ -379,11 +379,6 @@ void Graphics::LoadPipeline() {
 void Graphics::Update() {
   UpdateFrameResources();
 
-  curCamera.posMtx.lock();
-  curCamera.cmatrix = DirectX::XMMatrixLookToRH(
-      XMLoadFloat3(curCamera.position), XMLoadFloat4(&curCamera.rotation),
-      XMLoadFloat4(&curCamera.upDirection));
-  curCamera.posMtx.unlock();
 
   using namespace DirectX;
   for(auto& tInstance : oTracker.GetActiveInstances()){
@@ -401,10 +396,11 @@ void Graphics::Update() {
                 XMMatrixTranslation(Position.x,
                                     Position.y,
                                     Position.z) *
-                curCamera.cmatrix * XMLoadFloat4x4(&fovPerspective)));
+                XMLoadFloat4x4(&tInstance->ActiveCamera()->cMatrix) * XMLoadFloat4x4(&fovPerspective)));
       }
     }
   };
+
 }
 
 void Graphics::RenderFrame() {
@@ -443,11 +439,11 @@ void Graphics::RenderFrame() {
   commandQueue->ExecuteCommandLists(commandLists.size(), commandLists.data());
   commandQueue->Signal(fence.Get(), cframeBuffer.fenceValue) >> chk;
 
-  // Fence to prevent backbuffer race conditions. 0 is valid though throws a
+  //  0 is valid though throws a
   // warning in debug mode.
   cframeIndex = swapChain->GetCurrentBackBufferIndex();
   // Vsync off. add toggle here for changing vsync
-  swapChain->Present(0, 512) >> chk;
+  swapChain->Present(0, DXGI_PRESENT_ALLOW_TEARING | DXGI_PRESENT_DO_NOT_WAIT) >> chk;
 }
 
 void Graphics::CreateBuffers(Tracker::Instance &tInstance) {

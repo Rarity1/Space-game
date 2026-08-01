@@ -30,9 +30,255 @@ void Engine::iLoad() {
 
     //Instance memory is handled by tracker will always be valid as long as tracker is valid
     auto& instance = tracker.initInstance();
+    auto instanceID = instance.GetID();
     cTrackedInstance = instance.GetID();
     tracker.MakeInstanceActive(instance);
-    plModel = tracker.initPhysObject(instance, "untitled", []{},2, 1,DirectX::XMFLOAT3{ 0,0,138 }, DirectX::XMFLOAT4{ 0,0,0,1}, 2000.0);
+
+    //Move these custom lambda functions to their own functions so this isnt so messy.
+    //Also figure out a clean way to decouple camera updates from engine tickrate
+    auto Camera =
+        tracker.initCameraObject(instance, "Main", [this, instanceID] {
+                //Toggle Freecam
+
+          Movement move;
+          auto& Camera = *tracker.getInstance(instanceID)
+                .ActiveCamera();
+
+
+          if (m_keysPressed.FindBuffered(KeysPressed::J) && inputDelay.Peek() > 0.5) {
+              inputDelay.Mark();
+              Camera.ToggleFreedom();
+          }      
+          float pitch = 0;
+          float yaw = 0;
+          float roll = 0;
+          {
+            // Rotation per second in radians //Currently 90 degrees per second
+            double rotationPS = ucontrolClock.Peek() * DirectX::XM_PIDIV2;
+            if (m_keysPressed.FindBuffered(KeysPressed::up)) {
+              pitch += rotationPS;
+            }
+            if (m_keysPressed.FindBuffered(KeysPressed::down)) {
+              pitch += -rotationPS;
+            }
+            if (m_keysPressed.FindBuffered(KeysPressed::left)) {
+              yaw += -rotationPS;
+            }
+            if (m_keysPressed.FindBuffered(KeysPressed::right)) {
+              yaw += rotationPS;
+            }
+
+            if (m_keysPressed.FindBuffered(KeysPressed::Q)) {
+              roll += rotationPS;
+            }
+            if (m_keysPressed.FindBuffered(KeysPressed::E)) {
+              roll += -rotationPS;
+            }
+          }
+
+          if (pitch != 0 || yaw != 0 || roll != 0)
+            Camera.Rotate(pitch, yaw, roll);
+          {
+            auto movespeed = 2.0;
+            if (m_keysPressed.FindBuffered(KeysPressed::W)) {
+              move.forward += movespeed;
+            }
+            if (m_keysPressed.FindBuffered(KeysPressed::S)) {
+              move.forward -= movespeed;
+            }
+            if (m_keysPressed.FindBuffered(KeysPressed::A)) {
+              move.left += movespeed;
+            }
+            if (m_keysPressed.FindBuffered(KeysPressed::D)) {
+              move.left -= movespeed;
+            }
+            if (m_keysPressed.FindBuffered(KeysPressed::K)) {
+              move.movestop = true;
+            }
+          }
+          if (Camera.isFree()) {
+            if (move.forward != 0 || move.left != 0) {
+              // Figure this out
+              using namespace DirectX;
+
+              auto Pos = Camera.cPos.Get();
+              auto Rotation = Camera.cPos.GetRotation();
+              auto upDirection = Camera.cPos.GetUpDirection();
+              XMStoreFloat3(&Pos,
+                            XMLoadFloat4(&Rotation) *
+                                    (float)(move.forward * ucontrolClock.Peek()) +
+                                XMLoadFloat3(&Pos));
+              XMStoreFloat3(&Pos,
+                            XMVector3Transform(
+                                XMLoadFloat4(&Rotation),
+                                XMMatrixRotationAxis(
+                                    XMLoadFloat4(&upDirection),
+                                    XMConvertToRadians(90.0f))) *
+                                    (float)(move.left * ucontrolClock.Peek()) +
+                                XMLoadFloat3(&Pos));
+              Camera.cPos.Move(Pos);
+            }
+          }else if((move.forward != 0 || move.left != 0) && Camera.GetLinked()){
+            using namespace DirectX;
+              auto Pos = Camera.GetLinked()->mPos.Get();
+              auto Rotation = Camera.cPos.GetRotation();
+              auto upDirection = Camera.cPos.GetUpDirection();
+              XMStoreFloat3(&Pos,
+                            XMLoadFloat4(&Rotation) *
+                                    (float)(move.forward * ucontrolClock.Peek()) +
+                                XMLoadFloat3(&Pos));
+              XMStoreFloat3(&Pos,
+                            XMVector3Transform(
+                                XMLoadFloat4(&Rotation),
+                                XMMatrixRotationAxis(
+                                    XMLoadFloat4(&upDirection),
+                                    XMConvertToRadians(90.0f))) *
+                                    (float)(move.left * ucontrolClock.Peek()) +
+                                XMLoadFloat3(&Pos));
+              Camera.cPos.Move(Pos);
+          }
+          ucontrolClock.Mark();
+        }, {0,0,0} , {1,0,0,0}, {0,0,1,0});
+
+    Camera->MakeActive();
+
+    plModel = tracker.initPhysObject(
+        instance, "untitled",
+        [this, Camera] {
+          Movement move;
+          
+          {
+            auto movespeed = 2.0;
+            if (m_keysPressed.FindBuffered(KeysPressed::W)) {
+              move.forward += movespeed;
+            }
+            if (m_keysPressed.FindBuffered(KeysPressed::S)) {
+              move.forward -= movespeed;
+            }
+            if (m_keysPressed.FindBuffered(KeysPressed::A)) {
+              move.left += movespeed;
+            }
+            if (m_keysPressed.FindBuffered(KeysPressed::D)) {
+              move.left -= movespeed;
+            }
+            if (m_keysPressed.FindBuffered(KeysPressed::K)) {
+              move.movestop = true;
+            }
+          }
+          if(plModel == nullptr) return;
+          if(Camera == nullptr) return;
+          auto &pmodl = *(PhysicsObject *)plModel;
+          auto CameraRotation = Camera->cPos.GetRotation();
+          auto CameraUpDir = Camera->cPos.GetUpDirection();
+          if (!Camera->isFree()) {
+            if (move.forward != 0 && !move.movestop) {
+              float oldspeed = pmodl.speed <= 0.0001 ? 0 : pmodl.speed;
+              DirectX::XMFLOAT4 forwardScale = {0, 0, 0, 0};
+
+              {
+                using namespace DirectX;
+                
+                DirectX::XMStoreFloat4(
+                    &forwardScale,
+                    DirectX::XMVector3Dot(
+                        XMLoadFloat3(&pmodl.velDir),
+                        XMLoadFloat4(&CameraRotation) *
+                            (fabs(move.forward) / move.forward)));
+              }
+              forwardScale.x = fabs(forwardScale.x);
+
+              auto forwardSpeed = move.forward * updateClock.Peek() * 0.1;
+              float totalForwardSpeed = pmodl.speed + fabs(forwardSpeed);
+              float forwardSpeedScalar =
+                  fabs(forwardSpeed * (forwardScale.x) -
+                       forwardSpeed * (1 - forwardScale.x)) /
+                  totalForwardSpeed;
+              float invertedForwardSpeedScalar =
+                  fabs(pmodl.speed * (forwardScale.x)) / totalForwardSpeed;
+              if (forwardScale.y < 0) {
+                pmodl.speed = fabs(pmodl.speed - fabs(forwardSpeed));
+              } else {
+                pmodl.speed = pmodl.speed + fabs(forwardSpeed);
+              }
+
+              // Figure this out
+              DirectX::XMFLOAT3 Temporarydir;
+              {
+                using namespace DirectX;
+                DirectX::XMStoreFloat3(
+                    &Temporarydir,
+                    XMVector3Normalize(XMLoadFloat4(&CameraRotation) *
+                                           (fabs(move.forward) / move.forward) *
+                                           fabs(forwardSpeedScalar) +
+                                       XMLoadFloat3(&pmodl.velDir) *
+                                           invertedForwardSpeedScalar));
+              }
+
+              pmodl.velDir = Temporarydir;
+            }
+            if (move.left != 0 && !move.movestop) {
+              float oldspeed = pmodl.speed <= 0.0001 ? 0 : pmodl.speed;
+              DirectX::XMFLOAT4 leftScale = {0, 0, 0, 0};
+
+              {
+                using namespace DirectX;
+                DirectX::XMStoreFloat4(
+                    &leftScale,
+                    DirectX::XMVector3Dot(
+                        XMLoadFloat3(&pmodl.velDir),
+                        XMVector3Transform(
+                            XMLoadFloat4(&CameraRotation),
+                            XMMatrixRotationAxis(
+                                XMLoadFloat4(&CameraUpDir),
+                                XMConvertToRadians(90.0f))) *
+                            (fabs(move.left) / move.left)));
+              }
+              leftScale.x = fabs(leftScale.x);
+
+              auto leftSpeed = move.left * updateClock.Peek() * 0.1;
+              float totallefftSpeed = pmodl.speed + fabs(leftSpeed);
+              float leftSpeedScalar = fabs(leftSpeed * (leftScale.x) -
+                                           leftSpeed * (1 - leftScale.x)) /
+                                      totallefftSpeed;
+              float invertedleftSpeedScalar =
+                  fabs(pmodl.speed * (leftScale.x)) / totallefftSpeed;
+              if (leftScale.y < 0) {
+                pmodl.speed = fabs(pmodl.speed - fabs(leftSpeed));
+              } else {
+                pmodl.speed = pmodl.speed + fabs(leftSpeed);
+              }
+              // Figure this out
+              DirectX::XMFLOAT3 Temporarydir;
+              {
+                using namespace DirectX;
+                DirectX::XMStoreFloat3(
+                    &Temporarydir,
+                    XMVector3Normalize(
+                        XMVector3Transform(
+                            XMLoadFloat4(&CameraRotation),
+                            XMMatrixRotationAxis(
+                                XMLoadFloat4(&CameraUpDir),
+                                XMConvertToRadians(90.0f))) *
+                            (fabs(move.left) / move.left) *
+                            fabs(leftSpeedScalar) +
+                        XMLoadFloat3(&pmodl.velDir) * invertedleftSpeedScalar));
+              }
+
+              pmodl.velDir = Temporarydir;
+            }
+
+            if (move.movestop) {
+              pmodl.velDir = {0, 0, 0};
+              pmodl.speed = 0;
+            }
+          
+          }
+          updateClock.Mark();
+        },
+        2, 1, DirectX::XMFLOAT3{0, 0, 138}, DirectX::XMFLOAT4{0, 0, 0, 1},
+        2000.0);
+    Camera->LinkTo((RenderedObject*)plModel);
+    //Camera->AddParent(plModel);
     tracker.initPhysObject(instance, "cube", []{},1, 1, DirectX::XMFLOAT3{ 10,0,138 }, DirectX::XMFLOAT4{ 0,0,0,1}, 200);
     tracker.initPhysObject(instance, "wrld", []{},4, 1, DirectX::XMFLOAT3{ 0,0,0 }, DirectX::XMFLOAT4{ 0,0,0,1}, 8570000000.0);
     //wrld is 1:50000
@@ -97,9 +343,11 @@ void Engine::EngineLoop() {
         loopLock.unlock();
         last = Clock.Mark();
         last = last >= urate ? last - urate : 0;
+        
         enQueueEngineCommands();
         enQueueExternCommands();
         eventBusSync();
+
     }
 }
 
@@ -108,7 +356,6 @@ bool Engine::Update()
     
     tsPrintBuffer::PrintFBuffered();
     UControls();
-    ucontrolClock.Mark();
     loopVariable.notify_all();
     mAniUpdate();
     //Update rendered instances every frame
@@ -119,123 +366,6 @@ bool Engine::Update()
 
 
 //Calculate instances based on playermodel position ?
- void Engine::cPlayermodel()
- {
-     std::unique_ptr<Movement> move(std::make_unique<Movement>());
-
-     {
-         auto movespeed = 2.0;
-         if (m_keysPressed.FindBuffered(KeysPressed::W)) {
-             move->forward += movespeed;
-         }if (m_keysPressed.FindBuffered(KeysPressed::S)) {
-             move->forward -= movespeed;
-         }if (m_keysPressed.FindBuffered(KeysPressed::A)) {
-             move->left += movespeed;
-         }if (m_keysPressed.FindBuffered(KeysPressed::D)) {
-             move->left -= movespeed;
-         }
-         if (m_keysPressed.FindBuffered(KeysPressed::K)) {
-             move->movestop = true;
-         }
-     }
-
-     auto& pmodl = *(PhysicsObject*)plModel;
-
-     if (freeCamTGL.load()) {
-         if (move->forward != 0 || move->left != 0) {
-             // Figure this out
-             using namespace DirectX;
-
-             XMStoreFloat3(&freeCamPos, XMLoadFloat4(&rGfx.curCamera.rotation) * (float)(move->forward * updateClock.Peek()) + XMLoadFloat3(&freeCamPos));
-             XMStoreFloat3(&freeCamPos, XMVector3Transform(XMLoadFloat4(&rGfx.curCamera.rotation), XMMatrixRotationAxis(XMLoadFloat4(&rGfx.curCamera.upDirection), XMConvertToRadians(90.0f))) * (float)(move->left * updateClock.Peek()) + XMLoadFloat3(&freeCamPos));
-
-         }
-         if (move->movestop) {
-             pmodl.velDir = { 0,0,0 };
-             pmodl.speed = 0;
-         }
-     }
-     else {
-         if (move->forward != 0 && !move->movestop) {
-             float oldspeed = pmodl.speed <= 0.0001 ? 0 : pmodl.speed;
-             DirectX::XMFLOAT4 forwardScale = { 0,0,0,0 };
-
-             {
-                 using namespace DirectX;
-                 DirectX::XMStoreFloat4(&forwardScale, DirectX::XMVector3Dot(XMLoadFloat3(&pmodl.velDir), XMLoadFloat4(&rGfx.curCamera.rotation) * (fabs(move->forward) / move->forward)));
-             }
-             forwardScale.x = fabs(forwardScale.x);
-
-             auto forwardSpeed = move->forward * updateClock.Peek() * 0.1;
-             float totalForwardSpeed = pmodl.speed + fabs(forwardSpeed);
-             float forwardSpeedScalar = fabs(forwardSpeed * (forwardScale.x) - forwardSpeed * (1 - forwardScale.x)) / totalForwardSpeed;
-             float invertedForwardSpeedScalar = fabs(pmodl.speed * (forwardScale.x)) / totalForwardSpeed;
-             if (forwardScale.y < 0) {
-                 pmodl.speed = fabs(pmodl.speed - fabs(forwardSpeed));
-             }
-             else {
-                 pmodl.speed = pmodl.speed + fabs(forwardSpeed);
-
-             }
-
-             // Figure this out
-             DirectX::XMFLOAT3 Temporarydir;
-             {
-                 using namespace DirectX;
-                 DirectX::XMStoreFloat3(&Temporarydir, XMVector3Normalize(XMLoadFloat4(&rGfx.curCamera.rotation) * (fabs(move->forward) / move->forward) * fabs(forwardSpeedScalar) + XMLoadFloat3(&pmodl.velDir) * invertedForwardSpeedScalar));
-
-             }
-
-
-
-
-             pmodl.velDir = Temporarydir;
-         }
-         if (move->left != 0 && !move->movestop) {
-             float oldspeed = pmodl.speed <= 0.0001 ? 0 : pmodl.speed;
-             DirectX::XMFLOAT4 leftScale = { 0,0,0,0 };
-
-             {
-                 using namespace DirectX;
-                 DirectX::XMStoreFloat4(&leftScale, DirectX::XMVector3Dot(XMLoadFloat3(&pmodl.velDir), XMVector3Transform(XMLoadFloat4(&rGfx.curCamera.rotation), XMMatrixRotationAxis(XMLoadFloat4(&rGfx.curCamera.upDirection), XMConvertToRadians(90.0f))) * (fabs(move->left) / move->left)));
-             }
-             leftScale.x = fabs(leftScale.x);
-
-             auto leftSpeed = move->left * updateClock.Peek() * 0.1;
-             float totallefftSpeed = pmodl.speed + fabs(leftSpeed);
-             float leftSpeedScalar = fabs(leftSpeed * (leftScale.x) - leftSpeed * (1 - leftScale.x)) / totallefftSpeed;
-             float invertedleftSpeedScalar = fabs(pmodl.speed * (leftScale.x)) / totallefftSpeed;
-             if (leftScale.y < 0) {
-                 pmodl.speed = fabs(pmodl.speed - fabs(leftSpeed));
-             }
-             else {
-                 pmodl.speed = pmodl.speed + fabs(leftSpeed);
-             }
-             // Figure this out
-             DirectX::XMFLOAT3 Temporarydir;
-             {
-                 using namespace DirectX;
-                 DirectX::XMStoreFloat3(&Temporarydir, XMVector3Normalize(XMVector3Transform(XMLoadFloat4(&rGfx.curCamera.rotation), XMMatrixRotationAxis(XMLoadFloat4(&rGfx.curCamera.upDirection), XMConvertToRadians(90.0f))) * (fabs(move->left) / move->left) * fabs(leftSpeedScalar) + XMLoadFloat3(&pmodl.velDir) * invertedleftSpeedScalar));
-
-             }
-
-
-
-
-             pmodl.velDir = Temporarydir;
-         }
-
-
-         
-         if (move->movestop) {
-             pmodl.velDir = { 0,0,0 };
-             pmodl.speed = 0;
-         }
-     }
-
-
-
- }
 
 void Engine::mAniUpdate(){
     using namespace DirectX;
@@ -253,14 +383,12 @@ void Engine::mAniUpdate(){
 
     }
     */
-
 }
 
-void Engine::uPosInstances()
+void Engine::updateInstances()
 {
     for (auto& Instance : tracker.GetActiveInstances()) {
-      auto& Objects = Instance->GetPhysicsObjects();
-        std::for_each( Objects.begin(), Objects.end(), [](auto& e) { ((PhysicsObject*)e)->UpdatePosition(); });
+      Instance->InstanceObject->UpdateChildren();
     }
 }
 
@@ -277,8 +405,6 @@ void Engine::uPhysics()
 int Engine::eventBusSync()
 {
     tMain->gEndWork(eWref);
-    updateClock.Mark();
-
     return 0;
 }
 
@@ -305,13 +431,13 @@ std::vector<std::function<void()>>& Engine::getCQueue()
 void Engine::enQueueEngineCommands()
 {
     queueCommand([this] {
-        cPlayermodel();
+
     }, 0);
     queueCommand([this] {
         uPhysics();
     }, 20);
     queueCommand([this] {
-        uPosInstances();
+        updateInstances();
         }, 21);
     //queueCommand([this] {rGfx.Update(tracker.trackedObjects);}, 65535);
     eWref = tMain->gPushWork(getCQueue());
@@ -321,99 +447,9 @@ void Engine::enQueueExternCommands()
 {
 }
 
-void Engine::UCampos() {
-    auto& pmodl = *(PhysicsObject*)plModel;
-    //Please add a threadsafe way to update position
-    if (rGfx.curCamera.position == nullptr) {
-        rGfx.curCamera.position = pmodl.mPos.GetPtr();
-    }
-
-    //Toggle Freecam
-    if (m_keysPressed.FindBuffered(KeysPressed::J) && inputDelay.Peek() > 0.5) {
-        inputDelay.Mark();
-        if (freeCamTGL.load()) {
-            freeCamTGL.store(false);
-            rGfx.curCamera.position = pmodl.mPos.GetPtr();
-        }
-        else {
-            freeCamTGL.store(true);
-            freeCamPos = pmodl.mPos.Get();
-            rGfx.curCamera.position = &freeCamPos;
-            //rGfx.curCamera.posMtx = &freeCamMTX;
-        }
-    }
-
-    float pitch = 0;
-    float yaw = 0;
-    float roll = 0;
-    {
-        //Rotation per second in radians //Currently 90 degrees per second
-        double rotationPS = ucontrolClock.Peek() * DirectX::XM_PIDIV2;
-
-        if (m_keysPressed.FindBuffered(KeysPressed::up)) {
-            pitch += rotationPS;
-        }
-        if (m_keysPressed.FindBuffered(KeysPressed::down)) {
-            pitch += -rotationPS;
-        }
-        if (m_keysPressed.FindBuffered(KeysPressed::left)) {
-            yaw += -rotationPS;
-        }
-        if (m_keysPressed.FindBuffered(KeysPressed::right)) {
-            yaw += rotationPS;
-        }
-
-        if (m_keysPressed.FindBuffered(KeysPressed::Q)) {
-            roll += rotationPS;
-        }
-        if (m_keysPressed.FindBuffered(KeysPressed::E)) {
-            roll += -rotationPS;
-        }
-    }
 
 
-    if(pitch != 0 || yaw != 0 || roll != 0)
-    RotateCam(pitch, yaw, roll);
 
-
-}
-
-
-void Engine::RotateCam(float Pitch, float Yaw, float Roll) {
-    auto updirect = XMLoadFloat4(&rGfx.curCamera.upDirection);
-    auto lookdirect = XMLoadFloat4(&rGfx.curCamera.rotation);
-    
-    //auto gravdirect = DirectX::XMQuaternionInverse(XMLoadFloat4(&plModel->grav));
-    if (Yaw != 0) {
-        auto temp = DirectX::XMQuaternionRotationNormal(updirect, Yaw);
-        auto left = DirectX::XMQuaternionMultiply(temp, lookdirect);
-        
-        lookdirect = DirectX::XMQuaternionMultiply(left, DirectX::XMQuaternionConjugate(temp));
-        auto qup = DirectX::XMQuaternionMultiply(temp, updirect);
-        updirect = DirectX::XMQuaternionMultiply(qup, DirectX::XMQuaternionConjugate(temp));
-    }
-    if (Roll != 0) {
-        auto temp = DirectX::XMQuaternionRotationNormal((lookdirect), Roll);
-        auto qup = DirectX::XMQuaternionMultiply(temp, updirect);
-        updirect = DirectX::XMQuaternionMultiply(qup, DirectX::XMQuaternionConjugate(temp));
-        auto left = DirectX::XMQuaternionMultiply(temp, lookdirect);
-        lookdirect = DirectX::XMQuaternionMultiply(left, DirectX::XMQuaternionConjugate((temp)));
-    }
-    if (Pitch != 0) {
-        auto temp = DirectX::XMQuaternionRotationNormal(DirectX::XMQuaternionMultiply(lookdirect, updirect), Pitch);
-        auto qup = DirectX::XMQuaternionMultiply(temp, updirect);
-
-
-        updirect = DirectX::XMQuaternionMultiply(qup, DirectX::XMQuaternionConjugate(temp));
-
-        auto left = DirectX::XMQuaternionMultiply(temp, lookdirect);
-        lookdirect = DirectX::XMQuaternionMultiply(left, DirectX::XMQuaternionConjugate((temp)));
-    }
-    
-    
-    DirectX::XMStoreFloat4(&rGfx.curCamera.rotation, lookdirect);
-    DirectX::XMStoreFloat4(&rGfx.curCamera.upDirection, updirect);
-}
 
 
 DirectX::XMFLOAT3 Engine::rWorld(DirectX::XMFLOAT3 pos1) {
@@ -526,7 +562,6 @@ void Engine::UControls() {
             OnKeyDown(ss->GetCode());
         }
     }
-    UCampos();
 }
 
 

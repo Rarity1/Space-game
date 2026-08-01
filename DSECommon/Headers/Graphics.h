@@ -38,14 +38,6 @@ Tracker& oTracker;
   DXGI_FORMAT SwapChainFormat = DXGI_FORMAT_R10G10B10A2_UNORM;
   HMODULE DXGIDebug;
   void dxgichk();
-  struct pCamera {
-    const DirectX::XMFLOAT3 *position = nullptr;
-    std::mutex posMtx;
-    DirectX::XMFLOAT4 rotation = {1, 0, 0, 0};
-    DirectX::XMFLOAT4 upDirection = {0, 0, 1, 0};
-    DirectX::XMFLOAT4 forwardDirect = {1, 0, 0, 0};
-    DirectX::XMMATRIX cmatrix;
-  };
   // update graphics for a list of tracked objects. Preferably objects loaded in
   // memory and meant to be rendered
   void Update();
@@ -71,10 +63,7 @@ Tracker& oTracker;
   #endif
   HWND &hWnd;
   const UINT bufferCount = 3;
-
-  pCamera curCamera;
   std::vector<std::string> loadbuff;
-
   void UpdateFrameResources();
   std::condition_variable uFrameResource;
   std::mutex frMutex;

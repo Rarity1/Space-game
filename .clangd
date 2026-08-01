@@ -2,6 +2,6 @@ Diagnostics:
   Suppress: builtin_definition
 CompileFlags:
   Add: [-Wall]
-  Remove: [-fmodules-ts, -fmodule-mapper=*, -fdeps-format=*]
+  Remove: [-fmodules-ts, -fmodule-mapper=*, -fdeps-format=*, -mcrtdll=*]
   Compiler: g++
   BuiltinHeaders: QueryDriver

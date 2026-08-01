@@ -112,11 +112,9 @@ private:
 	void OnKeyDown(unsigned char key);
 	void OnKeyUp(unsigned char key);
 	void UControls();
-	void RotateCam(float Pitch = 0, float Yaw = 0, float Roll = 0);
-	void UCampos();
-	void cPlayermodel();
 	void mAniUpdate();
-	void uPosInstances();
+  //Update active instances
+	void updateInstances();
 	void uPhysics();
 
 	std::mutex evBusLock;
@@ -124,10 +122,6 @@ private:
 
 	DirectX::XMFLOAT4 cWorld;
 	DirectX::XMFLOAT4 nWorld;
-
-	DirectX::XMFLOAT3 freeCamPos{ 0, 0, 0 };
-	std::mutex freeCamMTX;
-	std::atomic<bool> freeCamTGL = false;
 	EngineTime inputDelay;
 	std::vector<std::function<void()>> wFunctions;
 	Keyboard& kbd;
