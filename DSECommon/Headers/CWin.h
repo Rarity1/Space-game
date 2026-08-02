@@ -64,6 +64,8 @@
 #define STRICT
 #pragma once
 #include <windows.h>
+#include <minwindef.h>
+#include <winnt.h>
 #include <string>
 #include <vector>
 #include <array>
@@ -71,10 +73,14 @@
 #include <cstdint>
 #include <sdkddkver.h>
 
+
+
+#ifndef DLL
 #ifdef DESCDLL
 #define DLL __declspec( dllexport )
 #else
 #define DLL __declspec( dllimport )
+#endif
 #endif
 
 #define IDI_ICON1 101

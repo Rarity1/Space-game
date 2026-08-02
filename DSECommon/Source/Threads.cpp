@@ -1,182 +1,111 @@
 #include "Threads.h"
 #include <cassert>
+#include <memory>
 
 
 //Add more depth when doing recursive functions. Depth is amount of thread recursion - 1
-THREADS::THREADS(int cCount, uint8_t Depth) {
+THREADS::THREADS(int cCount):
+IDMapPtr(std::make_unique<std::unordered_map<std::thread::id, THREAD*>>()), MasterthreadIDMap(*IDMapPtr),
+IDMutexPtr(std::make_unique<std::mutex>()), IDMutex(*IDMutexPtr) {
 	tCount = cCount;
-	DepthIndex = Depth;
-	for (UINT t = 0; t < tCount; t++) {
-		Threads[t] = new THREAD();
-		threadIDMap[Threads[t]->thread.get_id()] = Threads[t];
+	for (int t = 0; t < tCount; t++) {
+		Threads.emplace_back(std::make_unique<THREAD>());
+		threadIDMap.insert({Threads[t]->thread.get_id(), Threads[t].get()});
 	}
-	if (Depth > 0) {
-		SubThreads = std::make_unique<THREADS>(cCount, Depth - 1);
-		threadIDMap.insert(SubThreads->threadIDMap.begin(), SubThreads->threadIDMap.end());
-	}
+  MasterthreadIDMap.insert(threadIDMap.begin(), threadIDMap.end());
+};
+
+THREADS::THREADS(int cCount,
+                 std::unordered_map<std::thread::id, THREAD *> &PIDMap,
+                 std::unordered_map<std::thread::id, THREAD *> &MasterIDMap,
+                 std::mutex &Mutex, uint8_t DepthID)
+    : MasterthreadIDMap(MasterIDMap), IDMutex(Mutex) {
+  tCount = cCount;
+  DepthIndex = DepthID;
+
+  for (int t = 0; t < tCount; t++) {
+    Threads.emplace_back(std::make_unique<THREAD>());
+    threadIDMap.insert({Threads[t]->thread.get_id(), Threads[t].get()});
+  }
+  IDMutex.lock();
+  MasterIDMap.insert(threadIDMap.begin(), threadIDMap.end());
+  PIDMap.insert(threadIDMap.begin(), threadIDMap.end());
+  IDMutex.unlock();
 };
 
 THREADS::~THREADS() {
-	for (auto t = 0; t < tCount; t++) delete Threads[t];
 }
 
-THREADS::WRef THREADS::gPushWork(std::function<void()> f)
+
+ THREADS::WRef THREADS::gPushWork(std::function<void()> f)
 {
-	WRef Result{ 0, DepthIndex };
-	uint8_t least = 0;
-	uint8_t tInd = 0;
-	bool valid = false;
-	uint8_t twCount(0);
-	if (threadIDMap.find(std::this_thread::get_id()) == threadIDMap.end()) {
-		for (uint8_t i = 0; i < tCount; i++) {
-			twCount = Threads[i]->qSize.load() + Threads[i]->lWaiting.load();
-			if (twCount < least || !valid) {
-				valid = true;
-				least = twCount;
-				tInd = i;
-			}
-
-			
-
-		}
-	}
-	else {
-		if (DepthIndex > 0) {
-			return SubThreads->gPushWork(std::move(f));
-		}
-		else {
-      assert(false);
-			//If this code runs just add more depth
-			/*
-			for (uint8_t i = 0; i < tCount; i++) {
-				bool test = threadIDMap[std::this_thread::get_id()] != Threads[i];
-				twCount = Threads[i]->qSize.load() + Threads[i]->lWaiting.load();
-				if ((twCount < least && test) || (!valid && test)) {
-					valid = true;
-					least = twCount;
-					tInd = i;
-				}
-			}
-			*/
-		}
-	}
-
-	//Process depth needed if this throws
-	assert(valid);
-	Threads[tInd]->cMut.lock();
-	Result.uWid = Threads[tInd]->tPushWork(std::move(f));
-	Threads[tInd]->cMut.unlock();
-	Result.Worker = Threads[tInd];
-	Threads[tInd]->cVariable.notify_one();
-
-
-	return Result;
-}
-
-inline THREADS::WRef THREADS::gPushWork(std::function<void()>& f)
-{
-	WRef Result{ 0, DepthIndex };
-	uint8_t least = 0;
-	uint8_t tInd = 0;
-	bool valid = false;
-	uint8_t twCount(0);
-	if (threadIDMap.find(std::this_thread::get_id()) == threadIDMap.end()) {
-		for (uint8_t i = 0; i < tCount; i++) {
-			twCount = Threads[i]->qSize.load() + Threads[i]->lWaiting.load();
-			if (twCount < least || !valid) {
-				valid = true;
-				least = twCount;
-				tInd = i;
-			}
-
-
-
-		}
-	}
-	else {
-		if (DepthIndex > 0) {
-			return SubThreads->gPushWork(std::move(f));
-		}
-		else {
-			//If this code runs just add more depth
-			for (uint8_t i = 0; i < tCount; i++) {
-				bool test = threadIDMap[std::this_thread::get_id()] != Threads[i];
-				twCount = Threads[i]->qSize.load() + Threads[i]->lWaiting.load();
-				if ((twCount < least && test) || (!valid && test)) {
-					valid = true;
-					least = twCount;
-					tInd = i;
-				}
-			}
-		}
-	}
-
-	assert(valid);
-	Threads[tInd]->cMut.lock();
-	Result.uWid = Threads[tInd]->tPushWork(std::move(f));
-	Threads[tInd]->cMut.unlock();
-	Result.Worker = Threads[tInd];
-	Threads[tInd]->cVariable.notify_one();
-
-
-	return Result;
-}
-
+  return PushToSubThread(f);
+ }
 
 //Pushes batch of work onto single thread
-inline THREADS::WRef THREADS::gPushWork(std::vector<std::function<void()>>& f)
+ THREADS::WRef THREADS::gPushWork(std::vector<std::function<void()>> f)
 {
 
-	std::function<void()> recur([&f]() {auto vect = std::move(f); auto iter = vect.begin(); recurBatch(vect, iter); });
-
-	WRef Result{ 0, DepthIndex };
-	uint8_t least = 0;
-	uint8_t tInd = 0;
-	bool valid = false;
-	uint8_t twCount(0);
-	if (threadIDMap.find(std::this_thread::get_id()) == threadIDMap.end()) {
-		for (uint8_t i = 0; i < tCount; i++) {
-			twCount = Threads[i]->qSize.load() + Threads[i]->lWaiting.load();
-			if (twCount < least || !valid) {
-				valid = true;
-				least = twCount;
-				tInd = i;
-			}
-
-
-
-		}
-	}
-	else {
-		if (DepthIndex > 0) {
-			return SubThreads->gPushWork(std::move(recur));
-		}
-		else {
-			//If this code runs just add more depth
-			for (uint8_t i = 0; i < tCount; i++) {
-				bool test = threadIDMap[std::this_thread::get_id()] != Threads[i];
-				twCount = Threads[i]->qSize.load() + Threads[i]->lWaiting.load();
-				if ((twCount < least && test) || (!valid && test)) {
-					valid = true;
-					least = twCount;
-					tInd = i;
-				}
-			}
-		}
-	}
-
-	assert(valid);
-	Threads[tInd]->cMut.lock();
-	Result.uWid = Threads[tInd]->tPushWork(std::move(recur));
-	Threads[tInd]->cMut.unlock();
-	Result.Worker = Threads[tInd];
-	Threads[tInd]->cVariable.notify_one();
-
-
-	return Result;
+	std::function<void()> recur([f]() {auto iter = f.begin(); recurBatch(f, iter); });
+  return PushToSubThread(recur);
 }
 
+THREADS::WRef THREADS::PushToSubThread(std::function<void()> &f) {
 
+  WRef Result{0, DepthIndex};
+  uint8_t least = 0;
+  uint8_t tInd = 0;
+  bool valid = false;
+  uint8_t twCount(0);
+  IDMutex.lock();
+  bool containID = MasterthreadIDMap.contains(std::this_thread::get_id());
+  IDMutex.unlock();
+  if (!containID) {
+    for (uint8_t i = 0; i < tCount; i++) {
+      twCount = Threads[i]->qSize.load() + Threads[i]->lWaiting.load();
+      if (twCount < least || !valid) {
+        valid = true;
+        least = twCount;
+        tInd = i;
+      }
+    }
+    assert(valid);
+    Result.uWid = Threads[tInd]->tPushWork(std::move(f));
+    Result.Worker = Threads[tInd].get();
+    Threads[tInd]->cVariable.notify_one();
+  } else {
+    IDMutex.lock();
+    bool contain = SubThreadIDMap.contains(std::this_thread::get_id()) ||
+                   threadIDMap.contains(std::this_thread::get_id());
+    IDMutex.unlock();
+    if (contain) {
+      SubThreadsCreationLock.lock();
+      if (SubThreads.get()) {
+        Result = SubThreads->PushToSubThread(f);
+      } else {
+        SubThreads = std::make_unique<THREADS>(
+            tCount, SubThreadIDMap, MasterthreadIDMap, IDMutex, DepthIndex + 1);
+        Result = SubThreads->gPushWork(f);
+      }
+      SubThreadsCreationLock.unlock();
+    } else {
+      for (uint8_t i = 0; i < tCount; i++) {
+        twCount = Threads[i]->qSize.load() + Threads[i]->lWaiting.load();
+        if (twCount < least || !valid) {
+          valid = true;
+          least = twCount;
+          tInd = i;
+        }
+      }
+      assert(valid);
+      Result.uWid = Threads[tInd]->tPushWork(std::move(f));
+      Result.Worker = Threads[tInd].get();
+      Threads[tInd]->cVariable.notify_one();
+    }
+  }
+
+  return Result;
+}
 
 void THREADS::gEndWork(WRef wref)
 {
@@ -201,9 +130,8 @@ void THREADS::gEndWork(std::vector<WRef>& wrefv)
 THREADS::THREAD::THREAD()
 {
 	Queue.reserve(256);
-	eTime = std::make_unique<EngineTime>();
 	tRunning.store(true);
-	thread = move(std::thread([this] {exeWork(); }));
+	thread = std::thread([this] {exeWork(); });
 	tThreadID = thread.get_id();
 	lWaiting.store(0);
 	Counter = 0;
@@ -221,7 +149,7 @@ THREADS::THREAD::~THREAD()
 //Currently ONLY for concurrent work. Do not push parent/child work. Erratic behavior expected if you do. Add checking for queue overflow. eg Give instructions to work distribution that queue is full of unfinished work
 uint8_t THREADS::THREAD::tPushWork(std::function<void()> f) {
 
-	//cMut.lock();
+	cMut.lock();
 	uint8_t result(Counter);
 	tWork[result].uWorkMTX.lock();
 	assert(tWork[result].Worked);
@@ -230,12 +158,12 @@ uint8_t THREADS::THREAD::tPushWork(std::function<void()> f) {
 	tWork[result].uWorkMTX.unlock();
 	Counter++;
 	Queue.emplace_back(result);
-	//cMut.unlock();
+	cMut.unlock();
 
 	return result;
 };
 
-void THREADS::recurBatch(std::vector<std::function<void()>>& f, std::vector<std::function<void()>>::iterator& i)
+void THREADS::recurBatch(const std::vector<std::function<void()>>& f, std::vector<std::function<void()>>::const_iterator& i)
 {
 	if (i != f.end())
 	{
@@ -274,9 +202,6 @@ void THREADS::THREAD::exeWork() {
 
 		lWorkCount = 0;
 		qSize.store(0);
-
-		auto time = std::chrono::duration <int, std::nano>(2000);
-		
 
 		aVariable.notify_all();
 	}

@@ -1,31 +1,30 @@
 #include "Window.h"
+#include "DLLGui.h"
 #include "Engine.h"
 #include <cassert>
+#include <functional>
 
 
 
-static Window * Context;
-class StaticFunc{
+
+class WindowFunc{
 	friend class Window;
-	static LRESULT Function(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam){
-		return Context->HandleMsg(hWnd, msg, wParam, lParam);
-	};
+	
+
 };
 
 Window::Window(uint16_t w, uint16_t h, const char *name, HINSTANCE hInstance)
     : width(w), height(h) {
 
   std::unique_lock loc(winWait);
-
+  Context = this;
   // calculate window size based on desired client region size
   WindowRect.wr = RECT{0, 0, width, height};
-  
   // create window & get hWnd
-  Context = this;
   WNDCLASSEX wc = {
       .cbSize = sizeof(wc),
       .style = CS_HREDRAW | CS_VREDRAW,
-      .lpfnWndProc = StaticFunc::Function,
+      .lpfnWndProc = StaticHandleMsg,
       .cbClsExtra = 0,
       .cbWndExtra = 0,
       .hInstance = hInstance,
@@ -49,11 +48,14 @@ Window::Window(uint16_t w, uint16_t h, const char *name, HINSTANCE hInstance)
   ShowWindow(hWnd, SW_SHOWDEFAULT);
   UpdateWindow(hWnd);
 
-  sEng = std::make_unique<Engine>( kbd, clock, WindowRect, hWnd);
+  sEng = std::make_unique<Engine>(InputHndlr, WindowRect, hWnd);
   pGfx = sEng->pGfx.get();
 
   #ifndef IMGUI_DISABLE
-  ImGuiHnd = [this](HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam){return pGfx->iGui->ImGuiProcHndl(hWnd, msg, wParam, lParam);};
+  ImGuiHnd = std::bind(&imguid::ImGuiProcHndl, pGfx->iGui.get(), std::placeholders::_1,
+     std::placeholders::_2,
+      std::placeholders::_3,
+      std::placeholders::_4);
   // newly created windows start off as hidden
   #endif
   loc.unlock();
@@ -104,7 +106,7 @@ LRESULT Window::HandleMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		return 0;
 
 	case WM_KILLFOCUS:
-		kbd.ClearState();
+		InputHndlr.keyboard.ClearState();
 		break;
 
 	case WM_SIZING:
@@ -116,45 +118,45 @@ LRESULT Window::HandleMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 		break;
 	//Keyboard Messages
+  using EType = Input::Event::Type;
 	case WM_KEYDOWN:
 	case WM_SYSKEYDOWN:
-		if (!(lParam & 0x40000000) || kbd.AutorepeatIsEnabled())
-		{
-			kbd.OnKeyPressed(static_cast<unsigned char>(wParam));
-		}
+		InputHndlr.keyboard.UpdateKey(EType::Press, wParam);
 		break;
 	case WM_KEYUP:
 	case WM_SYSKEYUP:
-		kbd.OnKeyReleased(wParam);
+		InputHndlr.keyboard.UpdateKey(EType::Release, wParam);
 		break;
 	case WM_CHAR:
-		kbd.OnChar(wParam);
+		InputHndlr.keyboard.UpdateKey(EType::Character, wParam);
 		break;
 		//End Keyboard messages
 		//Mouse Messages
-	case WM_MOUSEMOVE:
+	
+  /*
+    case WM_MOUSEMOVE:
 	{
 		const POINTS pt = MAKEPOINTS(lParam);
 		//In client region -> log move, and log enter + capture mouse (if not previously captured?
 		if (pt.x >= 0 && pt.x < width && pt.y >= 0 && pt.y < height)
 		{
-			mouse.OnMouseMove(pt.x, pt.y);
-			if (!mouse.IsInWindow())
+			InputHndlr.mouse.OnMouseMove(pt.x, pt.y);
+			if (!InputHndlr.mouse.IsInWindow())
 			{
 				SetCapture(hWnd);
-				mouse.OnMouseEnter();
+				InputHndlr.mouse.OnMouseEnter();
 			}
 		}
 		// Not in client -> log move / maintain capture if button down
 		else {
 			if (wParam & (MK_LBUTTON | MK_RBUTTON))
 			{
-				mouse.OnMouseMove(pt.x, pt.y);
+				InputHndlr.mouse.OnMouseMove(pt.x, pt.y);
 			}
 			//button up -> release capture / log event for leaving
 			else {
 				ReleaseCapture();
-				mouse.OnMouseLeave();
+				InputHndlr.mouse.OnMouseLeave();
 			}
 		}
 		break;
@@ -162,35 +164,37 @@ LRESULT Window::HandleMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	case WM_LBUTTONDOWN:
 	{
 		const POINTS pt = MAKEPOINTS(lParam);
-		mouse.OnLeftPressed(pt.x, pt.y);
+		InputHndlr.mouse.OnLeftPressed(pt.x, pt.y);
 		break;
 	}
 	case WM_RBUTTONDOWN:
 	{
 		const POINTS pt = MAKEPOINTS(lParam);
-		mouse.OnRightPressed(pt.x, pt.y);
+		InputHndlr.mouse.OnRightPressed(pt.x, pt.y);
 		break;
 	}
 	case WM_LBUTTONUP:
 	{
 		const POINTS pt = MAKEPOINTS(lParam);
-		mouse.OnLeftReleased(pt.x, pt.y);
+		InputHndlr.mouse.OnLeftReleased(pt.x, pt.y);
 		break;
 	}
 	case WM_RBUTTONUP:
 	{
 		const POINTS pt = MAKEPOINTS(lParam);
-		mouse.OnRightReleased(pt.x, pt.y);
+		InputHndlr.mouse.OnRightReleased(pt.x, pt.y);
 		break;
 	}
 	case WM_MOUSEWHEEL:
 	{
 		const POINTS pt = MAKEPOINTS(lParam);
 		const int delta = GET_WHEEL_DELTA_WPARAM(wParam);
-		mouse.OnWheelDelta(pt.x, pt.y, delta);
+		InputHndlr.mouse.OnWheelDelta(pt.x, pt.y, delta);
 		break;
 		//End Mouse Messaging
 	}
+  */
+
 	}
 	#ifndef IMGUI_DISABLE
   ImGuiHnd(hWnd, msg, wParam, lParam);

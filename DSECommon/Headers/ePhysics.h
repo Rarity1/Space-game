@@ -89,11 +89,7 @@ private:
     DirectX::BoundingSphere &CollSp,
     std::vector<std::array<ModelData::Vertex, 3>> &Vertices);
 
- std::function<void()> CheckVertexDirection(std::vector<int> &Result,
-    ModelData &objudat, std::vector<bool> &IndexChecked,
-    unsigned short &localWorkData, 
-    DirectX::BoundingSphere &CollSp,
-    std::vector<std::array<ModelData::Vertex, 3>> &Vertices);
+
   std::mutex phyxBusy;
 	std::atomic<bool> Updated;
 ;

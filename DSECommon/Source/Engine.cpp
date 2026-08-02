@@ -1,16 +1,17 @@
 #include "Engine.h"
 #include "Exceptions.h"
+#include "InputHandler.h"
 #include "ObjectTracking.h"
 #include "ePhysics.h"
 #include <functional>
 #include <memory>
 
-Engine::Engine(Keyboard &kbd, EngineTime &clock, thRect &WindowRect, HWND &hWnd)
-    : Clock(clock), storage(std::make_unique<RStorage>()) ,pTracker(std::make_unique<Tracker>(*storage)),
+Engine::Engine(Input &InputHandler, thRect &WindowRect, HWND &hWnd)
+    : storage(std::make_unique<RStorage>()) ,pTracker(std::make_unique<Tracker>(*storage, InputHandler)),
     tracker(*pTracker),
     pGfx(std::make_unique<Graphics>(WindowRect, hWnd, *pTracker)), 
     rGfx(*pGfx), cWorld(0, 0, 0, 0), 
-    kbd(kbd)
+    InputHndlr(InputHandler)
 
 {
   // Get tracker id for phyx instance
@@ -37,136 +38,44 @@ void Engine::iLoad() {
     //Move these custom lambda functions to their own functions so this isnt so messy.
     //Also figure out a clean way to decouple camera updates from engine tickrate
     auto Camera =
-        tracker.initCameraObject(instance, "Main", [this, instanceID] {
-                //Toggle Freecam
-
-          Movement move;
-          auto& Camera = *tracker.getInstance(instanceID)
-                .ActiveCamera();
-
-
-          if (m_keysPressed.FindBuffered(KeysPressed::J) && inputDelay.Peek() > 0.5) {
-              inputDelay.Mark();
-              Camera.ToggleFreedom();
-          }      
-          float pitch = 0;
-          float yaw = 0;
-          float roll = 0;
-          {
-            // Rotation per second in radians //Currently 90 degrees per second
-            double rotationPS = ucontrolClock.Peek() * DirectX::XM_PIDIV2;
-            if (m_keysPressed.FindBuffered(KeysPressed::up)) {
-              pitch += rotationPS;
-            }
-            if (m_keysPressed.FindBuffered(KeysPressed::down)) {
-              pitch += -rotationPS;
-            }
-            if (m_keysPressed.FindBuffered(KeysPressed::left)) {
-              yaw += -rotationPS;
-            }
-            if (m_keysPressed.FindBuffered(KeysPressed::right)) {
-              yaw += rotationPS;
-            }
-
-            if (m_keysPressed.FindBuffered(KeysPressed::Q)) {
-              roll += rotationPS;
-            }
-            if (m_keysPressed.FindBuffered(KeysPressed::E)) {
-              roll += -rotationPS;
-            }
-          }
-
-          if (pitch != 0 || yaw != 0 || roll != 0)
-            Camera.Rotate(pitch, yaw, roll);
-          {
-            auto movespeed = 2.0;
-            if (m_keysPressed.FindBuffered(KeysPressed::W)) {
-              move.forward += movespeed;
-            }
-            if (m_keysPressed.FindBuffered(KeysPressed::S)) {
-              move.forward -= movespeed;
-            }
-            if (m_keysPressed.FindBuffered(KeysPressed::A)) {
-              move.left += movespeed;
-            }
-            if (m_keysPressed.FindBuffered(KeysPressed::D)) {
-              move.left -= movespeed;
-            }
-            if (m_keysPressed.FindBuffered(KeysPressed::K)) {
-              move.movestop = true;
-            }
-          }
-          if (Camera.isFree()) {
-            if (move.forward != 0 || move.left != 0) {
-              // Figure this out
-              using namespace DirectX;
-
-              auto Pos = Camera.cPos.Get();
-              auto Rotation = Camera.cPos.GetRotation();
-              auto upDirection = Camera.cPos.GetUpDirection();
-              XMStoreFloat3(&Pos,
-                            XMLoadFloat4(&Rotation) *
-                                    (float)(move.forward * ucontrolClock.Peek()) +
-                                XMLoadFloat3(&Pos));
-              XMStoreFloat3(&Pos,
-                            XMVector3Transform(
-                                XMLoadFloat4(&Rotation),
-                                XMMatrixRotationAxis(
-                                    XMLoadFloat4(&upDirection),
-                                    XMConvertToRadians(90.0f))) *
-                                    (float)(move.left * ucontrolClock.Peek()) +
-                                XMLoadFloat3(&Pos));
-              Camera.cPos.Move(Pos);
-            }
-          }else if((move.forward != 0 || move.left != 0) && Camera.GetLinked()){
-            using namespace DirectX;
-              auto Pos = Camera.GetLinked()->mPos.Get();
-              auto Rotation = Camera.cPos.GetRotation();
-              auto upDirection = Camera.cPos.GetUpDirection();
-              XMStoreFloat3(&Pos,
-                            XMLoadFloat4(&Rotation) *
-                                    (float)(move.forward * ucontrolClock.Peek()) +
-                                XMLoadFloat3(&Pos));
-              XMStoreFloat3(&Pos,
-                            XMVector3Transform(
-                                XMLoadFloat4(&Rotation),
-                                XMMatrixRotationAxis(
-                                    XMLoadFloat4(&upDirection),
-                                    XMConvertToRadians(90.0f))) *
-                                    (float)(move.left * ucontrolClock.Peek()) +
-                                XMLoadFloat3(&Pos));
-              Camera.cPos.Move(Pos);
-          }
-          ucontrolClock.Mark();
-        }, {0,0,0} , {1,0,0,0}, {0,0,1,0});
+        tracker.initCameraObject(instance, "Main", [] {}, {0,0,0} , {1,0,0,0}, {0,0,1,0});
 
     Camera->MakeActive();
 
     plModel = tracker.initPhysObject(
         instance, "untitled",
         [this, Camera] {
+          struct Movement {
+            float forward = 0.0;
+            float backward = 0.0;
+            float left = 0.0;
+            float right = 0.0;
+            bool movestop = false;
+          };
           Movement move;
-          
+
           {
             auto movespeed = 2.0;
-            if (m_keysPressed.FindBuffered(KeysPressed::W)) {
+            if (InputHndlr.keyboard.KeyIsPressed('W')) {
               move.forward += movespeed;
             }
-            if (m_keysPressed.FindBuffered(KeysPressed::S)) {
+            if (InputHndlr.keyboard.KeyIsPressed('S')) {
               move.forward -= movespeed;
             }
-            if (m_keysPressed.FindBuffered(KeysPressed::A)) {
+            if (InputHndlr.keyboard.KeyIsPressed('A')) {
               move.left += movespeed;
             }
-            if (m_keysPressed.FindBuffered(KeysPressed::D)) {
+            if (InputHndlr.keyboard.KeyIsPressed('D')) {
               move.left -= movespeed;
             }
-            if (m_keysPressed.FindBuffered(KeysPressed::K)) {
+            if (InputHndlr.keyboard.KeyIsPressed('K')) {
               move.movestop = true;
             }
           }
-          if(plModel == nullptr) return;
-          if(Camera == nullptr) return;
+          if (plModel == nullptr)
+            return;
+          if (Camera == nullptr)
+            return;
           auto &pmodl = *(PhysicsObject *)plModel;
           auto CameraRotation = Camera->cPos.GetRotation();
           auto CameraUpDir = Camera->cPos.GetUpDirection();
@@ -177,7 +86,7 @@ void Engine::iLoad() {
 
               {
                 using namespace DirectX;
-                
+
                 DirectX::XMStoreFloat4(
                     &forwardScale,
                     DirectX::XMVector3Dot(
@@ -228,9 +137,8 @@ void Engine::iLoad() {
                         XMLoadFloat3(&pmodl.velDir),
                         XMVector3Transform(
                             XMLoadFloat4(&CameraRotation),
-                            XMMatrixRotationAxis(
-                                XMLoadFloat4(&CameraUpDir),
-                                XMConvertToRadians(90.0f))) *
+                            XMMatrixRotationAxis(XMLoadFloat4(&CameraUpDir),
+                                                 XMConvertToRadians(90.0f))) *
                             (fabs(move.left) / move.left)));
               }
               leftScale.x = fabs(leftScale.x);
@@ -256,9 +164,8 @@ void Engine::iLoad() {
                     XMVector3Normalize(
                         XMVector3Transform(
                             XMLoadFloat4(&CameraRotation),
-                            XMMatrixRotationAxis(
-                                XMLoadFloat4(&CameraUpDir),
-                                XMConvertToRadians(90.0f))) *
+                            XMMatrixRotationAxis(XMLoadFloat4(&CameraUpDir),
+                                                 XMConvertToRadians(90.0f))) *
                             (fabs(move.left) / move.left) *
                             fabs(leftSpeedScalar) +
                         XMLoadFloat3(&pmodl.velDir) * invertedleftSpeedScalar));
@@ -271,7 +178,6 @@ void Engine::iLoad() {
               pmodl.velDir = {0, 0, 0};
               pmodl.speed = 0;
             }
-          
           }
           updateClock.Mark();
         },
@@ -353,14 +259,13 @@ void Engine::EngineLoop() {
 
 bool Engine::Update()
 {
-    
-    tsPrintBuffer::PrintFBuffered();
-    UControls();
+    InputHndlr.DispatchInputFunctions();
     loopVariable.notify_all();
     mAniUpdate();
     //Update rendered instances every frame
     rGfx.Update();
     rGfx.RenderFrame();
+    tsPrintBuffer::PrintFBuffered();
     return true;
 }
 
@@ -431,7 +336,6 @@ std::vector<std::function<void()>>& Engine::getCQueue()
 void Engine::enQueueEngineCommands()
 {
     queueCommand([this] {
-
     }, 0);
     queueCommand([this] {
         uPhysics();
@@ -449,9 +353,6 @@ void Engine::enQueueExternCommands()
 
 
 
-
-
-
 DirectX::XMFLOAT3 Engine::rWorld(DirectX::XMFLOAT3 pos1) {
 	return  { cWorld.x+pos1.x,cWorld.y+pos1.y,cWorld.z+pos1.z};
 }
@@ -461,107 +362,6 @@ DirectX::XMFLOAT3 Engine::dWorld(DirectX::XMFLOAT3 pos1) {
 DirectX::XMFLOAT3 Engine::cnWorld(DirectX::XMFLOAT3 pos1) {
     auto tworld = { cWorld.x - nWorld.x, cWorld.x - nWorld.x, cWorld.x - nWorld.x};
     return  { -cWorld.x + pos1.x,-cWorld.y + pos1.y,-cWorld.z + pos1.z };
-}
-
-
-//Rewrite this to accept a keybinding config. eg KeyPressed::Action instead of KeyPressed::Key
-void Engine::OnKeyDown(unsigned char key)
-{
-    switch (key)
-    {
-    case 'J':
-        m_keysPressed.Set(KeysPressed::J);
-        break;
-    case 'K':
-        m_keysPressed.Set(KeysPressed::K);
-        break;
-    case 'W':
-        m_keysPressed.Set(KeysPressed::W);
-        break;
-    case 'A':
-        m_keysPressed.Set(KeysPressed::A);
-        break;
-    case 'S':
-        m_keysPressed.Set(KeysPressed::S);
-        break;
-    case 'D':
-        m_keysPressed.Set(KeysPressed::D);
-        break;
-    case 'Q':
-        m_keysPressed.Set(KeysPressed::Q);
-        break;
-    case 'E':
-        m_keysPressed.Set(KeysPressed::E);
-        break;
-    case VK_LEFT:
-        m_keysPressed.Set(KeysPressed::left);
-        break;
-    case VK_RIGHT:
-        m_keysPressed.Set(KeysPressed::right);
-        break;
-    case VK_UP:
-        m_keysPressed.Set(KeysPressed::up);
-        break;
-    case VK_DOWN:
-        m_keysPressed.Set(KeysPressed::down);
-        break;
-    }
-}
-
-void Engine::OnKeyUp(unsigned char key)
-{
-    switch (key)
-    {
-    case 'J':
-        m_keysPressed.Set(KeysPressed::J, false);
-        break;
-    case 'K':
-        m_keysPressed.Set(KeysPressed::K, false);
-        break;
-    case 'W':
-        m_keysPressed.Set(KeysPressed::W, false);
-        break;
-    case 'A':
-        m_keysPressed.Set(KeysPressed::A, false);
-        break;
-    case 'S':
-        m_keysPressed.Set(KeysPressed::S, false);
-        break;
-    case 'D':
-        m_keysPressed.Set(KeysPressed::D, false);
-        break;
-    case 'Q':
-        m_keysPressed.Set(KeysPressed::Q, false);
-        break;
-    case 'E':
-        m_keysPressed.Set(KeysPressed::E, false);
-        break;
-    case VK_LEFT:
-        m_keysPressed.Set(KeysPressed::left, false);
-        break;
-    case VK_RIGHT:
-        m_keysPressed.Set(KeysPressed::right, false);
-        break;
-    case VK_UP:
-        m_keysPressed.Set(KeysPressed::up, false);
-        break;
-    case VK_DOWN:
-        m_keysPressed.Set(KeysPressed::down, false);
-        break;
-    }
-}
-
-
-void Engine::UControls() {
-    while (auto ss = kbd.ReadKey()) {
-
-        if (ss->IsRelease()) {
-            OnKeyUp(ss->GetCode());
-        }
-        if (ss->IsPress()) {
-            OnKeyDown(ss->GetCode());
-        }
-    }
 }
 
 

@@ -1,5 +1,6 @@
 #pragma once
 #include "CWin.h"
+#include "InputHandler.h"
 #include "RStorage.h"
 #include "Threads.h"
 #include <DirectXMath.h>
@@ -24,7 +25,7 @@ struct CBVData {
 typedef uint64_t UOID;
 typedef uint16_t InstID;
 class Tracker {
-  
+
 
 public:
   class Instance {
@@ -76,7 +77,10 @@ public:
   };
   friend class Tracker::Instance;
 
-  Tracker(RStorage &rs) :  tTracker(std::make_unique<THREADS>((int)std::thread::hardware_concurrency())), storage(rs) {};
+  Tracker(RStorage &rs, Input& Hndlr) : 
+    InputHndlr(Hndlr),
+    tTracker(std::make_unique<THREADS>((int)std::thread::hardware_concurrency())),
+    storage(rs){};
   ~Tracker() {};
   void lModel(RenderedObject *obj, umID umID) noexcept;
   // Returns ID of current model given UOID(Unique Object ID)
@@ -119,8 +123,9 @@ public:
   const std::list<Tracker::Instance *> &GetActiveInstances() {
     return ActiveInstances;
   };
-
+  Input& InputHndlr;
 private:
+  
   std::unique_ptr<THREADS> tTracker;
   class IDAllocator {
     uint64_t cIDCount = 0;
@@ -297,7 +302,9 @@ class CameraObject : public Object {
   // DirectX::XMFLOAT4 forwardDirect = {1, 0, 0, 0};
   DirectX::XMFLOAT4X4 cMatrix;
   RenderedObject *linkedObject = nullptr;
-
+  EngineTime ucontrolClock;
+  EngineTime inputDelay;
+  Input::dispatchID dispID;
 public:
   CameraPosition cPos;
   CameraObject(Object &obj, DirectX::XMFLOAT3 initPos = {0, 0, 0},

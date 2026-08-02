@@ -55,7 +55,7 @@ Physics::Physics(const int& UpdateRate, class Tracker& Tracker) :
     queue = cl::CommandQueue{ context, device };
     
     //Write something that can automatically assign child processess to new THREADS instance
-    tMain = std::make_unique<THREADS>(coreCount, 2);
+    tMain = std::make_unique<THREADS>(coreCount);
 
     clGetDeviceInfo(device.get(), CL_DEVICE_LOCAL_MEM_SIZE, sizeof(cl_ulong), &clLocalMemSize, 0);
 }
@@ -219,36 +219,6 @@ std::function<void()> Physics::CheckVertexDirection(
   };
 }
 
-std::function<void()> Physics::CheckVertexDirection(
-  std::vector<int> &Result,
-    ModelData &objudat, std::vector<bool> &IndexChecked,
-    unsigned short &BoneIndex,
-    DirectX::BoundingSphere &CollSp,
-    std::vector<std::array<ModelData::Vertex, 3>> &Vertices) {
-  return [&objudat, &IndexChecked, &BoneIndex, &CollSp,
-          &Vertices, &Result]() {
-    DirectX::XMFLOAT4 bdirection = fDirection(
-        objudat.bdata[BoneIndex].sphere.Center, CollSp.Center);
-    Result.reserve(objudat.bdata[BoneIndex].Indices.size());
-    std::for_each(
-        objudat.bdata[BoneIndex].Indices.begin(),
-        objudat.bdata[BoneIndex].Indices.end(),
-        [&IndexChecked, &Result, &objudat, &bdirection, &Vertices](auto &e) {
-          if (!IndexChecked[objudat.mIndex[e]]) {
-            using namespace DirectX;
-            if (XMVector3Greater(
-                    XMVector3Dot(
-                        XMLoadFloat4(&bdirection),
-                        XMLoadFloat3(
-                            &Vertices[objudat.mIndex[e]][0].normal)),
-                    XMVectorZero())) {
-              IndexChecked[objudat.mIndex[e]] = true;
-              Result.emplace_back(objudat.mIndex[e]);
-            }
-          }
-        });
-  };
-}
 
 Physics::WORKINDI Physics::ProcCollide(Object &obj, Object &obj2,
                                        DirectX::XMFLOAT3 &objpos,

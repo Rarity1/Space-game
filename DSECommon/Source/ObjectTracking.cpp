@@ -1,10 +1,9 @@
 #include "ObjectTracking.h"
+#include "InputHandler.h"
 #include "ePhysics.h"
 #include <DirectXMath.h>
 #include <functional>
 #include <memory>
-
-
 
 
 
@@ -171,67 +170,178 @@ Object::Object(std::string name, UOID uOID, std::function<void()> func,
   AddParent(pInstance->InstanceObject);
 };
 
-
-void CameraObject::Update(){
+void CameraObject::Update() {
   Script();
-  //Toggle Freecam
-  if(linkedObject != nullptr && !freeCam.load()){
+  // Toggle Freecam
+	struct Movement {
+		float forward = 0.0;
+		float backward = 0.0;
+		float left = 0.0;
+		float right = 0.0;
+		bool movestop = false;
+	};
+  Movement move;
+
+  //Make a helper function for this so I dont have to do it for every single key
+  if(dispID.Empty.load()){
+    dispID = LinkedInstance->pTracker.InputHndlr.linkEvent('J', [this]{
+    freeCam.store(freeCam.load() ? false : true);
+  });
+  }
+  
+
+  if (LinkedInstance->pTracker.InputHndlr.keyboard.KeyIsPressed('J') && inputDelay.Peek() > 0.5) {
+    inputDelay.Mark();
+    //ToggleFreedom();
+  }
+  float pitch = 0;
+  float yaw = 0;
+  float roll = 0;
+  {
+    // Rotation per second in radians //Currently 90 degrees per second
+    double rotationPS = ucontrolClock.Peek() * DirectX::XM_PIDIV2;
+    if (LinkedInstance->pTracker.InputHndlr.keyboard.KeyIsPressed(VK_UP)) {
+      pitch += rotationPS;
+    }
+    if (LinkedInstance->pTracker.InputHndlr.keyboard.KeyIsPressed(VK_DOWN)) {
+      pitch += -rotationPS;
+    }
+    if (LinkedInstance->pTracker.InputHndlr.keyboard.KeyIsPressed(VK_LEFT)) {
+      yaw += -rotationPS;
+    }
+    if (LinkedInstance->pTracker.InputHndlr.keyboard.KeyIsPressed(VK_RIGHT)) {
+      yaw += rotationPS;
+    }
+
+    if (LinkedInstance->pTracker.InputHndlr.keyboard.KeyIsPressed('Q')) {
+      roll += rotationPS;
+    }
+    if (LinkedInstance->pTracker.InputHndlr.keyboard.KeyIsPressed('E')) {
+      roll += -rotationPS;
+    }
+  }
+
+  if (pitch != 0 || yaw != 0 || roll != 0)
+    Rotate(pitch, yaw, roll);
+  {
+    auto movespeed = 2.0;
+    if (LinkedInstance->pTracker.InputHndlr.keyboard.KeyIsPressed('W')) {
+      move.forward += movespeed;
+    }
+    if (LinkedInstance->pTracker.InputHndlr.keyboard.KeyIsPressed('S')) {
+      move.forward -= movespeed;
+    }
+    if (LinkedInstance->pTracker.InputHndlr.keyboard.KeyIsPressed('A')) {
+      move.left += movespeed;
+    }
+    if (LinkedInstance->pTracker.InputHndlr.keyboard.KeyIsPressed('D')) {
+      move.left -= movespeed;
+    }
+    if (LinkedInstance->pTracker.InputHndlr.keyboard.KeyIsPressed('K')) {
+      move.movestop = true;
+    }
+  }
+  if (isFree()) {
+    if (move.forward != 0 || move.left != 0) {
+      // Figure this out
+      using namespace DirectX;
+
+      auto Pos = cPos.Get();
+      auto Rotation = cPos.GetRotation();
+      auto upDirection = cPos.GetUpDirection();
+      XMStoreFloat3(&Pos, XMLoadFloat4(&Rotation) *
+                                  (float)(move.forward * ucontrolClock.Peek()) +
+                              XMLoadFloat3(&Pos));
+      XMStoreFloat3(&Pos, XMVector3Transform(
+                              XMLoadFloat4(&Rotation),
+                              XMMatrixRotationAxis(XMLoadFloat4(&upDirection),
+                                                   XMConvertToRadians(90.0f))) *
+                                  (float)(move.left * ucontrolClock.Peek()) +
+                              XMLoadFloat3(&Pos));
+      cPos.Move(Pos);
+    }
+  } else if ((move.forward != 0 || move.left != 0) && GetLinked()) {
+    using namespace DirectX;
+    auto Pos = GetLinked()->mPos.Get();
+    auto Rotation = cPos.GetRotation();
+    auto upDirection = cPos.GetUpDirection();
+    XMStoreFloat3(&Pos, XMLoadFloat4(&Rotation) *
+                                (float)(move.forward * ucontrolClock.Peek()) +
+                            XMLoadFloat3(&Pos));
+    XMStoreFloat3(&Pos, XMVector3Transform(
+                            XMLoadFloat4(&Rotation),
+                            XMMatrixRotationAxis(XMLoadFloat4(&upDirection),
+                                                 XMConvertToRadians(90.0f))) *
+                                (float)(move.left * ucontrolClock.Peek()) +
+                            XMLoadFloat3(&Pos));
+    cPos.Move(Pos);
+  }
+  ucontrolClock.Mark();
+  // Toggle Freecam
+  if (linkedObject != nullptr && !freeCam.load()) {
     auto postomov = linkedObject->mPos.Get();
     cPos.Move(postomov);
-  } 
+  }
   auto position = cPos.Get();
   auto rotation = cPos.GetRotation();
   auto upDirection = cPos.GetUpDirection();
-  DirectX::XMStoreFloat4x4(&cMatrix, DirectX::XMMatrixLookToRH(
-      XMLoadFloat3(&position), XMLoadFloat4(&rotation),
-      XMLoadFloat4(&upDirection)));
-
+  DirectX::XMStoreFloat4x4(
+      &cMatrix, DirectX::XMMatrixLookToRH(XMLoadFloat3(&position),
+                                          XMLoadFloat4(&rotation),
+                                          XMLoadFloat4(&upDirection)));
 }
 
-void CameraObject::LinkTo(RenderedObject* obj){
-  if(linkedObject){
+void CameraObject::LinkTo(RenderedObject *obj) {
+  if (linkedObject) {
     linkedObject = nullptr;
   }
   linkedObject = obj;
 }
 
-void CameraObject::Rotate(float& Pitch, float& Yaw, float& Roll) {
-    auto upDirection = cPos.GetUpDirection();
-    auto updirect = XMLoadFloat4(&upDirection);
-    DirectX::XMFLOAT4  rotation = cPos.GetRotation();
-    auto lookdirect = XMLoadFloat4(&rotation);
-    
-    //auto gravdirect = DirectX::XMQuaternionInverse(XMLoadFloat4(&plModel->grav));
-    if (Yaw != 0) {
-        auto temp = DirectX::XMQuaternionRotationNormal(updirect, Yaw);
-        auto left = DirectX::XMQuaternionMultiply(temp, lookdirect);
-        
-        lookdirect = DirectX::XMQuaternionMultiply(left, DirectX::XMQuaternionConjugate(temp));
-        auto qup = DirectX::XMQuaternionMultiply(temp, updirect);
-        updirect = DirectX::XMQuaternionMultiply(qup, DirectX::XMQuaternionConjugate(temp));
-    }
-    if (Roll != 0) {
-        auto temp = DirectX::XMQuaternionRotationNormal((lookdirect), Roll);
-        auto qup = DirectX::XMQuaternionMultiply(temp, updirect);
-        updirect = DirectX::XMQuaternionMultiply(qup, DirectX::XMQuaternionConjugate(temp));
-        auto left = DirectX::XMQuaternionMultiply(temp, lookdirect);
-        lookdirect = DirectX::XMQuaternionMultiply(left, DirectX::XMQuaternionConjugate((temp)));
-    }
-    if (Pitch != 0) {
-        auto temp = DirectX::XMQuaternionRotationNormal(DirectX::XMQuaternionMultiply(lookdirect, updirect), Pitch);
-        auto qup = DirectX::XMQuaternionMultiply(temp, updirect);
+void CameraObject::Rotate(float &Pitch, float &Yaw, float &Roll) {
+  auto upDirection = cPos.GetUpDirection();
+  auto updirect = XMLoadFloat4(&upDirection);
+  DirectX::XMFLOAT4 rotation = cPos.GetRotation();
+  auto lookdirect = XMLoadFloat4(&rotation);
 
+  // auto gravdirect =
+  // DirectX::XMQuaternionInverse(XMLoadFloat4(&plModel->grav));
+  if (Yaw != 0) {
+    auto temp = DirectX::XMQuaternionRotationNormal(updirect, Yaw);
+    auto left = DirectX::XMQuaternionMultiply(temp, lookdirect);
 
-        updirect = DirectX::XMQuaternionMultiply(qup, DirectX::XMQuaternionConjugate(temp));
+    lookdirect = DirectX::XMQuaternionMultiply(
+        left, DirectX::XMQuaternionConjugate(temp));
+    auto qup = DirectX::XMQuaternionMultiply(temp, updirect);
+    updirect = DirectX::XMQuaternionMultiply(
+        qup, DirectX::XMQuaternionConjugate(temp));
+  }
+  if (Roll != 0) {
+    auto temp = DirectX::XMQuaternionRotationNormal((lookdirect), Roll);
+    auto qup = DirectX::XMQuaternionMultiply(temp, updirect);
+    updirect = DirectX::XMQuaternionMultiply(
+        qup, DirectX::XMQuaternionConjugate(temp));
+    auto left = DirectX::XMQuaternionMultiply(temp, lookdirect);
+    lookdirect = DirectX::XMQuaternionMultiply(
+        left, DirectX::XMQuaternionConjugate((temp)));
+  }
+  if (Pitch != 0) {
+    auto temp = DirectX::XMQuaternionRotationNormal(
+        DirectX::XMQuaternionMultiply(lookdirect, updirect), Pitch);
+    auto qup = DirectX::XMQuaternionMultiply(temp, updirect);
 
-        auto left = DirectX::XMQuaternionMultiply(temp, lookdirect);
-        lookdirect = DirectX::XMQuaternionMultiply(left, DirectX::XMQuaternionConjugate((temp)));
-    }
-    
-    DirectX::XMStoreFloat4(&rotation, lookdirect);
-    cPos.SetRotation(rotation);
-    DirectX::XMStoreFloat4(&upDirection, updirect);
-    cPos.SetUpDirection(upDirection);
+    updirect = DirectX::XMQuaternionMultiply(
+        qup, DirectX::XMQuaternionConjugate(temp));
+
+    auto left = DirectX::XMQuaternionMultiply(temp, lookdirect);
+    lookdirect = DirectX::XMQuaternionMultiply(
+        left, DirectX::XMQuaternionConjugate((temp)));
+  }
+
+  DirectX::XMStoreFloat4(&rotation, lookdirect);
+  cPos.SetRotation(rotation);
+  DirectX::XMStoreFloat4(&upDirection, updirect);
+  cPos.SetUpDirection(upDirection);
 }
 
 CameraObject::CameraObject(Object &obj, DirectX::XMFLOAT3 initPos, DirectX::XMFLOAT4 initRot,
