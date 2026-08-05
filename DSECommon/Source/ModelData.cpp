@@ -1,4 +1,6 @@
  #include "ModelData.h"
+#include <cmath>
+#include <cstdint>
  #include <fstream>
  #include <numeric>
  #include <sstream>
@@ -250,23 +252,23 @@ void ModelData::ReadModel(std::unique_ptr<rapidxml::xml_document<char>> doc, std
 
 	}
 
-	std::vector<DirectX::XMFLOAT2> tempcoord;
+	std::vector<FLOAT2> tempcoord;
 	{
 		std::stringstream ssmap(pmap->value());
 		float mx, my;
 
 		while (ssmap >> mx >> my) {
-			tempcoord.emplace_back(mx, 1.0 - my);
+			tempcoord.emplace_back(mx, 1.0f - my);
 		}
 
 
 	}
-	std::vector<DirectX::XMFLOAT3> normals;
+	std::vector<FLOAT3> normals;
 	{
 		float nx, ny, nz;
 		std::stringstream ssnorm(pnorm->value());
 		while (ssnorm >> nx >> ny >> nz) {
-			normals.emplace_back(DirectX::XMFLOAT3{ nx, ny, nz });
+			normals.emplace_back(nx, ny, nz );
 		}
 	}
 
@@ -275,7 +277,7 @@ void ModelData::ReadModel(std::unique_ptr<rapidxml::xml_document<char>> doc, std
 
 	{
 		std::stringstream ssindex(parray->value());
-		WORD vertex, normal, texcoord;
+		uint32_t vertex, normal, texcoord;
 		while (ssindex >> vertex >> normal >> texcoord) {
 			vFaceData t = { vertex, normal, texcoord };
 			idata.emplace_back(t);
@@ -334,10 +336,10 @@ void ModelData::ReadModel(std::unique_ptr<rapidxml::xml_document<char>> doc, std
 
 	{
 
-		DirectX::XMFLOAT3 Zero{ 0,0,0 };
-		DirectX::XMFLOAT3 tVert;
+		FLOAT3 Zero{ 0,0,0 };
+		FLOAT3 tVert;
 		for (auto i = 0; i < mVdata.size(); i++) {
-			XMStoreFloat3(&tVert, XMLoadFloat3(&mVdata[i].position));
+      tVert = mVdata[i].position;
 			auto temp = fDistance(tVert, Zero);
 			Sphere.Radius = temp > Sphere.Radius ? temp : Sphere.Radius;
 		}
@@ -349,14 +351,13 @@ void ModelData::ReadModel(std::unique_ptr<rapidxml::xml_document<char>> doc, std
 
 	for (auto& b : bdata) {
 
-		DirectX::XMFLOAT3 pos{ 0,0,0 };
-		using namespace DirectX;
-		std::for_each(b.Indices.begin(), b.Indices.end(), [this, &pos, &mVdata](auto& x) {
-			XMStoreFloat3(&pos, XMLoadFloat3(&mVdata[x].position) + XMLoadFloat3(&pos));
+		FLOAT3 pos{ 0,0,0 };
+		std::for_each(b.Indices.begin(), b.Indices.end(), [&pos, &mVdata](auto& x) {
+			pos = mVdata[x].position + pos;
 		});
-		auto isize = b.Indices.size();
+		float isize = b.Indices.size();
 		if (isize > 0) {
-			XMStoreFloat3(&b.sphere.Center, XMLoadFloat3(&pos) / (float)isize);
+			b.sphere.Center = pos / isize;
 		}
 		b.smallsphere = b.sphere;
 
@@ -378,134 +379,54 @@ void ModelData::ReadModel(std::unique_ptr<rapidxml::xml_document<char>> doc, std
 
 }
 
-float ModelData::fDistance(DirectX::XMFLOAT3& pos1, DirectX::XMFLOAT3& pos2) {
-	DirectX::XMFLOAT4 Result{ 0,0,0,0 };
-	DirectX::XMFLOAT3 Dist{ 0,0,0 };
+float ModelData::fDistance(FLOAT3& pos1, FLOAT3& pos2) {
+	FLOAT3 Result{ 0,0,0 };
+	FLOAT3 Dist{ 0,0,0 };
 	float d = 0;
-	DirectX::XMStoreFloat4(&Result, DirectX::XMVectorSubtract(XMLoadFloat3(&pos2), XMLoadFloat3(&pos1)));
-	DirectX::XMStoreFloat3(&Dist, DirectX::XMVector3Dot(XMLoadFloat4(&Result), XMLoadFloat4(&Result)));
+	Result = pos2 - pos1;
+	Dist = Result * Result;
 	d = sqrt(Dist.x);
 	return d;
 }
 
-DirectX::XMFLOAT4 ModelData::fDirection(DirectX::XMFLOAT3& pos1, DirectX::XMFLOAT3& pos2) {
-	using namespace DirectX;
-	DirectX::XMFLOAT4 Result{ 0,0,0,0 };
-	DirectX::XMFLOAT3 Dist{ 0,0,0 };
+FLOAT4 ModelData::fDirection(FLOAT3& pos1, FLOAT3& pos2) {
+	FLOAT3 Result{ 0,0,0};
+	FLOAT3 Dist{ 0,0,0 };
 	float d = 0;
-	DirectX::XMStoreFloat4(&Result, XMLoadFloat3(&pos2) - XMLoadFloat3(&pos1));
-	XMStoreFloat3(&Dist, DirectX::XMVector3Dot(XMLoadFloat4(&Result), XMLoadFloat4(&Result)));
+	Result = pos2 - pos1;
+	Dist = Result * Result;
 	d = sqrt(Dist.x);
 	if (d > 0) {
-		XMStoreFloat4(&Result, XMLoadFloat4(&Result) / d);
-		return Result;
+		return Result / d;
 	}
 	return { 0,0,0,0 };
 }
 
-DirectX::XMFLOAT4X4 ModelData::strToMatrix(std::istringstream& rawmatri) {
-	float m;
-	std::vector<float> tempfloats;
-	while (rawmatri >> m) {
-		tempfloats.emplace_back(m);
-	}
-	int rowcount = 0;
-	DirectX::XMFLOAT4X4 float4x4;
-	for (auto i = 0; i < 16; i++) {
-		switch (rowcount) {
-		case(0): {
-			switch (i % 4) {
-			case(0): {
-				float4x4._11 = tempfloats[i];
-				break;
-			}
-			case(1): {
-				float4x4._12 = tempfloats[i];
-				break;
-			}
-			case(2): {
-				float4x4._13 = tempfloats[i];
-				break;
-			}
-			case(3): {
-				float4x4._14 = tempfloats[i];
-				rowcount++;
-				break;
-			}
-			}
-			break;
-		}
-		case(1): {
-			switch (i % 4) {
-			case(0): {
-				float4x4._21 = tempfloats[i];
-				break;
-			}
-			case(1): {
-				float4x4._22 = tempfloats[i];
-				break;
-			}
-			case(2): {
-				float4x4._23 = tempfloats[i];
-				break;
-			}
-			case(3): {
-				float4x4._24 = tempfloats[i];
-				rowcount++;
-				break;
-			}
-			}
-			break;
-		}
-		case(2): {
-			switch (i % 4) {
-			case(0): {
-				float4x4._31 = tempfloats[i];
-				break;
-			}
-			case(1): {
-				float4x4._32 = tempfloats[i];
-				break;
-			}
-			case(2): {
-				float4x4._33 = tempfloats[i];
-				break;
-			}
-			case(3): {
-				float4x4._34 = tempfloats[i];
-				rowcount++;
-				break;
-			}
-			}
-			break;
-		}
-		case(3): {
-			switch (i % 4) {
-			case(0): {
-				float4x4._41 = tempfloats[i];
-				break;
-			}
-			case(1): {
-				float4x4._42 = tempfloats[i];
-				break;
-			}
-			case(2): {
-				float4x4._43 = tempfloats[i];
-				break;
-			}
-			case(3): {
-				float4x4._44 = tempfloats[i];
-				rowcount++;
-				break;
-			}
-			}
-			break;
-		}
-		}
-	}
-	return float4x4;
-}
+FLOAT4X4 ModelData::strToMatrix(std::istringstream &rawmatri) {
+  FLOAT4X4 float4x4;
+  float x, y, z, w;
+  int caser = 0;
+  while (rawmatri >> x >> y >> z >> w) {
+    switch (caser) {
+    case (0):
+      float4x4.a = {x, y, z, w};
+      break;
+    case (1):
+      float4x4.b = {x, y, z, w};
+      break;
+    case (2):
+      float4x4.c = {x, y, z, w};
+      break;
+    case (3):
+      float4x4.d = {x, y, z, w};
+      break;
+    }
 
+    caser++;
+  }
+
+  return float4x4;
+}
 
 ModelData::~ModelData()
 {

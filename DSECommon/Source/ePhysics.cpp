@@ -73,9 +73,9 @@ bool Physics::QueueCLBuffer(Object& obj){
                      sizeof(std::array<ModelData::Vertex, 3>) *
                          pObject.model->uData->MappedVertices.size());
       pObject.clPositionBuff =
-          cl::Buffer(context, CL_MEM_READ_WRITE, sizeof(DirectX::XMFLOAT3));
+          cl::Buffer(context, CL_MEM_READ_WRITE, sizeof(FLOAT3));
 
-      std::vector<DirectX::XMFLOAT3> WBone;
+      std::vector<FLOAT3> WBone;
       std::vector<int> IndexOffset;
       WBone.resize(std::size(pObject.model->uData->bdata));
       for (auto b = 0; b < std::size(WBone); b++) {
@@ -83,10 +83,10 @@ bool Physics::QueueCLBuffer(Object& obj){
       }
       pObject.model->clBoneBuff =
           cl::Buffer(context, CL_MEM_READ_ONLY,
-                     sizeof(DirectX::XMFLOAT3) * std::size(WBone));
+                     sizeof(FLOAT3) * std::size(WBone));
 
       queue.enqueueWriteBuffer(pObject.model->clBoneBuff, CL_FALSE, 0,
-                               sizeof(DirectX::XMFLOAT3) * std::size(WBone),
+                               sizeof(FLOAT3) * std::size(WBone),
                                WBone.data());
 
       queue.enqueueWriteBuffer(pObject.model->clBuff, CL_FALSE, 0,
@@ -133,13 +133,13 @@ void Physics::Update() {
 
 /*
 void Physics::cGravity(Object* obj) {
-    using namespace DirectX;
+    
     if (obj->ParentObject != nullptr) {
         //obj->grav = fDirection(obj->mPos->position, obj->mworld->mPos->position);
         //obj->gravpull = sqrt(((GConst * (obj->mworld->mass)) / pow(fDistance(obj->mPos->position, obj->mworld->mPos->position), 2))) * timer.Current();
 
         float mag = obj->speed + obj->gravpull;
-        DirectX::XMFLOAT3 dotpro = { 0,0,0 };
+        FLOAT3 dotpro = { 0,0,0 };
         auto Tempvel = obj->velDir;
         XMStoreFloat3(&Tempvel, XMLoadFloat3(&Tempvel) * obj->speed + XMLoadFloat4(&obj->grav) * obj->gravpull);
         XMStoreFloat3(&dotpro, XMVector3Dot(XMLoadFloat3(&Tempvel), XMLoadFloat3(&Tempvel)));
@@ -164,53 +164,40 @@ int Physics::bIndex(std::vector<int> w, int bInd) {
 }
 
 //This dont work ree
-void Physics::CalProportionalSpeed(DirectX::XMFLOAT4& VelDir1, DirectX::XMFLOAT4& VelDir2, float& VSpeed1, float& VSpeed2, float& Mass1, float& Mass2) {
-    using namespace DirectX;
+void Physics::CalProportionalSpeed(FLOAT4& VelDir1, FLOAT4& VelDir2, float& VSpeed1, float& VSpeed2, float& Mass1, float& Mass2) {
     float massScal1 = (Mass1 / (Mass1 + Mass2));
     float massScal2 = (Mass2 / (Mass1 + Mass2));
     massScal1 = massScal1 < 0.00001 ? 0 : massScal1;
     massScal2 = massScal2 < 0.00001 ? 0 : massScal2;
 
-    XMFLOAT4 TempVelD1 = VelDir1;
-    float TempVSpeed1 = VSpeed1;
 
-    XMFLOAT4 RelDir;
-    XMStoreFloat4(&RelDir, XMLoadFloat4(&VelDir2) * VSpeed2 * -massScal1 + XMLoadFloat4(&VelDir1)*VSpeed1* -massScal2);
-    XMFLOAT4 RelDot;
-    XMStoreFloat4(&RelDot, XMVector3Dot(XMLoadFloat4(&RelDir), XMLoadFloat4(&RelDir)));
-    float mag = sqrt(RelDot.x);
+    FLOAT4 RelDir =  VelDir2 * VSpeed2 * -massScal1 + VelDir1 * VSpeed1 * -massScal2;
+    float RelDot = RelDir * RelDir;
+    float mag = sqrt(RelDot);
 
 
-    XMStoreFloat4(&VelDir1, XMVector3Normalize(XMLoadFloat4(&RelDir) * -massScal2));
+    VelDir1 = (RelDir * -massScal2).Normal();
     VSpeed1 = mag * massScal2;
 
-    XMStoreFloat4(&VelDir2, XMVector3Normalize(XMLoadFloat4(&RelDir) * -massScal1));
+    VelDir2 = (RelDir * -massScal1).Normal();
     VSpeed2 = mag * massScal1;
 }
 
 std::function<void()> Physics::CheckVertexDirection(
-  std::vector<int> &Result,
-    ModelData &objudat, std::vector<std::atomic<bool>> &IndexChecked,
-    unsigned short &BoneIndex,
-    DirectX::BoundingSphere &CollSp,
+    std::vector<int> &Result, ModelData &objudat,
+    std::vector<std::atomic<bool>> &IndexChecked, uint32_t &BoneIndex,
+    SphereCollider &CollSp,
     std::vector<std::array<ModelData::Vertex, 3>> &Vertices) {
-  return [&objudat, &IndexChecked, &BoneIndex, &CollSp,
-          &Vertices, &Result]() {
-    DirectX::XMFLOAT4 bdirection = fDirection(
-        objudat.bdata[BoneIndex].sphere.Center, CollSp.Center);
+  return [&objudat, &IndexChecked, &BoneIndex, &CollSp, &Vertices, &Result]() {
+    FLOAT4 bdirection =
+        fDirection(objudat.bdata[BoneIndex].sphere.Center, CollSp.Center);
     Result.reserve(objudat.bdata[BoneIndex].Indices.size());
     std::for_each(
         objudat.bdata[BoneIndex].Indices.begin(),
         objudat.bdata[BoneIndex].Indices.end(),
         [&IndexChecked, &Result, &objudat, &bdirection, &Vertices](auto &e) {
           if (!IndexChecked[objudat.mIndex[e]].load()) {
-            using namespace DirectX;
-            if (XMVector3Greater(
-                    XMVector3Dot(
-                        XMLoadFloat4(&bdirection),
-                        XMLoadFloat3(
-                            &Vertices[objudat.mIndex[e]][0].normal)),
-                    XMVectorZero())) {
+            if (0 > (bdirection * Vertices[objudat.mIndex[e]][0].normal)) {
               IndexChecked[objudat.mIndex[e]].store(true);
               Result.emplace_back(objudat.mIndex[e]);
             }
@@ -219,14 +206,12 @@ std::function<void()> Physics::CheckVertexDirection(
   };
 }
 
-
 Physics::WORKINDI Physics::ProcCollide(Object &obj, Object &obj2,
-                                       DirectX::XMFLOAT3 &objpos,
-                                       DirectX::XMFLOAT3 &obj2pos,
-                                       DirectX::XMFLOAT4 &dir, float &dist) {
-  using namespace DirectX;
-  XMFLOAT3 pos2;
-  XMStoreFloat3(&pos2, XMLoadFloat4(&dir) * dist);
+                                       FLOAT3 &objpos,
+                                       FLOAT3 &obj2pos,
+                                       FLOAT4 &dir, float &dist) {
+  
+  FLOAT3 pos2 = {dir.x * dist, dir.y * dist,dir.z * dist};
 
   auto &objudat = *((PhysicsObject&)obj).model->uData;
   auto &obj2udat = *((PhysicsObject&)obj2).model->uData;
@@ -235,16 +220,15 @@ Physics::WORKINDI Physics::ProcCollide(Object &obj, Object &obj2,
   auto &MappedVert1 = objudat.MappedVertices;
   auto &MappedVert2 = obj2udat.MappedVertices;
 
-  std::vector<std::array<uint16_t, 2>> WorkData;
+  std::vector<std::array<uint32_t, 2>> WorkData;
   //WorkData.reserve(obj2bdata.size() * objbdata.size());
 
   for (auto &b2 : obj2bdata) {
-    BoundingSphere sph2 = b2.sphere;
-    XMStoreFloat3(&sph2.Center,
-                  XMLoadFloat3(&sph2.Center) + XMLoadFloat3(&pos2));
+    SphereCollider sph2 = b2.sphere;
+    sph2.Center = sph2.Center + pos2;
     for (auto &b : objbdata) {
-      if (b.sphere.Intersects(sph2)) {
-        WorkData.emplace_back(std::array<uint16_t, 2>{b.bIndex, b2.bIndex});
+      if (fDistance(b.sphere.Center, sph2.Center) <= b.sphere.Radius + sph2.Radius) {
+        WorkData.emplace_back(std::array<uint32_t, 2>{b.bIndex, b2.bIndex});
       }
     }
   }
@@ -255,24 +239,24 @@ Physics::WORKINDI Physics::ProcCollide(Object &obj, Object &obj2,
 
   std::vector<std::vector<int>> bdata1Indices(WorkData.size());
   std::vector<std::vector<int>> bdata2Indices(WorkData.size());
-  std::vector<UINT> offset1(WorkData.size());
-  std::vector<UINT> offset2(WorkData.size());
+  std::vector<uint32_t> offset1(WorkData.size());
+  std::vector<uint32_t> offset2(WorkData.size());
   std::vector<std::atomic<bool>> objCheck1(MappedVert1.size());
   std::vector<std::atomic<bool>> objCheck2(MappedVert2.size());
   
   std::vector<THREADS::WRef> refs1;
   std::vector<THREADS::WRef> refs2;
 
-  for (auto WDIndex = 0; WDIndex < WorkData.size(); WDIndex++) {
-    std::array<DirectX::BoundingSphere, 2> CollSp;
-    using namespace DirectX;
+  for (uint32_t WDIndex = 0; WDIndex < WorkData.size(); WDIndex++) {
+    std::array<SphereCollider, 2> CollSp;
+    
     CollSp[0] = objudat.bdata[WorkData[WDIndex][0]].sphere;
     CollSp[1] = obj2udat.bdata[WorkData[WDIndex][1]].sphere;
-    XMStoreFloat3(&CollSp[0].Center,
-                  XMLoadFloat3(&CollSp[0].Center) - XMLoadFloat3(&pos2));
+    CollSp[0].Center =
+                  CollSp[0].Center - pos2;
 
-    XMStoreFloat3(&CollSp[1].Center,
-                  XMLoadFloat3(&CollSp[1].Center) + XMLoadFloat3(&pos2));
+    CollSp[1].Center =
+                  CollSp[1].Center + pos2;
 
     auto &W1Indices = bdata1Indices[WDIndex];
     auto &W2Indices = bdata2Indices[WDIndex];
@@ -318,11 +302,11 @@ void Physics::pCollison(umID instanceID) {
   for (auto &tO0 : ObjectsToProcess) {
     auto tO = (PhysicsObject *)tO0;
     refs.emplace_back(tMain->gPushWork([this, tO, &ObjectsToProcess]() {
-      using namespace DirectX;
+      
       auto &obj = *(PhysicsObject *)tO;
       if (!obj.loadedModel)
         return;
-      XMFLOAT3 Pos1 = obj.mPos.Get();
+      FLOAT3 Pos1 = obj.mPos.Get();
       auto sph1 = obj.model->uData->Sphere;
 
       std::vector<collstruct> wCollModels;
@@ -334,12 +318,12 @@ void Physics::pCollison(umID instanceID) {
         if (*tO2 != obj) {
           if (!tO2->loadedModel)
             break;
-          XMFLOAT3 Pos2 = tO2->mPos.Get();
+          FLOAT3 Pos2 = tO2->mPos.Get();
           auto sph2 = tO2->model->uData->Sphere;
           auto tdist = fDirection(Pos1, Pos2);
-          XMStoreFloat3(&sph2.Center,
-                        XMLoadFloat4(&tdist) * fDistance(Pos1, Pos2));
-          if (sph2.Intersects(sph1)) {
+          tdist = tdist * fDistance(Pos1, Pos2);
+          sph2.Center = {tdist.x, tdist.y, tdist.z};
+          if (fDistance(sph1.Center, sph2.Center) <= sph1.Radius + sph2.Radius) {
             LCollModels.emplace_back(collstruct(&obj, tO2));
           }
         }
@@ -376,13 +360,13 @@ void Physics::pCollison(umID instanceID) {
         refs[i] = tMain->gPushWork([this, &wCollModels, i, &obj, &Pos1]() {
           std::array<int, 2> wSize = {0, 0};
 
-          XMFLOAT3 MoveD1{0, 0, 0};
-          XMFLOAT3 MoveD2{0, 0, 0};
-          XMFLOAT3 Zero{0, 0, 0};
+          FLOAT3 MoveD1{0, 0, 0};
+          FLOAT3 MoveD2{0, 0, 0};
+          FLOAT3 Zero{0, 0, 0};
           auto tQueue = cl::CommandQueue{context, devices.front()};
           auto &obj2 = *(PhysicsObject *)wCollModels[i].obj2;
-          XMFLOAT3 Pos2 = obj2.mPos.Get();
-          BoundingSphere sph2;
+          FLOAT3 Pos2 = obj2.mPos.Get();
+          SphereCollider sph2;
           sph2 = obj2.model->uData->Sphere;
           auto dir = fDirection(Pos1, Pos2);
           auto dist = fDistance(Pos1, Pos2);
@@ -395,14 +379,14 @@ void Physics::pCollison(umID instanceID) {
             wSize[1] = WorkIndi.tWorkCount;
             std::vector<RETURNDATA> retdata(wSize[0]);
             cl::Buffer PositionBuffer(context, CL_MEM_READ_ONLY,
-                                      sizeof(XMFLOAT3));
+                                      sizeof(FLOAT3));
             cl::Buffer IndexBuffer(context, CL_MEM_READ_ONLY,
                                    WorkIndi.Indices.size() * sizeof(int));
 
             cl::Kernel kerns(FullColl, "coll");
 
             tQueue.enqueueWriteBuffer(PositionBuffer, CL_FALSE, 0,
-                                      sizeof(XMFLOAT3), &WorkIndi.Position);
+                                      sizeof(FLOAT3), &WorkIndi.Position);
             tQueue.enqueueWriteBuffer(IndexBuffer, CL_FALSE, 0,
                                       WorkIndi.Indices.size() * sizeof(cl_int),
                                       WorkIndi.Indices.data());
@@ -435,31 +419,20 @@ void Physics::pCollison(umID instanceID) {
             assert(error == CL_SUCCESS);
             tQueue.finish();
 
-            auto dir = fDirection(Pos1, Pos2);
-            auto dist = fDistance(Pos1, Pos2);
-            XMFLOAT3 RelPos;
-            XMStoreFloat3(&RelPos, XMLoadFloat4(&dir) * dist);
+            //auto dir = fDirection(Pos1, Pos2);
+            //auto dist = fDistance(Pos1, Pos2);
+            //FLOAT3 RelPos = dir * dist;
 
             int coutn = 0;
             for (auto &r : retdata) {
               if (r.dist[0] != 0 && r.dist[1] != 0) {
-                // XMFLOAT3 isectDir;
+                // FLOAT3 isectDir;
 
                 // XMStoreFloat3(&isectDir,XMVector3Cross(XMLoadFloat3(&obj.model->uData->MappedVertices[r.index[0]][0].normal),
                 // XMLoadFloat3(&obj2.model->uData->MappedVertices[r.index[1]][0].normal)));
 
-                XMStoreFloat3(
-                    &MoveD1, (XMLoadFloat3(&MoveD1) +
-                              (XMLoadFloat3(&obj.model->uData
-                                                 ->MappedVertices[r.index[0]][0]
-                                                 .normal) *
-                               r.dist[0])));
-                XMStoreFloat3(
-                    &MoveD2, (XMLoadFloat3(&MoveD2) +
-                              (XMLoadFloat3(&obj2.model->uData
-                                                 ->MappedVertices[r.index[1]][0]
-                                                 .normal) *
-                               r.dist[1])));
+                MoveD1 = MoveD1 + obj.model->uData->MappedVertices[r.index[0]][0].normal * r.dist[0];
+                MoveD2 = MoveD2 + obj2.model->uData->MappedVertices[r.index[1]][0].normal * r.dist[1];
 
                 /*
                                         DebugMTX.lock();
@@ -540,12 +513,10 @@ void Physics::pCollison(umID instanceID) {
               massScal1 = massScal1 < 0.00001 ? 0 : massScal1;
               massScal2 = massScal2 < 0.00001 ? 0 : massScal2;
 
-              XMStoreFloat3(&MoveD1,
-                            (XMLoadFloat3(&MoveD1) / (float)coutn) * massScal2);
-              XMStoreFloat3(&MoveD2,
-                            (XMLoadFloat3(&MoveD2) / (float)coutn) * massScal1);
+              MoveD1 = MoveD1 / (float)coutn * massScal2;
+              MoveD2 = MoveD2 / (float)coutn * massScal1;
 
-              XMFLOAT3 Zero(0, 0, 0);
+              FLOAT3 Zero(0, 0, 0);
 
               // Fixxx thissss
               // CalProportionalSpeed(obj->velDir, obj2->velDir, obj->speed,
@@ -573,27 +544,18 @@ void Physics::pSpecReset() {
 
 
 
-float Physics::fDistance(DirectX::XMFLOAT3& pos1, DirectX::XMFLOAT3& pos2) {
-    DirectX::XMFLOAT4 Result{ 0,0,0,0 };
-    DirectX::XMFLOAT3 Dist{ 0,0,0 };
-    float d = 0;
-    DirectX::XMStoreFloat4(&Result, DirectX::XMVectorSubtract(XMLoadFloat3(&pos2), XMLoadFloat3(&pos1)));
-    DirectX::XMStoreFloat3(&Dist, DirectX::XMVector3Dot(XMLoadFloat4(&Result), XMLoadFloat4(&Result)));
-    d = sqrt(Dist.x);
-    return d;
+float Physics::fDistance(FLOAT3& pos1, FLOAT3& pos2) {
+    FLOAT4 Result{ 0,0,0,0 };
+    Result = pos2 - pos1;
+    return sqrt(Result * Result);
 }
 
-DirectX::XMFLOAT4 Physics::fDirection(DirectX::XMFLOAT3& pos1, DirectX::XMFLOAT3& pos2) {
-    using namespace DirectX;
-    DirectX::XMFLOAT4 Result{ 0,0,0,0 };
-    DirectX::XMFLOAT3 Dist{ 0,0,0 };
-    float d = 0;
-    DirectX::XMStoreFloat4(&Result, XMLoadFloat3(&pos2) - XMLoadFloat3(&pos1));
-    XMStoreFloat3(&Dist, DirectX::XMVector3Dot(XMLoadFloat4(&Result), XMLoadFloat4(&Result)));
-    d = sqrt(Dist.x);
-    if (d > 0) {
-        XMStoreFloat4(&Result, XMLoadFloat4(&Result) / d);
-        return Result;
+FLOAT4 Physics::fDirection(FLOAT3& pos1, FLOAT3& pos2) {
+    FLOAT4 Result{ 0,0,0,0 };
+    Result = pos2 - pos1;
+    auto dir = Result * Result;
+    if (dir != 0) {
+        return Result / sqrt(dir);
     }
     return { 0,0,0,0 };
 }

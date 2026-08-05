@@ -1,28 +1,5 @@
-typedef struct XMFLOAT4
-{
-    float x;
-    float y;
-    float z;
-    float w;
-}
-XMFLOAT4;
 
-typedef struct XMFLOAT2
-{
-    float x;
-    float y;
-}
-XMFLOAT2;
-
-typedef struct XMFLOAT3
-{
-    float x;
-    float y;
-    float z;
-}
-XMFLOAT3;
-
-__constant static XMFLOAT3 Zero = {0.0,0.0,0.0};
+__constant static float3 Zero = {0.0,0.0,0.0};
 __constant static double epsilon = 0.005;
 
 typedef enum
@@ -44,17 +21,17 @@ CINTERVAL;
 
 typedef struct BONE
 {
-    XMFLOAT3 Position;
-    int numIndices;
-    int iOffset;
+    float3 Position;
+    unsigned int numIndices;
+    unsigned int iOffset;
 }
 BONE;
 
 typedef struct Vertex
 {
-    XMFLOAT3 normal;
-    XMFLOAT3 position;
-    XMFLOAT2 tc;
+    float3 normal;
+    float3 position;
+    float2 tc;
 }
 Vertex;
 
@@ -67,14 +44,14 @@ TRIANGLE;
 typedef struct WORKDATA
 {
     int bIndex[2];
-    XMFLOAT3 Position;
+    float3 Position;
 }
 WORKDATA;
 
 typedef struct RETURNDATA
 {
     float dist[2];
-    int index[2];
+    unsigned int index[2];
 }
 RETURNDATA;
 
@@ -85,9 +62,9 @@ typedef struct CLOSEFORM
 }
 CLOSEFORM;
 
-XMFLOAT3 MulXMFLOAT3(XMFLOAT3 a, float b)
+float3 Mulfloat3(float3 a, float b)
 {
-    XMFLOAT3 result = { 0, 0, 0 };
+    float3 result = { 0, 0, 0 };
 
     result.x = a.x * b;
     result.y = a.y * b;
@@ -96,9 +73,9 @@ XMFLOAT3 MulXMFLOAT3(XMFLOAT3 a, float b)
     return result;
 }
 
-XMFLOAT3 SubXMFLOAT3(XMFLOAT3 a, XMFLOAT3 b)
+float3 Subfloat3(float3 a, float3 b)
 {
-    XMFLOAT3 result = { 0, 0, 0 };
+    float3 result = { 0, 0, 0 };
 
     result.x = a.x - b.x;
     result.y = a.y - b.y;
@@ -107,7 +84,7 @@ XMFLOAT3 SubXMFLOAT3(XMFLOAT3 a, XMFLOAT3 b)
     return result;
 }
 
-float XMVector3Dot(XMFLOAT3 a, XMFLOAT3 b)
+float XMVector3Dot(float3 a, float3 b)
 {
     float result = 0;
     result += a.x * b.x;
@@ -116,9 +93,9 @@ float XMVector3Dot(XMFLOAT3 a, XMFLOAT3 b)
     return result;
 }
 
-float fDistance(XMFLOAT3 pos1, XMFLOAT3 pos2)
+float fDistance(float3 pos1, float3 pos2)
 {
-    XMFLOAT3 Result = SubXMFLOAT3(pos2, pos1);
+    float3 Result = Subfloat3(pos2, pos1);
     float dist = XMVector3Dot(Result, Result);
     if(dist <= 0)
     {
@@ -130,9 +107,9 @@ float fDistance(XMFLOAT3 pos1, XMFLOAT3 pos2)
     }
 }
 
-double dDistance(XMFLOAT3 pos1, XMFLOAT3 pos2)
+double dDistance(float3 pos1, float3 pos2)
 {
-    XMFLOAT3 Result = SubXMFLOAT3(pos2, pos1);
+    float3 Result = Subfloat3(pos2, pos1);
     double dist = 0;
     dist += Result.x * Result.x;
     dist += Result.y * Result.y;
@@ -148,17 +125,17 @@ double dDistance(XMFLOAT3 pos1, XMFLOAT3 pos2)
     }
 }
 
-XMFLOAT3 fDirection(XMFLOAT3 pos1, XMFLOAT3 pos2) {
-    XMFLOAT3 Result = SubXMFLOAT3(pos2, pos1);
+float3 fDirection(float3 pos1, float3 pos2) {
+    float3 Result = Subfloat3(pos2, pos1);
     double mag = dDistance(pos1, pos2);
     mag = mag != 0 ? 1 / mag : 0;
-    Result = MulXMFLOAT3(Result, mag);
+    Result = Mulfloat3(Result, mag);
     return Result;
 }
 
-XMFLOAT3 AddXMFLOAT3(XMFLOAT3 a, XMFLOAT3 b)
+float3 Addfloat3(float3 a, float3 b)
 {
-    XMFLOAT3 result = { 0, 0, 0 };
+    float3 result = { 0, 0, 0 };
 
     result.x = a.x + b.x;
     result.y = a.y + b.y;
@@ -167,9 +144,9 @@ XMFLOAT3 AddXMFLOAT3(XMFLOAT3 a, XMFLOAT3 b)
     return result;
 }
 
-XMFLOAT3 XMVector3Cross(XMFLOAT3 a, XMFLOAT3 b)
+float3 XMVector3Cross(float3 a, float3 b)
 {
-    XMFLOAT3 result = { 0, 0, 0 };
+    float3 result = { 0, 0, 0 };
 
     result.x = a.y * b.z - a.z * b.y;
     result.y = a.z * b.x - a.x * b.z;
@@ -179,26 +156,26 @@ XMFLOAT3 XMVector3Cross(XMFLOAT3 a, XMFLOAT3 b)
 }
 
 
-double areaOfTriangle(XMFLOAT3 TriA, XMFLOAT3 TriB, XMFLOAT3 TriC)
+double areaOfTriangle(float3 TriA, float3 TriB, float3 TriC)
 {
-    XMFLOAT3 AB = XMVector3Cross(TriA, TriB);
-    XMFLOAT3 AC = XMVector3Cross(TriA, TriC);
-    XMFLOAT3 ABC = XMVector3Cross(AB, AC);
+    float3 AB = XMVector3Cross(TriA, TriB);
+    float3 AC = XMVector3Cross(TriA, TriC);
+    float3 ABC = XMVector3Cross(AB, AC);
 
     double Area = dDistance(ABC, Zero)/2;
     return Area;
 }
 
-bool PointInTri(XMFLOAT3 TestPoint, XMFLOAT3 TriA, XMFLOAT3 TriB, XMFLOAT3 TriC)
+bool PointInTri(float3 TestPoint, float3 TriA, float3 TriB, float3 TriC)
 {
 
-    XMFLOAT3 Vect1 = SubXMFLOAT3(TriB, TriA);
-    XMFLOAT3 Vect2 = SubXMFLOAT3(TestPoint, TriA);
+    float3 Vect1 = Subfloat3(TriB, TriA);
+    float3 Vect2 = Subfloat3(TestPoint, TriA);
 
-    XMFLOAT3 Normal1 = fDirection(Zero, XMVector3Cross(Vect1, Vect2));
-    Vect1 = SubXMFLOAT3(TriC, TriB);
-    Vect2 = SubXMFLOAT3(TestPoint, TriB);
-    XMFLOAT3 Normal2 = fDirection(Zero, XMVector3Cross(Vect1, Vect2));
+    float3 Normal1 = fDirection(Zero, XMVector3Cross(Vect1, Vect2));
+    Vect1 = Subfloat3(TriC, TriB);
+    Vect2 = Subfloat3(TestPoint, TriB);
+    float3 Normal2 = fDirection(Zero, XMVector3Cross(Vect1, Vect2));
 
 
     //Check if sum of A1, A2 and A3 is same as A
@@ -313,7 +290,7 @@ CINTERVAL ComputeInterval(float Vector0Vert, float Vector1Vert, float Vector2Ver
 
 //This is supposed to say object is colliding when triangle is inside another object but doesnt work currently
 /*
- CLOSEFORM CloseCheck(float TDistance[3], XMFLOAT3 WAPoint, XMFLOAT3 WBPoint, XMFLOAT3 WCPoint, XMFLOAT3 TAPoint, XMFLOAT3 TBPoint, XMFLOAT3 TCPoint, XMFLOAT3 Bone1, XMFLOAT3 TPos, XMFLOAT3 Bone2, float bdist, XMFLOAT3 bdir, XMFLOAT3 WNorm, XMFLOAT3 TNorm)
+ CLOSEFORM CloseCheck(float TDistance[3], float3 WAPoint, float3 WBPoint, float3 WCPoint, float3 TAPoint, float3 TBPoint, float3 TCPoint, float3 Bone1, float3 TPos, float3 Bone2, float bdist, float3 bdir, float3 WNorm, float3 TNorm)
 {
     CLOSEFORM Result;
     Result.dist[0] = 0;
@@ -323,24 +300,24 @@ CINTERVAL ComputeInterval(float Vector0Vert, float Vector1Vert, float Vector2Ver
     float WDistance[3];
 
     float TScalar = XMVector3Dot(TNorm, TAPoint);
-    WDistance[0] = XMVector3Dot(TNorm, AddXMFLOAT3(WAPoint, MulXMFLOAT3(bdir, -bdist))) - TScalar;
-    WDistance[1] = XMVector3Dot(TNorm, AddXMFLOAT3(WBPoint, MulXMFLOAT3(bdir, -bdist))) - TScalar;
-    WDistance[2] = XMVector3Dot(TNorm, AddXMFLOAT3(WCPoint, MulXMFLOAT3(bdir, -bdist))) - TScalar;
+    WDistance[0] = XMVector3Dot(TNorm, Addfloat3(WAPoint, Mulfloat3(bdir, -bdist))) - TScalar;
+    WDistance[1] = XMVector3Dot(TNorm, Addfloat3(WBPoint, Mulfloat3(bdir, -bdist))) - TScalar;
+    WDistance[2] = XMVector3Dot(TNorm, Addfloat3(WCPoint, Mulfloat3(bdir, -bdist))) - TScalar;
 
     if (WDistance[0] < 0 && WDistance[1] < 0 && WDistance[2] < 0)
     {
 
-        XMFLOAT3 iBDir = MulXMFLOAT3(bdir, -1);
-        XMFLOAT3 Bonedir = bdir;
-        XMFLOAT3 Bone2 = MulXMFLOAT3(bdir, bdist);
-        XMFLOAT3 WNewPointA = SubXMFLOAT3(WAPoint, MulXMFLOAT3(Bonedir, XMVector3Dot(WAPoint, Bonedir)));
-        XMFLOAT3 WNewPointB = SubXMFLOAT3(WBPoint, MulXMFLOAT3(Bonedir, XMVector3Dot(WBPoint, Bonedir)));
-        XMFLOAT3 WNewPointC = SubXMFLOAT3(WCPoint, MulXMFLOAT3(Bonedir, XMVector3Dot(WCPoint, Bonedir)));
+        float3 iBDir = Mulfloat3(bdir, -1);
+        float3 Bonedir = bdir;
+        float3 Bone2 = Mulfloat3(bdir, bdist);
+        float3 WNewPointA = Subfloat3(WAPoint, Mulfloat3(Bonedir, XMVector3Dot(WAPoint, Bonedir)));
+        float3 WNewPointB = Subfloat3(WBPoint, Mulfloat3(Bonedir, XMVector3Dot(WBPoint, Bonedir)));
+        float3 WNewPointC = Subfloat3(WCPoint, Mulfloat3(Bonedir, XMVector3Dot(WCPoint, Bonedir)));
 
 
-        XMFLOAT3 TNewPointA = SubXMFLOAT3(TAPoint, MulXMFLOAT3(Bonedir, XMVector3Dot(TAPoint, Bonedir)));
-        XMFLOAT3 TNewPointB = SubXMFLOAT3(TBPoint, MulXMFLOAT3(Bonedir, XMVector3Dot(TBPoint, Bonedir)));
-        XMFLOAT3 TNewPointC = SubXMFLOAT3(TCPoint, MulXMFLOAT3(Bonedir, XMVector3Dot(TCPoint, Bonedir)));
+        float3 TNewPointA = Subfloat3(TAPoint, Mulfloat3(Bonedir, XMVector3Dot(TAPoint, Bonedir)));
+        float3 TNewPointB = Subfloat3(TBPoint, Mulfloat3(Bonedir, XMVector3Dot(TBPoint, Bonedir)));
+        float3 TNewPointC = Subfloat3(TCPoint, Mulfloat3(Bonedir, XMVector3Dot(TCPoint, Bonedir)));
 
 
         //Make sure triangles are actually ontop of each other
@@ -360,16 +337,16 @@ CINTERVAL ComputeInterval(float Vector0Vert, float Vector1Vert, float Vector2Ver
  */
 typedef struct XMF32
 {
-    XMFLOAT3 a;
-    XMFLOAT3 b;
+    float3 a;
+    float3 b;
 }XMF32;
 
-XMF32 LIntersectPoint(XMFLOAT3 TriA, XMFLOAT3 TriB, XMFLOAT3 TriC, XMFLOAT3 Tri2A, XMFLOAT3 Tri2Normal){
+XMF32 LIntersectPoint(float3 TriA, float3 TriB, float3 TriC, float3 Tri2A, float3 Tri2Normal){
     XMF32 Result;
     //tripoint direction b to a
-    XMFLOAT3 BA = fDirection(TriB, TriA);
+    float3 BA = fDirection(TriB, TriA);
     //tripoint direction c to a
-    XMFLOAT3 CA = fDirection(TriC, TriA);
+    float3 CA = fDirection(TriC, TriA);
 
     float t2D = XMVector3Dot(Tri2Normal, Tri2A);
 
@@ -379,13 +356,13 @@ XMF32 LIntersectPoint(XMFLOAT3 TriA, XMFLOAT3 TriB, XMFLOAT3 TriC, XMFLOAT3 Tri2
     //Goal is to find a point along the direction BA or CA that intersects the plane of Tri2 then project that point back onto the first triangle and measure the distance between the two points
     //This isnt correct?
 
-    Result.a = AddXMFLOAT3(TriB, MulXMFLOAT3(BA, BAd));
-    Result.b = AddXMFLOAT3(TriC, MulXMFLOAT3(CA, CAd));
+    Result.a = Addfloat3(TriB, Mulfloat3(BA, BAd));
+    Result.b = Addfloat3(TriC, Mulfloat3(CA, CAd));
     return Result;
 }
 
 
-float TriDist(XMFLOAT3 TriA, XMFLOAT3 TriB, XMFLOAT3 TriC, XMFLOAT3 Tri2A, XMFLOAT3 Tri2B, XMFLOAT3 Tri2C, XMFLOAT3 Tri2Normal, XMFLOAT3 TriNormal, float Tri1Scalar[3], float Tri2Scalar[3])
+float TriDist(float3 TriA, float3 TriB, float3 TriC, float3 Tri2A, float3 Tri2B, float3 Tri2C, float3 Tri2Normal, float3 TriNormal, float Tri1Scalar[3], float Tri2Scalar[3])
 {
     float Result = 0.1;
 
@@ -394,7 +371,7 @@ float TriDist(XMFLOAT3 TriA, XMFLOAT3 TriB, XMFLOAT3 TriC, XMFLOAT3 Tri2A, XMFLO
     //float distBAp = ;
 
 
-    //float distCAp = XMVector3Dot(SubXMFLOAT3(Tri2A, TriA), Tri2Normal) * CAd;
+    //float distCAp = XMVector3Dot(Subfloat3(Tri2A, TriA), Tri2Normal) * CAd;
 
     //Need to have both points to figure out distance to move. Putting thoughts here to remember later
 
@@ -404,8 +381,8 @@ float TriDist(XMFLOAT3 TriA, XMFLOAT3 TriB, XMFLOAT3 TriC, XMFLOAT3 Tri2A, XMFLO
     int OddSide2 = OddOneOut(Tri2Scalar[0], Tri2Scalar[1], Tri2Scalar[2]);
     float Dist1 = 0;
     float Dist2 = 0;
-    XMFLOAT3 OddTri1;
-    XMFLOAT3 OddTri2;
+    float3 OddTri1;
+    float3 OddTri2;
 
 
     //Check if odd one out has the shorter distance to move. Possible it doesnt
@@ -521,7 +498,7 @@ float TriDist(XMFLOAT3 TriA, XMFLOAT3 TriB, XMFLOAT3 TriC, XMFLOAT3 Tri2A, XMFLO
     if(Dist1 < 0)
     {
 
-        if (PointInTri(AddXMFLOAT3(OddTri1, MulXMFLOAT3(Tri2Normal, sqrt(fabs(Dist1)))), Tri2A, Tri2B, Tri2C))
+        if (PointInTri(Addfloat3(OddTri1, Mulfloat3(Tri2Normal, sqrt(fabs(Dist1)))), Tri2A, Tri2B, Tri2C))
         {
             Result = 69;
         }
@@ -531,43 +508,43 @@ float TriDist(XMFLOAT3 TriA, XMFLOAT3 TriB, XMFLOAT3 TriC, XMFLOAT3 Tri2A, XMFLO
 
 }
 
-CLOSEFORM TooClose(TRIANGLE Tri1, TRIANGLE Tri2, XMFLOAT3 TPos)
+CLOSEFORM TooClose(TRIANGLE Tri1, TRIANGLE Tri2, float3 TPos)
 {
     CLOSEFORM Result;
     Result.dist[0] = 0;
     Result.dist[1] = 0;
 
 
-    XMFLOAT3 WAPoint = Tri1.Vertices[0].position;
-    XMFLOAT3 WBPoint = Tri1.Vertices[1].position;
-    XMFLOAT3 WCPoint = Tri1.Vertices[2].position;
-    XMFLOAT3 TAPoint = AddXMFLOAT3(Tri2.Vertices[0].position, TPos);
-    XMFLOAT3 TBPoint = AddXMFLOAT3(Tri2.Vertices[1].position, TPos);
-    XMFLOAT3 TCPoint = AddXMFLOAT3(Tri2.Vertices[2].position, TPos);
+    float3 WAPoint = Tri1.Vertices[0].position;
+    float3 WBPoint = Tri1.Vertices[1].position;
+    float3 WCPoint = Tri1.Vertices[2].position;
+    float3 TAPoint = Addfloat3(Tri2.Vertices[0].position, TPos);
+    float3 TBPoint = Addfloat3(Tri2.Vertices[1].position, TPos);
+    float3 TCPoint = Addfloat3(Tri2.Vertices[2].position, TPos);
 
 
     //A:0 B:1 C:2
     float TNormalScalar[3];
     float WNormalScalar[3];
 
-    XMFLOAT3 WNorm = Tri1.Vertices[0].normal;
-    XMFLOAT3 TNorm = Tri2.Vertices[0].normal;
+    float3 WNorm = Tri1.Vertices[0].normal;
+    float3 TNorm = Tri2.Vertices[0].normal;
 
     //A:0 B:1 C:2 Scalar distance of T*point mapped onto plane of WNorm given WA as origin.
-    //XMFLOAT3 AverageW = MulXMFLOAT3(AddXMFLOAT3(WAPoint, AddXMFLOAT3(WBPoint, WCPoint)),0.333333333333333333);
-    TNormalScalar[0] = XMVector3Dot(WNorm, SubXMFLOAT3(TAPoint, WAPoint));
-    TNormalScalar[1] = XMVector3Dot(WNorm, SubXMFLOAT3(TBPoint, WAPoint));
-    TNormalScalar[2] = XMVector3Dot(WNorm, SubXMFLOAT3(TCPoint, WAPoint));
+    //float3 AverageW = Mulfloat3(Addfloat3(WAPoint, Addfloat3(WBPoint, WCPoint)),0.333333333333333333);
+    TNormalScalar[0] = XMVector3Dot(WNorm, Subfloat3(TAPoint, WAPoint));
+    TNormalScalar[1] = XMVector3Dot(WNorm, Subfloat3(TBPoint, WAPoint));
+    TNormalScalar[2] = XMVector3Dot(WNorm, Subfloat3(TCPoint, WAPoint));
 
 
 
     if (!(Sign(TNormalScalar[0]) == Sign(TNormalScalar[1]) && Sign(TNormalScalar[0]) == Sign(TNormalScalar[2])))
     {
-        //XMFLOAT3 AverageT = MulXMFLOAT3(AddXMFLOAT3(TAPoint, AddXMFLOAT3(TBPoint, TCPoint)), 0.333333333333333333);
+        //float3 AverageT = Mulfloat3(Addfloat3(TAPoint, Addfloat3(TBPoint, TCPoint)), 0.333333333333333333);
         //A:0 B:1 C:2 Scalar distance of W*point mapped onto plane of TNorm given TA as origin.
-        WNormalScalar[0] = XMVector3Dot(TNorm, SubXMFLOAT3(WAPoint, TAPoint));
-        WNormalScalar[1] = XMVector3Dot(TNorm, SubXMFLOAT3(WBPoint, TAPoint));
-        WNormalScalar[2] = XMVector3Dot(TNorm, SubXMFLOAT3(WCPoint, TAPoint));
+        WNormalScalar[0] = XMVector3Dot(TNorm, Subfloat3(WAPoint, TAPoint));
+        WNormalScalar[1] = XMVector3Dot(TNorm, Subfloat3(WBPoint, TAPoint));
+        WNormalScalar[2] = XMVector3Dot(TNorm, Subfloat3(WCPoint, TAPoint));
 
 
         if (Sign(WNormalScalar[0]) == Sign(WNormalScalar[1]) && Sign(WNormalScalar[0]) == Sign(WNormalScalar[2]))
@@ -576,7 +553,7 @@ CLOSEFORM TooClose(TRIANGLE Tri1, TRIANGLE Tri2, XMFLOAT3 TPos)
         }
 
         //Vector describing the intersection line of the two normal planes
-        XMFLOAT3 ISectLineDir = XMVector3Cross(WNorm, TNorm);
+        float3 ISectLineDir = XMVector3Cross(WNorm, TNorm);
 
 
         //Finding greatest magnitude component of Intersection line(Aka biggest difference between planes)
@@ -696,10 +673,10 @@ CLOSEFORM TooClose(TRIANGLE Tri1, TRIANGLE Tri2, XMFLOAT3 TPos)
 }
 
 
-void kernel coll(global const TRIANGLE* WModel, global const TRIANGLE* TModel, global const XMFLOAT3* TPos, global const int* WorkingIndices, global RETURNDATA* retdat){
-int Wind = get_global_id(0);
-int Tind = get_global_id(1);
-int rd = Wind;
+void kernel coll(global const TRIANGLE* WModel, global const TRIANGLE* TModel, global const float3* TPos, global const unsigned int* WorkingIndices, global RETURNDATA* retdat){
+unsigned int Wind = get_global_id(0);
+unsigned int Tind = get_global_id(1);
+unsigned int rd = Wind;
 
     if (!(retdat[rd].dist[0] != 0 || retdat[rd].dist[1] != 0))
     {

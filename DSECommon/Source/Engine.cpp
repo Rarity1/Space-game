@@ -6,7 +6,7 @@
 #include <functional>
 #include <memory>
 
-Engine::Engine(Input &InputHandler, thRect &WindowRect, HWND &hWnd)
+Engine::Engine(Input &InputHandler, WRect &WindowRect, HWND &hWnd)
     : storage(std::make_unique<RStorage>()) ,pTracker(std::make_unique<Tracker>(*storage, InputHandler)),
     tracker(*pTracker),
     pGfx(std::make_unique<Graphics>(WindowRect, hWnd, *pTracker)), 
@@ -82,16 +82,16 @@ void Engine::iLoad() {
           if (!Camera->isFree()) {
             if (move.forward != 0 && !move.movestop) {
               float oldspeed = pmodl.speed <= 0.0001 ? 0 : pmodl.speed;
-              DirectX::XMFLOAT4 forwardScale = {0, 0, 0, 0};
+              FLOAT4 forwardScale = {0, 0, 0, 0};
 
               {
                 using namespace DirectX;
 
                 DirectX::XMStoreFloat4(
-                    &forwardScale,
+                    (XMFLOAT4*)&forwardScale,
                     DirectX::XMVector3Dot(
-                        XMLoadFloat3(&pmodl.velDir),
-                        XMLoadFloat4(&CameraRotation) *
+                        XMLoadFloat3((XMFLOAT3*)&pmodl.velDir),
+                        XMLoadFloat4((XMFLOAT4*)&CameraRotation) *
                             (fabs(move.forward) / move.forward)));
               }
               forwardScale.x = fabs(forwardScale.x);
@@ -111,33 +111,33 @@ void Engine::iLoad() {
               }
 
               // Figure this out
-              DirectX::XMFLOAT3 Temporarydir;
+              FLOAT3 Temporarydir;
               {
                 using namespace DirectX;
                 DirectX::XMStoreFloat3(
-                    &Temporarydir,
-                    XMVector3Normalize(XMLoadFloat4(&CameraRotation) *
+                    (XMFLOAT3*)&Temporarydir,
+                    XMVector3Normalize(XMLoadFloat4((XMFLOAT4*)&CameraRotation) *
                                            (fabs(move.forward) / move.forward) *
                                            fabs(forwardSpeedScalar) +
-                                       XMLoadFloat3(&pmodl.velDir) *
+                                       XMLoadFloat3((XMFLOAT3*)&pmodl.velDir) *
                                            invertedForwardSpeedScalar));
               }
 
-              pmodl.velDir = Temporarydir;
+              pmodl.velDir = *(FLOAT3*)&Temporarydir;
             }
             if (move.left != 0 && !move.movestop) {
               float oldspeed = pmodl.speed <= 0.0001 ? 0 : pmodl.speed;
-              DirectX::XMFLOAT4 leftScale = {0, 0, 0, 0};
+              FLOAT4 leftScale = {0, 0, 0, 0};
 
               {
                 using namespace DirectX;
                 DirectX::XMStoreFloat4(
-                    &leftScale,
+                    (XMFLOAT4*)&leftScale,
                     DirectX::XMVector3Dot(
-                        XMLoadFloat3(&pmodl.velDir),
+                        XMLoadFloat3((XMFLOAT3*)&pmodl.velDir),
                         XMVector3Transform(
-                            XMLoadFloat4(&CameraRotation),
-                            XMMatrixRotationAxis(XMLoadFloat4(&CameraUpDir),
+                            XMLoadFloat4((XMFLOAT4*)&CameraRotation),
+                            XMMatrixRotationAxis(XMLoadFloat4((XMFLOAT4*)&CameraUpDir),
                                                  XMConvertToRadians(90.0f))) *
                             (fabs(move.left) / move.left)));
               }
@@ -156,22 +156,22 @@ void Engine::iLoad() {
                 pmodl.speed = pmodl.speed + fabs(leftSpeed);
               }
               // Figure this out
-              DirectX::XMFLOAT3 Temporarydir;
+              FLOAT3 Temporarydir;
               {
                 using namespace DirectX;
                 DirectX::XMStoreFloat3(
-                    &Temporarydir,
+                    (XMFLOAT3*)&Temporarydir,
                     XMVector3Normalize(
                         XMVector3Transform(
-                            XMLoadFloat4(&CameraRotation),
-                            XMMatrixRotationAxis(XMLoadFloat4(&CameraUpDir),
+                            XMLoadFloat4((XMFLOAT4*)&CameraRotation),
+                            XMMatrixRotationAxis(XMLoadFloat4((XMFLOAT4*)&CameraUpDir),
                                                  XMConvertToRadians(90.0f))) *
                             (fabs(move.left) / move.left) *
                             fabs(leftSpeedScalar) +
-                        XMLoadFloat3(&pmodl.velDir) * invertedleftSpeedScalar));
+                        XMLoadFloat3((XMFLOAT3*)&pmodl.velDir) * invertedleftSpeedScalar));
               }
 
-              pmodl.velDir = Temporarydir;
+              pmodl.velDir = *(FLOAT3*)&Temporarydir;
             }
 
             if (move.movestop) {
@@ -181,22 +181,22 @@ void Engine::iLoad() {
           }
           updateClock.Mark();
         },
-        2, 1, DirectX::XMFLOAT3{0, 0, 138}, DirectX::XMFLOAT4{0, 0, 0, 1},
+        2, 1, FLOAT3{0, 0, 138}, FLOAT4{0, 0, 0, 1},
         2000.0);
     Camera->LinkTo((RenderedObject*)plModel);
     //Camera->AddParent(plModel);
-    tracker.initPhysObject(instance, "cube", []{},1, 1, DirectX::XMFLOAT3{ 10,0,138 }, DirectX::XMFLOAT4{ 0,0,0,1}, 200);
-    tracker.initPhysObject(instance, "wrld", []{},4, 1, DirectX::XMFLOAT3{ 0,0,0 }, DirectX::XMFLOAT4{ 0,0,0,1}, 8570000000.0);
+    tracker.initPhysObject(instance, "cube", []{},1, 1, FLOAT3{ 10,0,138 }, FLOAT4{ 0,0,0,1}, 200);
+    tracker.initPhysObject(instance, "wrld", []{},4, 1, FLOAT3{ 0,0,0 }, FLOAT4{ 0,0,0,1}, 8570000000.0);
     //wrld is 1:50000
 
     for (auto i = 0; i < 20; i++) {
         float p = i * 2;
-        tracker.initPhysObject(instance, "untitled", []{},2, 1, DirectX::XMFLOAT3{ 12 + p,0,138 }, DirectX::XMFLOAT4{ 0,0,0,1}, 200);
+        tracker.initPhysObject(instance, "untitled", []{},2, 1, FLOAT3{ 12 + p,0,138 }, FLOAT4{ 0,0,0,1}, 200);
     }
 
     for (auto i = 0; i < 10; i++) {
         float p = i * 2;
-        tracker.initPhysObject(instance, "cube", []{},1, 1, DirectX::XMFLOAT3{ 12 + p,0,138 }, DirectX::XMFLOAT4{ 0,0,0,1}, 200);
+        tracker.initPhysObject(instance, "cube", []{},1, 1, FLOAT3{ 12 + p,0,138 }, FLOAT4{ 0,0,0,1}, 200);
     }
 
     //trackedModels[0].mworld = &trackedModels[2];
@@ -259,9 +259,8 @@ void Engine::EngineLoop() {
 
 bool Engine::Update()
 {
-    InputHndlr.DispatchInputFunctions();
+    InputHndlr.DispatchInputEvents();
     loopVariable.notify_all();
-    mAniUpdate();
     //Update rendered instances every frame
     rGfx.Update();
     rGfx.RenderFrame();
@@ -279,11 +278,11 @@ void Engine::mAniUpdate(){
         if (m_keysPressed.FindBuffered(KeysPressed::K)) {
 
         XMFLOAT4 up(1,0,0, 0);
-        auto temp = DirectX::XMQuaternionRotationAxis(XMVector4Normalize(XMLoadFloat4(&up)), 10 * Clock.Current());
-        auto left = DirectX::XMQuaternionMultiply(temp, XMLoadFloat4(&trackedObjects[1].mPos.rotation));
+        auto temp = DirectX::XMQuaternionRotationAxis(XMVector4Normalize(XMLoadFloat4((XMFLOAT4*)&up)), 10 * Clock.Current());
+        auto left = DirectX::XMQuaternionMultiply(temp, XMLoadFloat4((XMFLOAT4*)&trackedObjects[1].mPos.rotation));
 
 
-        XMStoreFloat4(&trackedObjects[1].mPos.rotation, left);
+        XMStoreFloat4((XMFLOAT4*)&trackedObjects[1].mPos.rotation, left);
 
 
     }
@@ -353,13 +352,13 @@ void Engine::enQueueExternCommands()
 
 
 
-DirectX::XMFLOAT3 Engine::rWorld(DirectX::XMFLOAT3 pos1) {
+FLOAT3 Engine::rWorld(FLOAT3 pos1) {
 	return  { cWorld.x+pos1.x,cWorld.y+pos1.y,cWorld.z+pos1.z};
 }
-DirectX::XMFLOAT3 Engine::dWorld(DirectX::XMFLOAT3 pos1) {
+FLOAT3 Engine::dWorld(FLOAT3 pos1) {
     return  { -cWorld.x + pos1.x,-cWorld.y + pos1.y,-cWorld.z + pos1.z };
 }
-DirectX::XMFLOAT3 Engine::cnWorld(DirectX::XMFLOAT3 pos1) {
+FLOAT3 Engine::cnWorld(FLOAT3 pos1) {
     auto tworld = { cWorld.x - nWorld.x, cWorld.x - nWorld.x, cWorld.x - nWorld.x};
     return  { -cWorld.x + pos1.x,-cWorld.y + pos1.y,-cWorld.z + pos1.z };
 }

@@ -1,8 +1,13 @@
 #pragma once
-#include "CWin.h"
+
 #include "RStorage.h"
 #include "ObjectTracking.h"
+#include "CommonStructs.h"
+
+#ifdef _WIN32
+#include "CWin.h"
 #include <dxgi1_6.h>
+#endif
 
 #define NAME_D3D12_OBJECT(x) SetName((x).Get(), (wchar_t*)#x)
 inline void SetName(ID3D12Object* pObject, LPCWSTR name)
@@ -34,7 +39,7 @@ public:
     //std::vector<DirectX::XMFLOAT4X4*> cbvbuff;
     uint8_t fenceValue;
     struct Pipeline {
-      thRect& windowResolution;
+      WRect& windowResolution;
       ID3D12Device9* pDevice;
       IDXGISwapChain4* swapChain;
       ID3D12PipelineState* pPipelineState;

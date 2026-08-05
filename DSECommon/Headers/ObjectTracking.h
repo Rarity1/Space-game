@@ -1,9 +1,7 @@
 #pragma once
-#include "CWin.h"
 #include "InputHandler.h"
 #include "RStorage.h"
 #include "Threads.h"
-#include <DirectXMath.h>
 #include <atomic>
 #include <cstdint>
 #include <functional>
@@ -16,8 +14,8 @@ class CameraObject;
 class RenderedObject;
 class PhysicsObject;
 struct CBVData {
-  alignas(16) DirectX::XMFLOAT4X4 cbvMatrix;
-  UINT Texture = 0;
+  FLOAT4X4 cbvMatrix;
+  uint32_t Texture = 0;
   // do not use
   // UINT Padding[3];
 };
@@ -48,7 +46,7 @@ public:
     std::unordered_map<UOID, bool> physEnabled;
     // parent tracker class
 
-    UINT Count;
+    uint32_t Count;
     std::atomic<bool> Active;
     std::mutex InstanceObjLock;
     std::unique_ptr<Object> uniqueOrigin;
@@ -63,7 +61,7 @@ public:
 
     Instance(InstID instanceID, Tracker &Parent, std::function<void()> func);
     Tracker &pTracker;
-    const std::unordered_map<UINT, std::list<Object *>> &GetRenderObjects() {
+    const std::unordered_map<uint32_t, std::list<Object *>> &GetRenderObjects() {
       return ModelLinkedObjects;
     }
     const std::list<Object *> &GetPhysicsObjects() { return PhysicsObjects; }
@@ -96,23 +94,23 @@ public:
   CameraObject *initCameraObject(
     Tracker::Instance& pInstance,
       std::string name, std::function<void()> func = [] {},
-      DirectX::XMFLOAT3 initPos = {0, 0, 0},
-      DirectX::XMFLOAT4 initRot = {1, 0, 0, 0},
-      DirectX::XMFLOAT4 initUpDirection = {0, 0, 1, 0},
+      FLOAT3 initPos = {0, 0, 0},
+      FLOAT4 initRot = {1, 0, 0, 0},
+      FLOAT4 initUpDirection = {0, 0, 1, 0},
       RenderedObject *link = nullptr, bool Active = false);
 
   RenderedObject *initRenderObject(
       Instance &Instance, std::string name, std::function<void()> func = [] {},
       umID filebModelIndex = 0, float mScale = 1.0,
-      DirectX::XMFLOAT3 initPos = {0, 0, 0},
-      DirectX::XMFLOAT4 initRot = {0, 0, 0, 1});
+      FLOAT3 initPos = {0, 0, 0},
+      FLOAT4 initRot = {0, 0, 0, 1});
 
   PhysicsObject *initPhysObject(
       Instance &Instance, std::string name, std::function<void()> func = [] {},
       umID filebModelIndex = 0, float mScale = 1.0,
-      DirectX::XMFLOAT3 initPos = {0, 0, 0},
-      DirectX::XMFLOAT4 initRot = {0, 0, 0, 1}, float mMass = 0.0,
-      float mFriction = 0.01, DirectX::XMFLOAT3 initVelDir = {0, 0, 0},
+      FLOAT3 initPos = {0, 0, 0},
+      FLOAT4 initRot = {0, 0, 0, 1}, float mMass = 0.0,
+      float mFriction = 0.01, FLOAT3 initVelDir = {0, 0, 0},
       float initSpeed = 0);
 
   void unloadObject(UOID obj);
@@ -181,17 +179,17 @@ private:
 };
 class relposVect {
 protected:
-  std::unique_ptr<DirectX::XMFLOAT3> position;
-  DirectX::XMFLOAT3 lastposition = {0, 0, 0};
-  DirectX::XMFLOAT4 rotation{0, 0, 0, 1};
+  std::unique_ptr<FLOAT3> position;
+  FLOAT3 lastposition = {0, 0, 0};
+  FLOAT4 rotation{0, 0, 0, 1};
   std::mutex posMtx;
 
 public:
-  relposVect() : position(std::make_unique<DirectX::XMFLOAT3>(0, 0, 0)) {};
-  relposVect(DirectX::XMFLOAT3 initPos)
-      : position(std::make_unique<DirectX::XMFLOAT3>(initPos)) {};
-  relposVect(DirectX::XMFLOAT3 initPos, DirectX::XMFLOAT4 initRot)
-      : position(std::make_unique<DirectX::XMFLOAT3>(initPos)),
+  relposVect() : position(std::make_unique<FLOAT3>(0, 0, 0)) {};
+  relposVect(FLOAT3 initPos)
+      : position(std::make_unique<FLOAT3>(initPos)) {};
+  relposVect(FLOAT3 initPos, FLOAT4 initRot)
+      : position(std::make_unique<FLOAT3>(initPos)),
         rotation(initRot) {};
   ~relposVect() = default;
   relposVect(relposVect &&old) noexcept {
@@ -200,7 +198,7 @@ public:
     rotation = std::move(old.rotation);
   };
   relposVect(const relposVect &old) {
-    position = std::make_unique<DirectX::XMFLOAT3>(*old.position);
+    position = std::make_unique<FLOAT3>(*old.position);
     lastposition = old.lastposition;
     rotation = old.rotation;
   };
@@ -210,24 +208,24 @@ public:
     rotation = old.rotation;
     return *this;
   }
-  const DirectX::XMFLOAT3 Move(DirectX::XMFLOAT3 &NewPos);
-  const DirectX::XMFLOAT3 Get();
-  const DirectX::XMFLOAT3 GetLast();
-  const DirectX::XMFLOAT4 GetRotation();
-  void SetRotation(DirectX::XMFLOAT4& Rotation);
-  const DirectX::XMFLOAT3 *GetPtr() { return position.get(); };
+  const FLOAT3 Move(FLOAT3 &NewPos);
+  const FLOAT3 Get();
+  const FLOAT3 GetLast();
+  const FLOAT4 GetRotation();
+  void SetRotation(FLOAT4& Rotation);
+  const FLOAT3 *GetPtr() { return position.get(); };
 };
 
 class CameraPosition : public relposVect{
 
-  DirectX::XMFLOAT4 upDirection = {0, 0, 1, 0};
+  FLOAT4 upDirection = {0, 0, 1, 0};
   public:
-  CameraPosition(DirectX::XMFLOAT3 initPos, DirectX::XMFLOAT4 initRot, DirectX::XMFLOAT4 UpDirection):
+  CameraPosition(FLOAT3 initPos, FLOAT4 initRot, FLOAT4 UpDirection):
   relposVect(initPos, initRot),
   upDirection(UpDirection)
   {};
-  const DirectX::XMFLOAT4 GetUpDirection();
-  void SetUpDirection(DirectX::XMFLOAT4 UpDirection);
+  const FLOAT4 GetUpDirection();
+  void SetUpDirection(FLOAT4 UpDirection);
 };
 
 class Object {
@@ -299,24 +297,24 @@ class CameraObject : public Object {
   std::atomic<bool> isActive;
   std::atomic<bool> freeCam;
   
-  // DirectX::XMFLOAT4 forwardDirect = {1, 0, 0, 0};
-  DirectX::XMFLOAT4X4 cMatrix;
+  // FLOAT4 forwardDirect = {1, 0, 0, 0};
+  FLOAT4X4 cMatrix;
   RenderedObject *linkedObject = nullptr;
   EngineTime ucontrolClock;
   EngineTime inputDelay;
   Input::dispatchID dispID;
 public:
   CameraPosition cPos;
-  CameraObject(Object &obj, DirectX::XMFLOAT3 initPos = {0, 0, 0},
-               DirectX::XMFLOAT4 initRot = {1, 0, 0, 0},
-               DirectX::XMFLOAT4 initUpDirection = {0, 0, 1, 0},
+  CameraObject(Object &obj, FLOAT3 initPos = {0, 0, 0},
+               FLOAT4 initRot = {1, 0, 0, 0},
+               FLOAT4 initUpDirection = {0, 0, 1, 0},
                RenderedObject *link = nullptr, bool Active = false);
   CameraObject(
       std::string name, UOID uOID, std::function<void()> func = [] {},
       Tracker::Instance *pInstance = nullptr,
-      DirectX::XMFLOAT3 initPos = {0, 0, 0},
-      DirectX::XMFLOAT4 initRot = {1, 0, 0, 0},
-      DirectX::XMFLOAT4 initUpDirection = {0, 0, 1, 0},
+      FLOAT3 initPos = {0, 0, 0},
+      FLOAT4 initRot = {1, 0, 0, 0},
+      FLOAT4 initUpDirection = {0, 0, 1, 0},
       RenderedObject *link = nullptr, bool Active = false);
   // Returns previous active camera. Returns nullptr if first camera set
   CameraObject *MakeActive() {
@@ -348,21 +346,21 @@ protected:
   std::atomic<bool> isHidden;
   // This pointer is handled by rstorage
   RStorage::bmResource *model;
-  UINT CBVIndex = 0;
+  uint32_t CBVIndex = 0;
   float scale = 1;
 
 public:
   relposVect mPos;
   RenderedObject(Object &obj, RStorage::bmResource *model = nullptr,
                  umID filebModelIndex = 0, float mScale = 1,
-                 DirectX::XMFLOAT3 initPos = {0, 0, 0},
-                 DirectX::XMFLOAT4 initRot = {0, 0, 0, 1});
+                 FLOAT3 initPos = {0, 0, 0},
+                 FLOAT4 initRot = {0, 0, 0, 1});
   RenderedObject(
       std::string name, UOID uOID, std::function<void()> func = [] {},
       Tracker::Instance *pInstance = nullptr,
       RStorage::bmResource *model = nullptr, umID filebModelIndex = 0,
-      float mScale = 1, DirectX::XMFLOAT3 initPos = {0, 0, 0},
-      DirectX::XMFLOAT4 initRot = {0, 0, 0, 1});
+      float mScale = 1, FLOAT3 initPos = {0, 0, 0},
+      FLOAT4 initRot = {0, 0, 0, 1});
   RenderedObject(const RenderedObject &obj)
       : Object(obj), loadedModel(obj.loadedModel),
         isHidden(obj.isHidden.load()), model(obj.model), CBVIndex(obj.CBVIndex),
@@ -375,12 +373,12 @@ class PhysicsObject : public RenderedObject {
   friend class Engine;
 
 protected:
-  std::vector<DirectX::XMFLOAT4> pDir;
+  std::vector<FLOAT3> pDir;
   float gravpull = 0;
-  DirectX::XMFLOAT4 grav{0, 0, 0, 0};
+  FLOAT4 grav{0, 0, 0, 0};
   float mass = 1;
   float friction = 0;
-  DirectX::XMFLOAT3 velDir{0, 0, 0};
+  FLOAT3 velDir{0, 0, 0};
   float speed = 0;
   std::atomic<bool> updated;
   std::atomic<bool> Collision;
@@ -390,16 +388,16 @@ protected:
   // Only important for gravity/ loading reasons. Dont impliment until necessary
 public:
   PhysicsObject(RenderedObject &obj, float mMass = 1, float mFriction = 0,
-                DirectX::XMFLOAT3 initVelDir = {0, 0, 0}, float initSpeed = 0);
+                FLOAT3 initVelDir = {0, 0, 0}, float initSpeed = 0);
   PhysicsObject(
       std::string name, UOID uOID, std::function<void()> func = [] {},
       Tracker::Instance *pInstance = nullptr,
       RStorage::bmResource *model = nullptr, umID filebModelIndex = 0,
-      float mScale = 1, DirectX::XMFLOAT3 initPos = {0, 0, 0},
-      DirectX::XMFLOAT4 initRot = {0, 0, 0, 1}, float mMass = 1,
-      float mFriction = 0, DirectX::XMFLOAT3 initVelDir = {0, 0, 0},
+      float mScale = 1, FLOAT3 initPos = {0, 0, 0},
+      FLOAT4 initRot = {0, 0, 0, 1}, float mMass = 1,
+      float mFriction = 0, FLOAT3 initVelDir = {0, 0, 0},
       float initSpeed = 0);
-  void Move(DirectX::XMFLOAT4 Dir, float Dist = 1);
+  void Move(FLOAT4 Dir, float Dist = 1);
   void CollReset();
   bool CollCheck();
   void Update() override;

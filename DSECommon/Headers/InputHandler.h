@@ -74,7 +74,7 @@ public:
     void FlushKey();
     void FlushChar();
     // char event stuff
-    bool CharIsEmpty() const noexcept;
+    const bool CharIsEmpty() noexcept;
     void EmptyBuffers() noexcept;
     // autorepeat control
     void DLL UpdateKey(Event::Type Direction, unsigned char keycode) noexcept;
@@ -85,5 +85,5 @@ public:
   dispatchID linkEvent(unsigned char key, std::function<void()> dispatchFunc, Input::Event::Type type = Input::Event::Type::Release);
   void unlinkEvent(dispatchID key);
   
- void DispatchInputFunctions();
+ void DispatchInputEvents();
 };

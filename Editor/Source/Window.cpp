@@ -1,17 +1,10 @@
 #include "Window.h"
-#include "DLLGui.h"
 #include "Engine.h"
+#include "DLLGui.h"
 #include <cassert>
 #include <functional>
 
 
-
-
-class WindowFunc{
-	friend class Window;
-	
-
-};
 
 Window::Window(uint16_t w, uint16_t h, const char *name, HINSTANCE hInstance)
     : width(w), height(h) {
@@ -19,7 +12,7 @@ Window::Window(uint16_t w, uint16_t h, const char *name, HINSTANCE hInstance)
   std::unique_lock loc(winWait);
   Context = this;
   // calculate window size based on desired client region size
-  WindowRect.wr = RECT{0, 0, width, height};
+  WindowRect.wr = WRect::WindowRect{0, 0, width, height};
   // create window & get hWnd
   WNDCLASSEX wc = {
       .cbSize = sizeof(wc),
@@ -38,12 +31,12 @@ Window::Window(uint16_t w, uint16_t h, const char *name, HINSTANCE hInstance)
           hInstance, MAKEINTRESOURCE(IDI_ICON1), IMAGE_ICON, 16, 16, 0))};
   assert(RegisterClassEx(&wc));
   auto WindowStyle = WS_MINIMIZEBOX | WS_SYSMENU | WS_CAPTION | WS_VISIBLE;
-  AdjustWindowRect(&WindowRect.wr, WindowStyle, FALSE);
+  AdjustWindowRect((LPRECT)&WindowRect.wr, WindowStyle, FALSE);
   hWnd = CreateWindow(name, name, WindowStyle, CW_USEDEFAULT, CW_USEDEFAULT,
                    WindowRect.wr.right - WindowRect.wr.left,
                    WindowRect.wr.bottom - WindowRect.wr.top, nullptr, nullptr,
                    GetModuleHandle(NULL), this);
-   GetClientRect(hWnd, &WindowRect.wr);
+   GetClientRect(hWnd, (LPRECT)&WindowRect.wr);
 
   ShowWindow(hWnd, SW_SHOWDEFAULT);
   UpdateWindow(hWnd);
@@ -112,9 +105,10 @@ LRESULT Window::HandleMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	case WM_SIZING:
 	case WM_SIZE:
 		WindowRect.Mtx.lock();
-		//GetClientRect(hWnd, &WindowRect.wr);
-      //WindowRect.Updated = true;
+		//GetClientRect(hWnd, (LPRECT)&WindowRect.wr);
+    //WindowRect.Updated.store(true);
 		WindowRect.Mtx.unlock();
+    
 
 		break;
 	//Keyboard Messages

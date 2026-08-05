@@ -1,11 +1,12 @@
 
 #include "Window.h"
-#include <libloaderapi.h>
-#include <minwindef.h>
+#include "Exceptions.h"
+#if defined(_WIN32)
+#include "CWin.h"
 
 
 //Main Class
-#if defined(_WIN32)
+
 int CALLBACK WinMain(HINSTANCE hInstance,
 	HINSTANCE hPrevInstance,
 	LPSTR lpCmdLine,

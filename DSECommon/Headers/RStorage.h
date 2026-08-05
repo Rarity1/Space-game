@@ -1,5 +1,5 @@
 #pragma once
-#include "CWin.h"
+#include "CommonStructs.h"
 #include "GraphicsErrors.h"
 #include "ModelData.h"
 #include "text.h"

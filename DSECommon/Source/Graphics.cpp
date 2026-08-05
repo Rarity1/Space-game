@@ -4,9 +4,12 @@
 #include "Graphics.h"
 #include "GraphicsErrors.h"
 #include "ObjectTracking.h"
+#include "RStorage.h"
 
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
+#include <directx/dxgiformat.h>
 #include <fstream>
 #include <functional>
 #include <winnt.h>
@@ -17,7 +20,7 @@ EXTERN_C const GUID local_DXGI_DEBUG_ALL = {
     0x490b,
     {0x87, 0xe6, 0x43, 0xe9, 0xa9, 0xcf, 0xda, 0x08}};
 
-Graphics::Graphics(thRect &WindowRect, HWND &hWnd, Tracker& oTracker)
+Graphics::Graphics(WRect &WindowRect, HWND &hWnd, Tracker& oTracker)
     : // width(w),
       // height(h),
       oTracker(oTracker),
@@ -47,7 +50,7 @@ Graphics::Graphics(thRect &WindowRect, HWND &hWnd, Tracker& oTracker)
   // windowResolution.wr.bottom); viewport = CD3DX12_VIEWPORT(0.f, 0.f,
   // windowResolution.wr.right, windowResolution.wr.bottom);
 
-  UINT dxgiFactoryFlags = 0;
+  uint32_t dxgiFactoryFlags = 0;
 #if defined(_DEBUG)
   D3D12GetDebugInterface(IID_PPV_ARGS(&debugController0)) >> chk;
   D3D12GetDebugInterface(IID_PPV_ARGS(&debugController1)) >> chk;
@@ -87,7 +90,7 @@ Graphics::Graphics(thRect &WindowRect, HWND &hWnd, Tracker& oTracker)
   pDevice->CreateCommandQueue(&desc, IID_PPV_ARGS(&commandQueue)) >> chk;
   NAME_D3D12_OBJECT(commandQueue);
 
-#ifdef __USESLANG
+#ifndef __USEDXC
   slang::createGlobalSession(&slangGlobalDesc, gSession.writeRef()) >> chk;
   {
     slang::TargetDesc Shaders[1];
@@ -170,11 +173,12 @@ void Graphics::LoadPipeline() {
   */
 
   // Swap Chain Creation
+  windowResolution.Mtx.lock();
   if (!swapChain) {
     DXGI_SWAP_CHAIN_DESC1 SwapChainDesc = {};
     SwapChainDesc.BufferCount = bufferCount;
-    SwapChainDesc.Width = 0;
-    SwapChainDesc.Height = 0;
+    SwapChainDesc.Width = windowResolution.wr.right;
+    SwapChainDesc.Height = windowResolution.wr.bottom;
     SwapChainDesc.Format = SwapChainFormat;
     SwapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
     SwapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
@@ -200,7 +204,9 @@ void Graphics::LoadPipeline() {
         (IDXGISwapChain1 **)swapChain.GetAddressOf()) >>
         chk;
   }
-
+  windowResolution.Updated.store(false);
+  windowResolution.Mtx.unlock();
+  
   cframeIndex = swapChain->GetCurrentBackBufferIndex();
 
   // Sampler descriptor heap
@@ -252,7 +258,7 @@ void Graphics::LoadPipeline() {
     CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
 
     rootSignatureDesc.Init_1_1(rootSignatureDesc,
-                               (UINT)std::size(rootParameters), rootParameters,
+                               (uint32_t)std::size(rootParameters), rootParameters,
                                0, nullptr, rootSignatureFlags);
     Microsoft::WRL::ComPtr<ID3DBlob> signatureBlob;
     Microsoft::WRL::ComPtr<ID3D10Blob> errorBlob;
@@ -276,7 +282,7 @@ void Graphics::LoadPipeline() {
   std::string pathPss = RelPath;
   pathPss += ("PixelShader.slang");
 
-#ifndef __USESLANG
+#ifdef __USEDXC
   Slang::ComPtr<IDxcBlob> vsShaderblob;
   Slang::ComPtr<IDxcBlob> psShaderblob;
   vsShaderblob = CompileShader(pathVss, L"vs_6_8", L"VSmain");
@@ -298,18 +304,18 @@ void Graphics::LoadPipeline() {
 
   // Input layout for shaders
   D3D12_INPUT_ELEMENT_DESC inputLayout[] = {
-      {"NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,
+      {"NORMAL", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0,
        D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
        0},
-      {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,
+      {"POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0,
        D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
        0},
       {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT,
        D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
   };
-  pipelineStateStream.InputLayout = {inputLayout, (UINT)std::size(inputLayout)};
+  pipelineStateStream.InputLayout = {inputLayout, (uint32_t)std::size(inputLayout)};
 // Link Compiled shaders into pipeline state
-#ifndef __USESLANG // this is stupid
+#ifdef __USEDXC // this is stupid
   pipelineStateStream.VS = CD3DX12_SHADER_BYTECODE(
       vsShaderblob->GetBufferPointer(), vsShaderblob->GetBufferSize());
   pipelineStateStream.PS = CD3DX12_SHADER_BYTECODE(
@@ -379,28 +385,22 @@ void Graphics::LoadPipeline() {
 void Graphics::Update() {
   UpdateFrameResources();
 
-
   using namespace DirectX;
-  for(auto& tInstance : oTracker.GetActiveInstances()){
+  for (auto &tInstance : oTracker.GetActiveInstances()) {
     for (auto &tmodel : tInstance->GetRenderObjects()) {
       for (auto &trackedModel : tmodel.second) {
-        auto& rModel = *(RenderedObject*)trackedModel;
-        auto& cbvData = tInstance->GetCBVPtr(tmodel.first)[rModel.CBVIndex];
-        auto& Rotation = rModel.mPos.GetRotation();
-        auto& Position = rModel.mPos.Get();
-        XMStoreFloat4x4(
-            &cbvData.cbvMatrix,
-            XMMatrixTranspose(
-                XMMatrixRotationQuaternion(
-                    XMLoadFloat4(&Rotation)) *
-                XMMatrixTranslation(Position.x,
-                                    Position.y,
-                                    Position.z) *
-                XMLoadFloat4x4(&tInstance->ActiveCamera()->cMatrix) * XMLoadFloat4x4(&fovPerspective)));
+        auto &rModel = *(RenderedObject *)trackedModel;
+        auto &cbvData = tInstance->GetCBVPtr(tmodel.first)[rModel.CBVIndex];
+        auto &Rotation = rModel.mPos.GetRotation();
+        auto &Position = rModel.mPos.Get();
+
+        cbvData.cbvMatrix =
+            (FLOAT4X4::Rotation(Rotation) * FLOAT4X4::Translation(Position).Transpose() *
+             tInstance->ActiveCamera()->cMatrix * fovPerspective)
+                .Transpose();
       }
     }
   };
-
 }
 
 void Graphics::RenderFrame() {
@@ -452,7 +452,7 @@ void Graphics::CreateBuffers(Tracker::Instance &tInstance) {
   for (auto &trackedModel : tInstance.GetRenderObjects()) {
     auto &model = tInstance.pTracker.GetModel(trackedModel.first);
     if (model.vbuffer == nullptr) {
-      UINT vbuffSize = model.uData->sIndex.size() * sizeof(ModelData::Vertex);
+      uint32_t vbuffSize = model.uData->sIndex.size() * sizeof(ModelData::Vertex);
       {
         const CD3DX12_HEAP_PROPERTIES heapProps{D3D12_HEAP_TYPE_DEFAULT};
         const auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(vbuffSize);
@@ -465,7 +465,7 @@ void Graphics::CreateBuffers(Tracker::Instance &tInstance) {
         model.vbuffView = D3D12_VERTEX_BUFFER_VIEW{
             .BufferLocation = model.vbuffer->GetGPUVirtualAddress(),
             .SizeInBytes = vbuffSize,
-            .StrideInBytes = (UINT)sizeof(ModelData::Vertex)};
+            .StrideInBytes = (uint32_t)sizeof(ModelData::Vertex)};
       }
       {
         const CD3DX12_HEAP_PROPERTIES heapProps{D3D12_HEAP_TYPE_UPLOAD};
@@ -476,7 +476,7 @@ void Graphics::CreateBuffers(Tracker::Instance &tInstance) {
             IID_PPV_ARGS(&model.uvbuffer)) >>
             chk;
       }
-      UINT ibuffSize = model.uData->sIndex.size() * sizeof(uint32_t);
+      uint32_t ibuffSize = model.uData->sIndex.size() * sizeof(uint32_t);
 
       {
         const CD3DX12_HEAP_PROPERTIES heapProps{D3D12_HEAP_TYPE_DEFAULT};
@@ -489,7 +489,7 @@ void Graphics::CreateBuffers(Tracker::Instance &tInstance) {
         model.ibuffView = D3D12_INDEX_BUFFER_VIEW{
             .BufferLocation = model.ibuffer->GetGPUVirtualAddress(),
             .SizeInBytes =
-                (UINT)std::size(model.uData->sIndex) * (UINT)sizeof(uint32_t),
+                (uint32_t)std::size(model.uData->sIndex) * (uint32_t)sizeof(uint32_t),
             .Format = DXGI_FORMAT_R32_UINT};
       }
 
@@ -529,7 +529,7 @@ void Graphics::CreateBuffers(Tracker::Instance &tInstance) {
       model.cbvwriteBuffer->Unmap(0, nullptr);
       model.cbvwriteBuffer.Reset();
     }
-    UINT size =
+    uint32_t size =
         (sizeof(CBVData) * trackedModel.second.size()) +
         (256 - ((sizeof(CBVData) * trackedModel.second.size()) % 256));
     {
@@ -639,11 +639,11 @@ void Graphics::UpdateLocalTransform(RenderedObject &bm) {
   using namespace DirectX;
   if (std::strstr(bm.model->uData->bdata[0].name.c_str(), "placeholder"))
     return;
-  XMFLOAT4X4 temp{1.f, 0.f, 0.f, 0.f, 0.f, 1.f, 0.f, 0.f,
-                  0.f, 0.f, 1.f, 0.f, 0.f, 0.f, 0.f, 1.f};
-  XMStoreFloat4x4(&bm.model->uData->ndata.LocalTransform,
-                  XMLoadFloat4x4(&temp) *
-                      XMLoadFloat4x4(&bm.model->uData->ndata.matrix));
+  const FLOAT4X4 temp{1.f, 0.f, 0.f, 0.f, 
+                0.f, 1.f, 0.f, 0.f,
+                0.f, 0.f, 1.f, 0.f,
+                0.f, 0.f, 0.f, 1.f};
+  bm.model->uData->ndata.LocalTransform = temp * bm.model->uData->ndata.matrix;
 
   for (auto &c : bm.model->uData->ndata.children) {
     RecurLTrans(&c, &bm.model->uData->ndata);
@@ -657,20 +657,16 @@ void Graphics::UpdateLocalTransform(RenderedObject &bm) {
 }
 
 void Graphics::RecurLTrans(ModelData::Node *n, ModelData::Node *P) {
-  XMStoreFloat4x4(&n->LocalTransform,
-                  XMMatrixMultiply(XMLoadFloat4x4(&P->LocalTransform),
-                                   XMLoadFloat4x4(&n->matrix)));
+  n->LocalTransform = P->LocalTransform * n->matrix;
 }
 
 // Fix model updates
 void Graphics::UpdateModel(RenderedObject *bm) {
   auto GlobITrans =
-      XMMatrixInverse(nullptr, XMLoadFloat4x4(&bm->model->uData->ndata.matrix));
+      bm->model->uData->ndata.matrix.Inverse();
   if (!std::strstr(bm->model->uData->bdata[0].name.c_str(), "placeholder"))
     for (auto &b : bm->model->uData->bdata) {
-      XMStoreFloat4x4(&b.finalTransform,
-                      XMLoadFloat4x4(&b.matrix) *
-                          XMLoadFloat4x4(&b.node->LocalTransform) * GlobITrans);
+      b.finalTransform = b.matrix * b.node->LocalTransform * GlobITrans;
     };
   auto vdata = bm->model->uData->MappedVertices;
   auto &idata = bm->model->uData->mIndex;
@@ -684,15 +680,10 @@ void Graphics::UpdateModel(RenderedObject *bm) {
   if (bm->model->uData->bdata.size() > 0) {
     for (auto v = 0; v < std::size(idata); v++) {
       auto &weights = bm->model->uData->weights[v];
-      auto vd = vdata[idata[v]][v % 3].position;
+      FLOAT4 vd = vdata[idata[v]][v % 3].position;
 
       for (auto w = 0; w < std::size(weights.weight); w++) {
-        XMStoreFloat3(
-            &vd, XMVector3TransformNormal(
-                     XMLoadFloat3(&vd),
-                     (XMLoadFloat4x4(&bm->model->uData->bdata[weights.bIndex[w]]
-                                          .finalTransform) *
-                      weights.weight[w])));
+        vd = (vd * (bm->model->uData->bdata[weights.bIndex[w]].finalTransform * weights.weight[w]));
       }
       vdata[idata[v]][v % 3].position.x += vd.x;
       vdata[idata[v]][v % 3].position.y += vd.y;
@@ -707,7 +698,7 @@ void Graphics::UpdateModel(RenderedObject *bm) {
   UpdBuffer(*bm->model, commandList, pDevice, commandAllocator, commandQueue);
 }
 
-#ifndef __USESLANG
+#ifdef __USEDXC
 Slang::ComPtr<IDxcBlob> Graphics::CompileShader(std::string ShaderSrc,
                                                 std::wstring CompileVersion,
                                                 std::wstring EntryPoint) {
@@ -825,13 +816,13 @@ Slang::ComPtr<slang::IBlob> Graphics::CompileShaderSlang(std::string ShaderSrc,
 }
 #endif
 
-void Graphics::FovPerspectiveRHInfinite(DirectX::XMFLOAT4X4& fovOutput, float& fovRadians, float& aspect, float& nearClip){
+void Graphics::FovPerspectiveRHInfinite(FLOAT4X4& fovOutput, float& fovRadians, float& aspect, float& nearClip){
   
   uint32_t wrap = 0;
   wrap += -1;
   auto e = 1/((float)wrap);
   float focallength = 1/fovRadians*2;
-  DirectX::XMFLOAT4X4 Result{
+  FLOAT4X4 Result{
     focallength, 0,0,0,
     0,focallength*aspect, 0,0,
     0,0, e-(1-nearClip), (e-2)*(1-nearClip),
@@ -884,6 +875,8 @@ void Graphics::UpdateFrameResources() {
   }
 
   if (windowResolution.Updated) {
+  windowResolution.Updated.store(false);
+
   windowResolution.Mtx.lock();
     fenceValue = fence->GetCompletedValue();
     {

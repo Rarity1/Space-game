@@ -12,7 +12,7 @@ class DLL Engine {
 	friend class App;
   friend class Window;
 public:
-	Engine(Input& InputHandler, thRect &WindowRect, HWND &hWnd);
+	Engine(Input& InputHandler, WRect &WindowRect, HWND &hWnd);
 	~Engine();
 	const int updaterate = 60;
 	void iLoad();
@@ -47,9 +47,9 @@ private:
 	int eventBusSync();
 	bool pauseLoop = false;
 	void EngineLoop();
-	DirectX::XMFLOAT3 rWorld(DirectX::XMFLOAT3 pos1);
-	DirectX::XMFLOAT3 dWorld(DirectX::XMFLOAT3 pos1);
-	DirectX::XMFLOAT3 cnWorld(DirectX::XMFLOAT3 pos1);
+	FLOAT3 rWorld(FLOAT3 pos1);
+	FLOAT3 dWorld(FLOAT3 pos1);
+	FLOAT3 cnWorld(FLOAT3 pos1);
 	void mAniUpdate();
   //Update active instances
 	void updateInstances();
@@ -58,8 +58,8 @@ private:
 	std::mutex evBusLock;
 
 
-	DirectX::XMFLOAT4 cWorld;
-	DirectX::XMFLOAT4 nWorld;
+	FLOAT4 cWorld;
+	FLOAT4 nWorld;
 	std::vector<std::function<void()>> wFunctions;
 	Input& InputHndlr;
 	std::mutex usingThread;

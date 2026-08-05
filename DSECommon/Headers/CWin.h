@@ -73,16 +73,6 @@
 #include <cstdint>
 #include <sdkddkver.h>
 
-
-
-#ifndef DLL
-#ifdef DESCDLL
-#define DLL __declspec( dllexport )
-#else
-#define DLL __declspec( dllimport )
-#endif
-#endif
-
 #define IDI_ICON1 101
 
 #ifdef APSTUDIO_INVOKED
@@ -101,13 +91,7 @@
 #include <Support/Errorcodes.h>
 #endif
 
-#include <mutex>
-#include <atomic>
-struct thRect {
-    std::atomic<bool> Updated;
-    RECT wr = {};
-    std::mutex Mtx;
-};
+
 
 #ifdef __MINGW32__
 constexpr uint8_t nybble_from_hex(char c) {

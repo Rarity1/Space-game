@@ -1,7 +1,7 @@
 #include "ObjectTracking.h"
 #include "InputHandler.h"
+#include "RStorage.h"
 #include "ePhysics.h"
-#include <DirectXMath.h>
 #include <functional>
 #include <memory>
 
@@ -79,8 +79,8 @@ Object *Tracker::initObject(Instance &oInstance, std::string Name,
 }
 
 CameraObject* Tracker::initCameraObject(Tracker::Instance& pInstance, std::string name, std::function<void()> func, 
-     DirectX::XMFLOAT3 initPos, 
-    DirectX::XMFLOAT4 initRot, DirectX::XMFLOAT4 initUpDirection, 
+     FLOAT3 initPos, 
+    FLOAT4 initRot, FLOAT4 initUpDirection, 
     RenderedObject* link, bool Active){
       auto UOID = idTracker.AllocID();
   TrackedObjects.insert(
@@ -95,9 +95,9 @@ CameraObject* Tracker::initCameraObject(Tracker::Instance& pInstance, std::strin
 PhysicsObject *
 Tracker::initPhysObject(Instance &Instance, std::string Name,
                     std::function<void()> func, umID filebModelIndex,
-                    float mScale, DirectX::XMFLOAT3 initPos,
-                    DirectX::XMFLOAT4 initRot, float mMass, float mFriction,
-                    DirectX::XMFLOAT3 initVelDir, float initSpeed) {
+                    float mScale, FLOAT3 initPos,
+                    FLOAT4 initRot, float mMass, float mFriction,
+                    FLOAT3 initVelDir, float initSpeed) {
 
   auto UOID = idTracker.AllocID();
   TrackedObjects.insert(
@@ -175,8 +175,6 @@ void CameraObject::Update() {
   // Toggle Freecam
 	struct Movement {
 		float forward = 0.0;
-		float backward = 0.0;
-		float left = 0.0;
 		float right = 0.0;
 		bool movestop = false;
 	};
@@ -185,21 +183,18 @@ void CameraObject::Update() {
   //Make a helper function for this so I dont have to do it for every single key
   if(dispID.Empty.load()){
     dispID = LinkedInstance->pTracker.InputHndlr.linkEvent('J', [this]{
-    freeCam.store(freeCam.load() ? false : true);
+    ToggleFreedom();
   });
   }
   
 
-  if (LinkedInstance->pTracker.InputHndlr.keyboard.KeyIsPressed('J') && inputDelay.Peek() > 0.5) {
-    inputDelay.Mark();
-    //ToggleFreedom();
-  }
+
   float pitch = 0;
   float yaw = 0;
   float roll = 0;
   {
     // Rotation per second in radians //Currently 90 degrees per second
-    double rotationPS = ucontrolClock.Peek() * DirectX::XM_PIDIV2;
+    double rotationPS = ucontrolClock.Peek() * _DEGREES90;
     if (LinkedInstance->pTracker.InputHndlr.keyboard.KeyIsPressed(VK_UP)) {
       pitch += rotationPS;
     }
@@ -223,72 +218,51 @@ void CameraObject::Update() {
 
   if (pitch != 0 || yaw != 0 || roll != 0)
     Rotate(pitch, yaw, roll);
-  {
-    auto movespeed = 2.0;
-    if (LinkedInstance->pTracker.InputHndlr.keyboard.KeyIsPressed('W')) {
-      move.forward += movespeed;
-    }
-    if (LinkedInstance->pTracker.InputHndlr.keyboard.KeyIsPressed('S')) {
-      move.forward -= movespeed;
-    }
-    if (LinkedInstance->pTracker.InputHndlr.keyboard.KeyIsPressed('A')) {
-      move.left += movespeed;
-    }
-    if (LinkedInstance->pTracker.InputHndlr.keyboard.KeyIsPressed('D')) {
-      move.left -= movespeed;
-    }
-    if (LinkedInstance->pTracker.InputHndlr.keyboard.KeyIsPressed('K')) {
-      move.movestop = true;
-    }
-  }
-  if (isFree()) {
-    if (move.forward != 0 || move.left != 0) {
-      // Figure this out
-      using namespace DirectX;
 
-      auto Pos = cPos.Get();
+  if (isFree()) {
+    
+      // Figure this out
+
+      auto movespeed = 2.0 * ucontrolClock.Peek();
+      if (LinkedInstance->pTracker.InputHndlr.keyboard.KeyIsPressed('W')) {
+        move.forward += movespeed;
+      }
+      if (LinkedInstance->pTracker.InputHndlr.keyboard.KeyIsPressed('S')) {
+        move.forward -= movespeed;
+      }
+      if (LinkedInstance->pTracker.InputHndlr.keyboard.KeyIsPressed('D')) {
+        move.right += movespeed;
+      }
+      if (LinkedInstance->pTracker.InputHndlr.keyboard.KeyIsPressed('A')) {
+        move.right -= movespeed;
+      }
+      if (LinkedInstance->pTracker.InputHndlr.keyboard.KeyIsPressed('K')) {
+        move.movestop = true;
+      }
+  if (move.forward != 0 || move.right != 0) {
       auto Rotation = cPos.GetRotation();
       auto upDirection = cPos.GetUpDirection();
-      XMStoreFloat3(&Pos, XMLoadFloat4(&Rotation) *
-                                  (float)(move.forward * ucontrolClock.Peek()) +
-                              XMLoadFloat3(&Pos));
-      XMStoreFloat3(&Pos, XMVector3Transform(
-                              XMLoadFloat4(&Rotation),
-                              XMMatrixRotationAxis(XMLoadFloat4(&upDirection),
-                                                   XMConvertToRadians(90.0f))) *
-                                  (float)(move.left * ucontrolClock.Peek()) +
-                              XMLoadFloat3(&Pos));
-      cPos.Move(Pos);
-    }
-  } else if ((move.forward != 0 || move.left != 0) && GetLinked()) {
-    using namespace DirectX;
-    auto Pos = GetLinked()->mPos.Get();
-    auto Rotation = cPos.GetRotation();
-    auto upDirection = cPos.GetUpDirection();
-    XMStoreFloat3(&Pos, XMLoadFloat4(&Rotation) *
-                                (float)(move.forward * ucontrolClock.Peek()) +
-                            XMLoadFloat3(&Pos));
-    XMStoreFloat3(&Pos, XMVector3Transform(
-                            XMLoadFloat4(&Rotation),
-                            XMMatrixRotationAxis(XMLoadFloat4(&upDirection),
-                                                 XMConvertToRadians(90.0f))) *
-                                (float)(move.left * ucontrolClock.Peek()) +
-                            XMLoadFloat3(&Pos));
-    cPos.Move(Pos);
+      FLOAT4 NewPos;
+      NewPos = Rotation * (move.forward) + cPos.Get();
+      NewPos = Rotation *
+                   FLOAT4X4::Rotation(
+                       FLOAT4::RotateQuaternion(upDirection, _DEGREES90)) *
+                   (move.right) +
+               NewPos;
+      FLOAT3 mv = {NewPos.x, NewPos.y, NewPos.z};
+      cPos.Move(mv);
+  }
+  } else if (GetLinked() && !isFree()) {
+    FLOAT3 mv = GetLinked()->mPos.Get();
+    cPos.Move(mv);
   }
   ucontrolClock.Mark();
   // Toggle Freecam
-  if (linkedObject != nullptr && !freeCam.load()) {
-    auto postomov = linkedObject->mPos.Get();
-    cPos.Move(postomov);
-  }
+
   auto position = cPos.Get();
   auto rotation = cPos.GetRotation();
   auto upDirection = cPos.GetUpDirection();
-  DirectX::XMStoreFloat4x4(
-      &cMatrix, DirectX::XMMatrixLookToRH(XMLoadFloat3(&position),
-                                          XMLoadFloat4(&rotation),
-                                          XMLoadFloat4(&upDirection)));
+  cMatrix = LookTo(position*-1.f, rotation*-1.f, upDirection);
 }
 
 void CameraObject::LinkTo(RenderedObject *obj) {
@@ -299,53 +273,41 @@ void CameraObject::LinkTo(RenderedObject *obj) {
 }
 
 void CameraObject::Rotate(float &Pitch, float &Yaw, float &Roll) {
-  auto upDirection = cPos.GetUpDirection();
-  auto updirect = XMLoadFloat4(&upDirection);
-  DirectX::XMFLOAT4 rotation = cPos.GetRotation();
-  auto lookdirect = XMLoadFloat4(&rotation);
+  FLOAT4 upDirection = cPos.GetUpDirection();
+  FLOAT4 rotation = cPos.GetRotation();
 
   // auto gravdirect =
-  // DirectX::XMQuaternionInverse(XMLoadFloat4(&plModel->grav));
+  // DirectX::XMQuaternionInverse(XMLoadFloat4((XMFLOAT4*)&plModel->grav));
   if (Yaw != 0) {
-    auto temp = DirectX::XMQuaternionRotationNormal(updirect, Yaw);
-    auto left = DirectX::XMQuaternionMultiply(temp, lookdirect);
-
-    lookdirect = DirectX::XMQuaternionMultiply(
-        left, DirectX::XMQuaternionConjugate(temp));
-    auto qup = DirectX::XMQuaternionMultiply(temp, updirect);
-    updirect = DirectX::XMQuaternionMultiply(
-        qup, DirectX::XMQuaternionConjugate(temp));
+    auto rotat = FLOAT4::RotateQuaternion(upDirection, Yaw);
+    rotation = rotation.RotateByQuaternion(rotat).Real().Normal();
+    auto upchang = rotat.QuaternionMul(upDirection);
+    upDirection = upchang.RotateByQuaternion(upchang).Real().Normal();
   }
+  
   if (Roll != 0) {
-    auto temp = DirectX::XMQuaternionRotationNormal((lookdirect), Roll);
-    auto qup = DirectX::XMQuaternionMultiply(temp, updirect);
-    updirect = DirectX::XMQuaternionMultiply(
-        qup, DirectX::XMQuaternionConjugate(temp));
-    auto left = DirectX::XMQuaternionMultiply(temp, lookdirect);
-    lookdirect = DirectX::XMQuaternionMultiply(
-        left, DirectX::XMQuaternionConjugate((temp)));
+    auto rotat = FLOAT4::RotateQuaternion(rotation, Roll);
+    auto upchang = rotat.QuaternionMul(upDirection);
+    upDirection =  upchang.RotateByQuaternion(rotat).Real().Normal();
+    rotation = rotation.RotateByQuaternion(rotat).Real().Normal();
   }
   if (Pitch != 0) {
-    auto temp = DirectX::XMQuaternionRotationNormal(
-        DirectX::XMQuaternionMultiply(lookdirect, updirect), Pitch);
-    auto qup = DirectX::XMQuaternionMultiply(temp, updirect);
 
-    updirect = DirectX::XMQuaternionMultiply(
-        qup, DirectX::XMQuaternionConjugate(temp));
-
-    auto left = DirectX::XMQuaternionMultiply(temp, lookdirect);
-    lookdirect = DirectX::XMQuaternionMultiply(
-        left, DirectX::XMQuaternionConjugate((temp)));
+    auto rotat = FLOAT4::RotateQuaternion(rotation.QuaternionMul(upDirection), Pitch).Normal();
+    auto qup = rotat.QuaternionMul(upDirection);
+    upDirection = qup.QuaternionMul(rotat.Conjugate()).Real().Normal();
+    auto left = rotat.QuaternionMul(rotation);
+    rotation = left.QuaternionMul(rotat.Conjugate()).Real().Normal();
   }
-
-  DirectX::XMStoreFloat4(&rotation, lookdirect);
+ //DirectX::XMStoreFloat4((DirectX::XMFLOAT4*)&rotation, lookdirect);
   cPos.SetRotation(rotation);
-  DirectX::XMStoreFloat4(&upDirection, updirect);
+  //DirectX::XMStoreFloat4((DirectX::XMFLOAT4*)&upDirection, updirect);
   cPos.SetUpDirection(upDirection);
+ 
 }
 
-CameraObject::CameraObject(Object &obj, DirectX::XMFLOAT3 initPos, DirectX::XMFLOAT4 initRot,
-                           DirectX::XMFLOAT4 initUpDirection,
+CameraObject::CameraObject(Object &obj, FLOAT3 initPos, FLOAT4 initRot,
+                           FLOAT4 initUpDirection,
                            RenderedObject *link, bool Active)
     : Object(obj),
       isActive(Active), linkedObject(link), cPos(CameraPosition(initPos, initRot, initUpDirection))
@@ -355,8 +317,8 @@ CameraObject::CameraObject(Object &obj, DirectX::XMFLOAT3 initPos, DirectX::XMFL
 CameraObject::CameraObject(std::string name, UOID uOID,
                            std::function<void()> func,
                            Tracker::Instance *pInstance,
-                           DirectX::XMFLOAT3 initPos, DirectX::XMFLOAT4 initRot,
-                           DirectX::XMFLOAT4 initUpDirection,
+                           FLOAT3 initPos, FLOAT4 initRot,
+                           FLOAT4 initUpDirection,
                            RenderedObject *link, bool Active)
     : Object(
           name, uOID, func, pInstance),
@@ -371,8 +333,8 @@ RenderedObject::RenderedObject(std::string name, UOID UOID,
                                std::function<void()> func,
                                Tracker::Instance *pInstance,
                                RStorage::bmResource *model, umID filebModelIndex,
-                               float mScale, DirectX::XMFLOAT3 initPos,
-                               DirectX::XMFLOAT4 initRot)
+                               float mScale, FLOAT3 initPos,
+                               FLOAT4 initRot)
     : Object(
           name, UOID, func, pInstance),
       model(model), scale(mScale),
@@ -384,9 +346,9 @@ PhysicsObject::PhysicsObject(std::string name, UOID UOID,
                              std::function<void()> func,
                              Tracker::Instance *pInstance,
                              RStorage::bmResource *model, umID filebModelIndex,
-                             float mScale, DirectX::XMFLOAT3 initPos,
-                             DirectX::XMFLOAT4 initRot, float mMass,
-                             float mFriction, DirectX::XMFLOAT3 initVelDir,
+                             float mScale, FLOAT3 initPos,
+                             FLOAT4 initRot, float mMass,
+                             float mFriction, FLOAT3 initVelDir,
                              float initSpeed)
     : RenderedObject(
           name, UOID, func, pInstance, model, filebModelIndex,
@@ -397,11 +359,10 @@ PhysicsObject::PhysicsObject(std::string name, UOID UOID,
 
 //"Thread Safe" way to change position. Uses vector and direction to change
 //position
-void PhysicsObject::Move(DirectX::XMFLOAT4 Dir, float Dist)
+void PhysicsObject::Move(FLOAT4 Dir, float Dist)
 {
 	PhysicsUpdate.lock();
-	using namespace DirectX;
-	XMStoreFloat4(&pDir.emplace_back(XMFLOAT4{ 0,0,0,0 }), XMLoadFloat4(&Dir) * Dist);
+	pDir.emplace_back(FLOAT3(Dir.x, Dir.y, Dir.z) * Dist);
 	PhysicsUpdate.unlock();
 }
 
@@ -417,8 +378,8 @@ bool PhysicsObject::CollCheck()
 	return false;
 }
 
-const DirectX::XMFLOAT3 relposVect::Move(DirectX::XMFLOAT3& NewPos){
-  DirectX::XMFLOAT3 result;
+const FLOAT3 relposVect::Move(FLOAT3& NewPos){
+  FLOAT3 result;
   posMtx.lock();
   //auto OldestPosition = lastposition;
 	lastposition = *position;
@@ -427,42 +388,42 @@ const DirectX::XMFLOAT3 relposVect::Move(DirectX::XMFLOAT3& NewPos){
 	posMtx.unlock();
 	return result;
 }
-const DirectX::XMFLOAT3 relposVect::Get(){
-  DirectX::XMFLOAT3 result;
+const FLOAT3 relposVect::Get(){
+  FLOAT3 result;
   posMtx.lock();
   result = *position;
   posMtx.unlock();
 	return result;
 }
 
-const DirectX::XMFLOAT3 relposVect::GetLast(){
-  DirectX::XMFLOAT3 result;
+const FLOAT3 relposVect::GetLast(){
+  FLOAT3 result;
   posMtx.lock();
   result = lastposition;
   posMtx.unlock();
 	return result;
 }
 
-const DirectX::XMFLOAT4 relposVect::GetRotation(){
-  DirectX::XMFLOAT4 result;
+const FLOAT4 relposVect::GetRotation(){
+  FLOAT4 result;
   posMtx.lock();
   result = rotation;
   posMtx.unlock();
 	return result;
 }
 
-void relposVect::SetRotation(DirectX::XMFLOAT4& Rotation){
+void relposVect::SetRotation(FLOAT4& Rotation){
   posMtx.lock();
   rotation = Rotation;
   posMtx.unlock();
 }
 
-void CameraPosition::SetUpDirection(DirectX::XMFLOAT4 UpDir){
+void CameraPosition::SetUpDirection(FLOAT4 UpDir){
   posMtx.lock();
   upDirection = UpDir;
   posMtx.unlock();
 }
-const DirectX::XMFLOAT4 CameraPosition::GetUpDirection(){
+const FLOAT4 CameraPosition::GetUpDirection(){
   
   posMtx.lock();
   auto upDir = upDirection;
@@ -474,19 +435,18 @@ const DirectX::XMFLOAT4 CameraPosition::GetUpDirection(){
 void PhysicsObject::Update()
 {
   Script();
-	DirectX::XMFLOAT4 nDir{ 0,0,0,0 };
+	FLOAT3 nDir{ 0,0,0 };
 	PhysicsUpdate.lock();
-	using namespace DirectX;
 	std::for_each(pDir.begin(), pDir.end(), [&nDir](auto& x) {
-		XMStoreFloat4(&nDir, XMLoadFloat4(&nDir) + XMLoadFloat4(&x));
+		nDir = nDir + x;
 	});
 	PhysicsUpdate.unlock();
 
-	using namespace DirectX;
+
   auto position = mPos.Get();
-	XMStoreFloat3(&position, XMLoadFloat3(&position) + XMLoadFloat4(&nDir));
+	position = position + nDir;
 	CollReset();
-	XMStoreFloat3(&position, XMLoadFloat3(&position) + XMLoadFloat3(&velDir) * (speed));
+	position = position + (velDir * speed);
   mPos.Move(position);
 
 }

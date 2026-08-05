@@ -2,6 +2,10 @@
 #include <sstream>
 
 
+#if defined(_WIN32)
+#include <CWin.h>
+#endif
+
 Exceptions::Exceptions(int line, const char* file) noexcept
 	:
 	line(line),
@@ -42,7 +46,7 @@ std::string Exceptions::GetOriginString() const noexcept
 }
 
 //Window Exception
-std::string HrException::TranslateErrorCode(HRESULT hr) const noexcept
+std::string HrException::TranslateErrorCode(ERRORCODE hr) const noexcept
 {
 	char* pMsgBuf = nullptr;
 	// windows will allocate memory for err string and make our pointer point to it
@@ -63,7 +67,7 @@ std::string HrException::TranslateErrorCode(HRESULT hr) const noexcept
 	LocalFree(pMsgBuf);
 	return errorString;
 }
-HrException::HrException(HRESULT hr, int line, const char* file) noexcept
+HrException::HrException(ERRORCODE hr, int line, const char* file) noexcept
 	:
 	Exceptions(line, file),
 	hr(hr)
@@ -82,7 +86,7 @@ const char* HrException::what() const noexcept
 const char *HrException::GetType() const noexcept {
   return "Demo Window Exception";
 }
-HRESULT HrException::GetErrorCode() const noexcept { return hr; }
+ERRORCODE HrException::GetErrorCode() const noexcept { return hr; }
 std::string HrException::GetErrorDescription() const noexcept {
   return TranslateErrorCode(hr);
 }

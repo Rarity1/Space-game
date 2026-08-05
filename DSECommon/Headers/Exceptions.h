@@ -1,5 +1,18 @@
 #pragma once
-#include "CWin.h"
+#include <mutex>
+#include <string>
+#include <vector>
+
+
+#ifndef DLL
+#ifdef DESCDLL
+#define DLL __declspec( dllexport )
+#else
+#define DLL __declspec( dllimport )
+#endif
+#endif
+
+typedef long ERRORCODE;
 
 class DLL Exceptions : public std::exception
 {
@@ -19,15 +32,15 @@ protected:
 
 class DLL HrException : public Exceptions {
 public:
-  HrException(HRESULT hr, int line, const char *file) noexcept;
+  HrException(ERRORCODE hr, int line, const char *file) noexcept;
   const char *what() const noexcept override;
   const char *GetType() const noexcept override;
-  HRESULT GetErrorCode() const noexcept;
+  ERRORCODE GetErrorCode() const noexcept;
   std::string GetErrorDescription() const noexcept;
-  std::string TranslateErrorCode(HRESULT hr) const noexcept;
+  std::string TranslateErrorCode(ERRORCODE hr) const noexcept;
 
 private:
-  HRESULT hr;
+  ERRORCODE hr;
 };
 
 class tsPrintBuffer {

@@ -3,7 +3,6 @@
 #include "RStorage.h"
 #include "Threads.h"
 #include <CL/opencl.hpp>
-#include <DirectXCollision.h>
 
 
 class Object;
@@ -37,8 +36,8 @@ private:
   Tracker& Tracker;
 	THREADS::WRef lastWref;
 	unsigned int coreCount = 0;
-	static float fDistance(DirectX::XMFLOAT3& pos1, DirectX::XMFLOAT3& pos2);
-	static DirectX::XMFLOAT4 fDirection(DirectX::XMFLOAT3& pos1, DirectX::XMFLOAT3& pos2);
+	static float fDistance(FLOAT3& pos1, FLOAT3& pos2);
+	static FLOAT4 fDirection(FLOAT3& pos1, FLOAT3& pos2);
 	cl_ulong clLocalMemSize;
 	struct collstruct {
 		Object* obj = nullptr;
@@ -56,7 +55,7 @@ private:
 	float GConst = 0;
 	void cGravity(Object* obj);
 	int bIndex(std::vector<int> w, int bInd);
-	void CalProportionalSpeed(DirectX::XMFLOAT4& VelDir1, DirectX::XMFLOAT4& VelDir2, float& VSpeed1, float& VSpeed2, float& Mass1, float& Mass2);
+	void CalProportionalSpeed(FLOAT4& VelDir1, FLOAT4& VelDir2, float& VSpeed1, float& VSpeed2, float& Mass1, float& Mass2);
 	//Main Collision function
 	void pCollison(umID instanceID);
 	void pSpecReset();
@@ -73,20 +72,20 @@ private:
 	std::mutex DebugMTX;
 	struct RETURNDATA {
 		cl_float dist[2]{0.0,0.0};
-		cl_int index[2]{ 0,0 };
+		cl_uint index[2]{ 0,0 };
 	};
 
 	struct WORKINDI {
 		cl_int wWorkCount = 0;
 		cl_int tWorkCount = 0;
-		DirectX::XMFLOAT3 Position{ 0,0,0 };
+		FLOAT3 Position{ 0,0,0 };
 		std::vector<cl_int> Indices{};
 	};
-	 WORKINDI ProcCollide(Object& obj, Object& obj2, DirectX::XMFLOAT3& objpos, DirectX::XMFLOAT3& obj2pos, DirectX::XMFLOAT4& dir, float& dist);
+	 WORKINDI ProcCollide(Object& obj, Object& obj2, FLOAT3& objpos, FLOAT3& obj2pos, FLOAT4& dir, float& dist);
   std::function<void()> CheckVertexDirection(std::vector<int> &Result,
     ModelData &objudat, std::vector<std::atomic<bool>> &IndexChecked,
-    unsigned short &localWorkData, 
-    DirectX::BoundingSphere &CollSp,
+    uint32_t &localWorkData, 
+    SphereCollider &CollSp,
     std::vector<std::array<ModelData::Vertex, 3>> &Vertices);
 
 

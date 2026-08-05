@@ -1,12 +1,15 @@
 #pragma once
 
-#include <CWin.h>
-#include "Engine.h"
-#include <Exceptions.h>
 #include "InputHandler.h"
-
+#include "CommonStructs.h"
 #include <condition_variable>
+
+#if defined(_WIN32)
+#include "CWin.h"
+#endif
 class Window;
+class Graphics;
+class Engine;
 static Window* Context;
 //Window Class
 class Window {
@@ -35,7 +38,7 @@ private:
 
   Input InputHndlr;
 	std::mutex winWait;
-	thRect WindowRect;
+	WRect WindowRect;
 	uint16_t width;
 	uint16_t height;
 	Graphics* pGfx;

@@ -1,11 +1,17 @@
 #pragma once
-#include "CWin.h"
+
+#include "CommonStructs.h"
+#include "ModelData.h"
+
 #include <rapidxml/rapidxml.hpp>
-#include <DirectXMath.h>
-#include <DirectXCollision.h>
+#include <array>
+#include <vector>
+#include <string>
+#include <memory>
 
 
-class DLL ModelData{
+
+class ModelData{
 public:
 	enum PARSE{
 		DEFAULT,
@@ -15,9 +21,9 @@ public:
 		SAVE
 	};
 	struct vFaceData {
-		WORD index;
-		WORD normal;
-		WORD texcoord;
+		uint32_t index;
+		uint32_t normal;
+		uint32_t texcoord;
 	};
 	struct boneweight {
 		std::vector<uint32_t> bIndex{ 0 };
@@ -25,17 +31,17 @@ public:
 	};
 	struct Vertex
 	{
-		DirectX::XMFLOAT3 normal;
-		DirectX::XMFLOAT3 position;
-		DirectX::XMFLOAT2 tc;
+		FLOAT3 normal;
+		FLOAT3 position;
+		FLOAT2 tc;
 	};
 	struct Node {
 		float mass = 0;
 		std::string name;
 		int bIndex = -1;
-		DirectX::XMFLOAT4X4 matrix;
-		DirectX::XMFLOAT4 pos{ 0,0,0,0 };
-		DirectX::XMFLOAT4X4 LocalTransform;
+		FLOAT4X4 matrix;
+		FLOAT4 pos = {0, 0, 0,0};
+		FLOAT4X4 LocalTransform;
 		std::vector<Node> children = {};
 		int numchild = 0;
 		std::vector<Node*> aChildren = {};
@@ -43,15 +49,15 @@ public:
 
 	struct Bone {
 		std::string name;
-		uint16_t bIndex;
+		uint32_t bIndex;
 		//Inverse bind pose matrix
-		DirectX::XMFLOAT4X4 matrix;
-		DirectX::XMFLOAT4X4 finalTransform;
+		FLOAT4X4 matrix;
+		FLOAT4X4 finalTransform;
 		//sIndex index. Not index of vertices.
 		std::vector<uint32_t> Indices;
 		Node* node;
-		DirectX::BoundingSphere sphere;
-		DirectX::BoundingSphere smallsphere;
+		SphereCollider sphere;
+		SphereCollider smallsphere;
 	};
 
 	ModelData(std::string path, PARSE parse = DEFAULT);
@@ -72,7 +78,7 @@ public:
 	std::vector<Bone> bdata;
 	Node ndata;
 	std::vector<boneweight> weights;
-	DirectX::BoundingSphere Sphere;
+	SphereCollider Sphere;
 	std::vector<std::array<Vertex, 3>> MappedVertices;
 	std::vector<uint32_t> sIndex{};
 	std::vector<uint32_t> mIndex{};
@@ -81,9 +87,9 @@ public:
 private:
 
 	void ReadModel(std::unique_ptr<rapidxml::xml_document<char>> doc, std::unique_ptr<std::vector<char>> buffer);
-	static float fDistance(DirectX::XMFLOAT3& pos1, DirectX::XMFLOAT3& pos2);
-	static DirectX::XMFLOAT4 fDirection(DirectX::XMFLOAT3& pos1, DirectX::XMFLOAT3& pos2);
-	DirectX::XMFLOAT4X4 strToMatrix(std::istringstream& rawmatri);
+	static float fDistance(FLOAT3& pos1, FLOAT3& pos2);
+	static FLOAT4 fDirection(FLOAT3& pos1, FLOAT3& pos2);
+	FLOAT4X4 strToMatrix(std::istringstream& rawmatri);
 	Node ChildNodeRead(rapidxml::xml_node<char>* node);
 	void GetAllChildBones(Node& node, std::vector<Node*>& Parent);
 

@@ -1,12 +1,17 @@
 
+set(EditorSources
+  Source/main.cpp
+  Source/Window.cpp
+)
+
+
 if(WIN32)
 
-        add_executable(Editor WIN32 "Source/main.cpp" Source/SimpleCamera.cpp Source/Window.cpp)
-
+        add_executable(Editor WIN32 ${EditorSources})
         # Add Windows-specific configurations here
 
 elseif(UNIX)
-add_executable(Editor "Source/main.cpp" Source/App.cpp Source/Editor.cpp Source/SimpleCamera.cpp Source/Window.cpp)
+#add_executable(Editor "Source/main.cpp" Source/App.cpp Source/Editor.cpp  Source/Window.cpp)
 # Add Unix-specific configurations here
 else()
 message(STATUS "Unknown Operating System")

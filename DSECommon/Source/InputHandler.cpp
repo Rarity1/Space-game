@@ -10,9 +10,12 @@ bool Input::Keyboard::KeyIsPressed(unsigned char keycode) const noexcept
 	return CurrentKeyState[keycode];
 }
 
-bool Input::Keyboard::CharIsEmpty() const noexcept
+const bool Input::Keyboard::CharIsEmpty() noexcept
 {
-	return charbuffer.empty();
+  BufferLock.lock();
+  auto result = charbuffer.empty();
+  BufferLock.unlock();
+	return result;
 }
 
 void Input::Keyboard::FlushKey()
@@ -30,8 +33,10 @@ void Input::Keyboard::FlushChar()
 }
 
 void Input::Keyboard::EmptyBuffers() noexcept {
+  BufferLock.lock();
   keybuffer = std::queue<Event>();
   charbuffer = std::queue<char>();
+  BufferLock.unlock();
 }
 
 void Input::Keyboard::UpdateKey(Event::Type Direction,
@@ -56,7 +61,9 @@ void Input::Keyboard::UpdateKey(Event::Type Direction,
 
 void Input::Keyboard::ClearState() noexcept
 {
+  BufferLock.lock();
 	CurrentKeyState.reset();
+  BufferLock.unlock();
 }
 
 Input::dispatchID Input::linkEvent(unsigned char key, std::function<void()> dispatchFunc, Input::Event::Type type){
@@ -84,7 +91,7 @@ void Input::unlinkEvent(dispatchID key){
   dispatchMTX.unlock();
 }
 
-void Input::DispatchInputFunctions() {
+void Input::DispatchInputEvents() {
 
   std::vector<THREADS::WRef> WorkRefs;
   keyboard.BufferLock.lock();

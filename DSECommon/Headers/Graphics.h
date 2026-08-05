@@ -1,31 +1,34 @@
 #include <DirectXMath.h>
-#define __USESLANG //We using slang to compile shaders
+
 #pragma once
 #include "FrameResource.h"
 #include "EngineTime.h"
 
-#ifndef __USESLANG
-#include <dxcapi.h>
-#endif
 
 #include <slang.h>
 #include "slang-com-ptr.h"
 #include <condition_variable>
 
+#ifdef __WIN32
+#ifdef __USEDXC
+#include <dxcapi.h>
+#endif
+
 #ifdef _DEBUG
 #include <dxgidebug.h>
 #endif
-
+#endif
 
 #ifndef IMGUI_DISABLE
 #include <DLLGui.h>
 #endif
+
 class DLL Graphics {
   friend class FrameResource;
   friend class Engine;
 
 public:
-  Graphics(thRect &WindowRect, HWND &hWnd, Tracker& oTracker);
+  Graphics(WRect &WindowRect, HWND &hWnd, Tracker& oTracker);
   Graphics(const Graphics &) = delete;
   Graphics &operator=(const Graphics &) = delete;
   ~Graphics();
@@ -35,7 +38,7 @@ public:
 #endif
 private:
 Tracker& oTracker;
-  DXGI_FORMAT SwapChainFormat = DXGI_FORMAT_R10G10B10A2_UNORM;
+  const DXGI_FORMAT SwapChainFormat = DXGI_FORMAT_R10G10B10A2_UNORM;
   HMODULE DXGIDebug;
   void dxgichk();
   // update graphics for a list of tracked objects. Preferably objects loaded in
@@ -53,7 +56,7 @@ Tracker& oTracker;
   void LoadResources(Tracker::Instance &tInstance);
   void LoadPipeline();
   void UpdateLocalTransform(RenderedObject &bm);
-  #ifndef __USESLANG
+  #ifdef __USEDXC
   Slang::ComPtr<IDxcBlob> CompileShader(std::string ShaderSrc,
                  std::wstring CompileVersion, std::wstring EntryPoint);
   #else
@@ -68,14 +71,14 @@ Tracker& oTracker;
   std::condition_variable uFrameResource;
   std::mutex frMutex;
 
-  DirectX::XMFLOAT4X4 fovPerspective;
+  FLOAT4X4 fovPerspective;
   float timesincestart;
   void RecurLTrans(ModelData::Node *n, ModelData::Node *P);
 
   // uint16_t& width;
   // uint16_t& height;
 
-  thRect &windowResolution;
+  WRect &windowResolution;
   CD3DX12_RECT scissorRect;
   CD3DX12_VIEWPORT viewport;
   FrameResource::Pipeline PipelinePtrs;
@@ -96,7 +99,7 @@ Tracker& oTracker;
   Slang::ComPtr<slang::IGlobalSession> gSession;
   Slang::ComPtr<slang::ISession> iSession;
 
-  void FovPerspectiveRHInfinite(DirectX::XMFLOAT4X4& fovOutput, float& fovRadians, float& aspect, float& nearClip);
+  void FovPerspectiveRHInfinite(FLOAT4X4& fovOutput, float& fovRadians, float& aspect, float& nearClip);
 
   uint8_t cframeIndex;
 
