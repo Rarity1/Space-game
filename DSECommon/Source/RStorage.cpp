@@ -2,22 +2,20 @@
 
 
 
-
+  std::unordered_map<umID, RStorage::bmResource> RStorage::AvailableModels;
+  std::list<umID> RStorage::ModelList;
+  std::unordered_map<umID, ModelData> RStorage::LoadedModels;
+  std::unordered_map<std::string, std::filesystem::path> RStorage::Textures;
+  Exceptions::CheckerToken RStorage::chk;
 
 RStorage::RStorage()
 {
-	std::vector<std::filesystem::path> folders = {};
-	WCHAR path[MAX_PATH];
-	//Wow this is cringe
-	GetModuleFileNameW(NULL, path, MAX_PATH);
-	std::filesystem::current_path(std::wstring(path).substr(0, std::wstring(path).find(L"\\")));
-	for (auto& file : std::filesystem::directory_iterator{ std::filesystem::current_path() / "models" }) {
+	for (auto& file : std::filesystem::directory_iterator{ _CURRENTPATH / "models" }) {
 		if (file.path().extension() == ".dae") {
-			mData smData;
-			smData.modelPath = file.path();
 			bool toggle = false;
 			auto name = file.path().filename().string().substr(0, file.path().filename().string().find(file.path().extension().string()));
-			std::vector<char> UniqueID(1, '0');
+			std::string ModelName;
+      std::vector<char> UniqueID(1, '0');
 			for (auto& chr : name) {
 				if (chr == '#') {
 					toggle = !toggle ? true : false;
@@ -26,61 +24,47 @@ RStorage::RStorage()
 					UniqueID.emplace_back(chr);
 				}
 				if (!toggle && chr != '#') {
-					smData.name = smData.name + chr;
+					ModelName = ModelName + chr;
 				}
 
 			}
-			smData.umID = std::stoul(std::string(UniqueID.data(), UniqueID.size()));
-			AvailableModels.emplace(smData.umID, smData);
+			umID mID = std::stoul(std::string(UniqueID.data(), UniqueID.size()));
+
+			AvailableModels.emplace(mID, bmResource(mID, file.path().string(), ModelName));
 		}
 	}
-	for (auto& file : std::filesystem::directory_iterator{ std::filesystem::current_path() / "textures" }) {
+
+	for (auto& file : std::filesystem::directory_iterator{ _CURRENTPATH / "textures" }) {
+    auto name = file.path().filename().string().substr(0, file.path().filename().string().find(file.path().extension().string()));
 		if (file.path().extension() == ".dds") {
-			Textures.emplace_back(file.path());
+			Textures.emplace(name,file.path());
 		}
 	}
 }
 
-
-
-
-
-
-
-RStorage::bmResource& RStorage::GetModel(umID umID) {
-return LoadedModels[umID];
+ModelData* RStorage::GetModel(umID mID) {
+  if(LoadedModels.contains(mID)){
+    return &LoadedModels[mID];
+  }else{
+    return nullptr;
+  }
 }
 
-RStorage::bmResource* RStorage::loadModel(umID umID)
-{
 
-	assert(AvailableModels.find(umID) != AvailableModels.end());
-	auto& currentModel = AvailableModels[umID];
-	if (currentModel.model == nullptr) {
-		//Need to count referenced myself inorder to delete them
-		LoadedModels.emplace( umID, RStorage::bmResource(umID, ModelData(currentModel.modelPath.string(), ModelData::PARSE::MODEL), currentModel.name) );
-		currentModel.model = &LoadedModels[umID];
-	}
-	return AvailableModels[umID].model;
+ModelData* RStorage::loadModel(umID mID) {
+  ModelData* Result = nullptr;
+  if (AvailableModels.contains(mID)) {
+    auto &currentModel = AvailableModels[mID];
+    if (!isModelLoaded(mID)) {
+      // Need to count referenced myself inorder to delete them
+      LoadedModels.emplace(mID, ModelData(currentModel.modPath));
+    }
+    Result = &LoadedModels[mID];
+  };
+  return Result;
 }
-
 
 std::filesystem::path RStorage::getTexture(std::string name)
 {
-	auto result = std::find_if(Textures.begin(), Textures.end(), [&name](auto& e) {return e.filename().string().substr(0, e.filename().string().find(e.extension().string())) == name; });
-	
-
-	return result != Textures.end() ? *result : L"";
+	return Textures.contains(name) ? Textures[name] : L"";
 }
-
-
-
-RStorage::~RStorage()
-{
-	for (auto& a : LoadedModels) {
-		if (a.second.cbvwriteBuffer != nullptr) {
-			a.second.cbvwriteBuffer->Unmap(0, nullptr);
-		}
-	}
-}
-

@@ -1,10 +1,10 @@
 #pragma once
-#include "RStorage.h"
-#include "ePhysics.h"
 #include "Graphics.h"
+#include "ePhysics.h"
 #include "EngineTime.h"
 #include "Threads.h"
 #include "ObjectTracking.h"
+#include <memory>
 
 class Input;
 
@@ -26,7 +26,8 @@ public:
 	std::unique_ptr<Physics> phyx;
   std::unique_ptr<Graphics> pGfx;
   Graphics& rGfx;
-	Object* plModel;
+	std::shared_ptr<Object> plModel;
+  
 	struct Event {
 		unsigned short wPriority;
 		std::function<void()> wFunc;
@@ -40,6 +41,7 @@ private:
 	EngineTime updateClock;
 	EngineTime ucontrolClock;
 
+  void PlayerModelUpdate();
 	//Queues a function onto the event queue without running the function. Larger priority number = lower priority. 
 	void queueCommand(std::function<void()> Function, unsigned short Priority = 0);
 	std::vector<std::function<void()>>& getCQueue();
@@ -71,8 +73,4 @@ private:
 	std::condition_variable loopVariable;
 	std::unique_lock<std::mutex> loopLock;
 	std::mutex loopMutex;
-
-
-
-
 };

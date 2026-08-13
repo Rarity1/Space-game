@@ -1,10 +1,13 @@
 #include <DDSTextureLoader.h>
-#include <DirectXMath.h>
 #include <ResourceUploadBatch.h>
+
 #include "Graphics.h"
+#include "Exceptions.h"
+#include "FrameResource.h"
 #include "GraphicsErrors.h"
 #include "ObjectTracking.h"
 #include "RStorage.h"
+#include "Profiler.h"
 
 #include <cstdint>
 #include <cstdio>
@@ -20,6 +23,14 @@ EXTERN_C const GUID local_DXGI_DEBUG_ALL = {
     0x490b,
     {0x87, 0xe6, 0x43, 0xe9, 0xa9, 0xcf, 0xda, 0x08}};
 
+#ifdef  _DEBUG
+void D3D12MessageCallback(D3D12_MESSAGE_CATEGORY Category,
+                                   D3D12_MESSAGE_SEVERITY Severity,
+                                   D3D12_MESSAGE_ID ID, LPCSTR pDescription,
+                                   void *pContext);
+#endif
+
+
 Graphics::Graphics(WRect &WindowRect, HWND &hWnd, Tracker& oTracker)
     : // width(w),
       // height(h),
@@ -28,6 +39,8 @@ Graphics::Graphics(WRect &WindowRect, HWND &hWnd, Tracker& oTracker)
       windowResolution(WindowRect), 
       PipelinePtrs(WindowRect),
       cframeIndex(0) {
+
+  Profiler prof;
   // XMStoreFloat4x4(&fovPerspective,
   // DirectX::XMMatrixPerspectiveFovRH(DirectX::XM_PIDIV2,
   // float(windowResolution.wr.right - windowResolution.wr.left) /
@@ -40,7 +53,7 @@ Graphics::Graphics(WRect &WindowRect, HWND &hWnd, Tracker& oTracker)
   viewport = CD3DX12_VIEWPORT(0.f, 0.f, windowResolution.wr.right,
                               windowResolution.wr.bottom);
   windowResolution.Mtx.unlock();
-    float fov90Deg = DirectX::XM_PIDIV2;
+    float fov90Deg = std::numbers::pi_v<float> * 0.5;
     float aspectRatio = float(windowResolution.wr.right) / float(windowResolution.wr.bottom);
     float nearplane = 0;
   FovPerspectiveRHInfinite(fovPerspective, fov90Deg, aspectRatio, nearplane);
@@ -63,7 +76,6 @@ Graphics::Graphics(WRect &WindowRect, HWND &hWnd, Tracker& oTracker)
   D3D12CreateDevice(nullptr, D3D_FEATURE_LEVEL_12_2, IID_PPV_ARGS(&pDevice)) >>
       chk;
   NAME_D3D12_OBJECT(pDevice);
-
   // RTV descriptors and buffer references
 #ifdef _DEBUG
   pDevice.As(&D3DInfoQueue);
@@ -79,7 +91,7 @@ Graphics::Graphics(WRect &WindowRect, HWND &hWnd, Tracker& oTracker)
 
   DWORD CallbackCookie;
   D3DInfoQueue->RegisterMessageCallback(
-      (D3D12MessageFunc)GErrors::D3D12MessageCallback,
+      (D3D12MessageFunc)D3D12MessageCallback,
       D3D12_MESSAGE_CALLBACK_IGNORE_FILTERS, this, &CallbackCookie) >>
       chk;
 #endif
@@ -273,9 +285,7 @@ void Graphics::LoadPipeline() {
         chk;
     NAME_D3D12_OBJECT(pRootSignature);
   }
-
-  auto path = std::filesystem::current_path().parent_path().parent_path();
-  std::string RelPath = path.string();
+  std::string RelPath = _CURRENTPATH.string();
   RelPath += ("/Shaders/");
   std::string pathVss = RelPath;
   pathVss += ("VertexShader.slang");
@@ -311,6 +321,8 @@ void Graphics::LoadPipeline() {
        D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
        0},
       {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT,
+       D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+       {"TESTVAL", 0, DXGI_FORMAT_R8_UINT, 0, D3D12_APPEND_ALIGNED_ELEMENT,
        D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
   };
   pipelineStateStream.InputLayout = {inputLayout, (uint32_t)std::size(inputLayout)};
@@ -379,28 +391,35 @@ void Graphics::LoadPipeline() {
   PipelinePtrs.swapChain = swapChain.Get();
   PipelinePtrs.pPipelineState = pPipelineState.Get();
   PipelinePtrs.pRootSignature = pRootSignature.Get();
-  PipelinePtrs.objectAllocator = objectAllocator.get();
 }
 
 void Graphics::Update() {
   UpdateFrameResources();
-
-  using namespace DirectX;
+  CreateBuffers();
+  UpdateResources();
+  for(auto& buffers : RenderBufferMap){
+  std::vector<CBVData> tempData(buffers.second.InstanceCount);
   for (auto &tInstance : oTracker.GetActiveInstances()) {
-    for (auto &tmodel : tInstance->GetRenderObjects()) {
-      for (auto &trackedModel : tmodel.second) {
-        auto &rModel = *(RenderedObject *)trackedModel;
-        auto &cbvData = tInstance->GetCBVPtr(tmodel.first)[rModel.CBVIndex];
-        auto &Rotation = rModel.mPos.GetRotation();
-        auto &Position = rModel.mPos.Get();
-
-        cbvData.cbvMatrix =
-            (FLOAT4X4::Rotation(Rotation) * FLOAT4X4::Translation(Position).Transpose() *
-             tInstance->ActiveCamera()->cMatrix * fovPerspective)
-                .Transpose();
+    for (auto &trackedModel : tInstance.second->GetInstanceObjects()) {
+      auto Object = oTracker.IsRendered(trackedModel.second->GetID());
+      if(Object){
+      auto &rModel = *Object;
+      if(rModel.hasModel.load() && !oTracker.CBVFlagged(rModel.ModelID) && buffers.first == rModel.ModelID){
+      auto &Rotation = rModel.mPos.GetRotation();
+      auto &Position = rModel.mPos.Get();
+      tempData[rModel.CBVIndex].cbvMatrix = ((FLOAT4X4::Rotation(Rotation) *
+           FLOAT4X4::Translation(Position).Transpose() *
+           tInstance.second->GetActiveCamera()->cMatrix * fovPerspective)
+              .Transpose());
       }
+
+      }
+
     }
   };
+  memcpy(oTracker.GetViewMatrix(buffers.first, 0), tempData.data(),
+         tempData.size() * sizeof(CBVData));
+  }
 }
 
 void Graphics::RenderFrame() {
@@ -428,9 +447,8 @@ void Graphics::RenderFrame() {
   std::vector<ID3D12DescriptorHeap*> ppHeaps = {objectAllocator->DescHeap.Get(), pSamplerDescriptorHeap.Get()};
   D3D12_GPU_DESCRIPTOR_HANDLE SamplerHeapGpuHandle;
   pSamplerDescriptorHeap->GetGPUDescriptorHandleForHeapStart(&SamplerHeapGpuHandle);
-  for(auto instance : oTracker.GetActiveInstances()){
-    cframeBuffer.PopulateCommandList(&scissorRect, &viewport, *instance, ppHeaps, SamplerHeapGpuHandle);
-  }
+  cframeBuffer.PopulateCommandList(&scissorRect, &viewport, RenderBufferMap, ppHeaps, SamplerHeapGpuHandle);
+
 //COmmand list order DOES matter. First in first out.
   std::vector<ID3D12CommandList *> commandLists = {
        cframeBuffer.pCommandList.Get(), cframeBuffer.imguiCommandList.Get()};
@@ -445,189 +463,213 @@ void Graphics::RenderFrame() {
   // Vsync off. add toggle here for changing vsync
   swapChain->Present(0, DXGI_PRESENT_ALLOW_TEARING | DXGI_PRESENT_DO_NOT_WAIT) >> chk;
 }
+// Upload batch is very expensive replace this with something better
+void Graphics::CreateBuffers() {
 
-void Graphics::CreateBuffers(Tracker::Instance &tInstance) {
-  DirectX::ResourceUploadBatch upload(pDevice.Get());
-  upload.Begin();
-  for (auto &trackedModel : tInstance.GetRenderObjects()) {
-    auto &model = tInstance.pTracker.GetModel(trackedModel.first);
-    if (model.vbuffer == nullptr) {
-      uint32_t vbuffSize = model.uData->sIndex.size() * sizeof(ModelData::Vertex);
-      {
-        const CD3DX12_HEAP_PROPERTIES heapProps{D3D12_HEAP_TYPE_DEFAULT};
-        const auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(vbuffSize);
+  for (auto &ViewBuffers : oTracker.GetViewBuffers()) {
+    RenderBuffers *buffptr = nullptr;
+    if (RenderBufferMap.contains(ViewBuffers.first)) {
+      buffptr = &RenderBufferMap[ViewBuffers.first];
+    } else {
+      RenderBufferMap.insert({ViewBuffers.first, RenderBuffers()});
+      buffptr = &RenderBufferMap[ViewBuffers.first];
+    }
+    auto &Buffer = *buffptr;
 
-        pDevice->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE,
-                                         &resourceDesc,
-                                         D3D12_RESOURCE_STATE_COMMON, nullptr,
-                                         IID_PPV_ARGS(&model.vbuffer)) >>
-            chk;
-        model.vbuffView = D3D12_VERTEX_BUFFER_VIEW{
-            .BufferLocation = model.vbuffer->GetGPUVirtualAddress(),
-            .SizeInBytes = vbuffSize,
-            .StrideInBytes = (uint32_t)sizeof(ModelData::Vertex)};
-      }
-      {
-        const CD3DX12_HEAP_PROPERTIES heapProps{D3D12_HEAP_TYPE_UPLOAD};
-        const auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(vbuffSize);
-        pDevice->CreateCommittedResource(
-            &heapProps, D3D12_HEAP_FLAG_NONE, &resourceDesc,
-            D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
-            IID_PPV_ARGS(&model.uvbuffer)) >>
-            chk;
-      }
-      uint32_t ibuffSize = model.uData->sIndex.size() * sizeof(uint32_t);
+    auto umID = ViewBuffers.first;
+    if (oTracker.CBVFlagged(umID)) {
+      oTracker.CBVUnFlag(umID);
+      Buffer.InstanceCount = ViewBuffers.second.vCount;
+      auto &model = *oTracker.GetModel(umID);
+      Buffer.IndexCount = model.sIndex.size();
 
-      {
-        const CD3DX12_HEAP_PROPERTIES heapProps{D3D12_HEAP_TYPE_DEFAULT};
-        const auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(ibuffSize);
-        pDevice->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE,
-                                         &resourceDesc,
-                                         D3D12_RESOURCE_STATE_COMMON, nullptr,
-                                         IID_PPV_ARGS(&model.ibuffer)) >>
-            chk;
-        model.ibuffView = D3D12_INDEX_BUFFER_VIEW{
-            .BufferLocation = model.ibuffer->GetGPUVirtualAddress(),
-            .SizeInBytes =
-                (uint32_t)std::size(model.uData->sIndex) * (uint32_t)sizeof(uint32_t),
-            .Format = DXGI_FORMAT_R32_UINT};
-      }
-
-      {
-        const CD3DX12_HEAP_PROPERTIES heapProps{D3D12_HEAP_TYPE_UPLOAD};
-        const auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(ibuffSize);
-        pDevice->CreateCommittedResource(
-            &heapProps, D3D12_HEAP_FLAG_NONE, &resourceDesc,
-            D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
-            IID_PPV_ARGS(&model.uibuffer)) >>
-            chk;
-      }
-      {
+      if (Buffer.vbuffer == nullptr) {
+        uint32_t vbuffSize = model.sIndex.size() * sizeof(Vertex);
         {
+          const CD3DX12_HEAP_PROPERTIES heapProps{D3D12_HEAP_TYPE_DEFAULT};
+          const auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(vbuffSize);
 
-          ModelData::Vertex *mappedVertexData = nullptr;
-          model.uvbuffer->Map(0, nullptr,
-                              reinterpret_cast<void **>(&mappedVertexData)) >>
+          pDevice->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE,
+                                           &resourceDesc,
+                                           D3D12_RESOURCE_STATE_COMMON, nullptr,
+                                           IID_PPV_ARGS(&Buffer.vbuffer)) >>
               chk;
-          uint32_t *mappedIndexData = nullptr;
-          model.uibuffer->Map(0, nullptr,
-                              reinterpret_cast<void **>(&mappedIndexData)) >>
-              chk;
-
-          memcpy(mappedVertexData, model.uData->MappedVertices.data(),
-                 vbuffSize);
-          memcpy(mappedIndexData, model.uData->sIndex.data(), ibuffSize);
+          Buffer.vbuffView = D3D12_VERTEX_BUFFER_VIEW{
+              .BufferLocation = Buffer.vbuffer->GetGPUVirtualAddress(),
+              .SizeInBytes = vbuffSize,
+              .StrideInBytes = (uint32_t)sizeof(Vertex)};
         }
-        model.uvbuffer->Unmap(0, nullptr);
-        model.uibuffer->Unmap(0, nullptr);
-      }
+        {
+          const CD3DX12_HEAP_PROPERTIES heapProps{D3D12_HEAP_TYPE_UPLOAD};
+          const auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(vbuffSize);
+          pDevice->CreateCommittedResource(
+              &heapProps, D3D12_HEAP_FLAG_NONE, &resourceDesc,
+              D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+              IID_PPV_ARGS(&Buffer.uvbuffer)) >>
+              chk;
+        }
+        uint32_t ibuffSize = model.sIndex.size() * sizeof(uint32_t);
 
-      UpdBuffer(model, commandList, pDevice, commandAllocator, commandQueue);
-    }
-    if (model.cbvwriteBuffer != nullptr) {
-      objectAllocator->Free(model.cbvCpuHandle, model.cbvGpuHandle);
-      model.cbvwriteBuffer->Unmap(0, nullptr);
-      model.cbvwriteBuffer.Reset();
-    }
-    uint32_t size =
-        (sizeof(CBVData) * trackedModel.second.size()) +
-        (256 - ((sizeof(CBVData) * trackedModel.second.size()) % 256));
-    {
-      const CD3DX12_HEAP_PROPERTIES heapProps{D3D12_HEAP_TYPE_UPLOAD};
-      const auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(size);
-      pDevice->CreateCommittedResource(
-          &heapProps, D3D12_HEAP_FLAG_NONE, &resourceDesc,
-          D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
-          IID_PPV_ARGS(&model.cbvwriteBuffer)) >>
-          chk;
-    }
-    CD3DX12_RANGE readRange(0, 0);
-    model.cbvwriteBuffer->Map(
-        0, &readRange,
-        reinterpret_cast<void **>(
-            tInstance.GetCBVPtrtoPtr(trackedModel.first))) >>
-        chk;
-    {
-      D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
-      cbvDesc.BufferLocation = model.cbvwriteBuffer->GetGPUVirtualAddress();
-      cbvDesc.SizeInBytes = size;
-      objectAllocator->Alloc(&model.cbvCpuHandle, &model.cbvGpuHandle);
-      pDevice->CreateConstantBufferView(&cbvDesc, model.cbvCpuHandle);
-    }
-    if (model.tbuffer == nullptr) {
+        {
+          const CD3DX12_HEAP_PROPERTIES heapProps{D3D12_HEAP_TYPE_DEFAULT};
+          const auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(ibuffSize);
+          pDevice->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE,
+                                           &resourceDesc,
+                                           D3D12_RESOURCE_STATE_COMMON, nullptr,
+                                           IID_PPV_ARGS(&Buffer.ibuffer)) >>
+              chk;
+          Buffer.ibuffView = D3D12_INDEX_BUFFER_VIEW{
+              .BufferLocation = Buffer.ibuffer->GetGPUVirtualAddress(),
+              .SizeInBytes = (uint32_t)std::size(model.sIndex) *
+                             (uint32_t)sizeof(uint32_t),
+              .Format = DXGI_FORMAT_R32_UINT};
+        }
 
-      // Check if texture exists. This does not currently do that
-      if (model.curTexture.string() != "") {
-        CreateDDSTextureFromFile(pDevice.Get(), upload,
-                                 model.curTexture.wstring().c_str(),
-                                 model.tbuffer.ReleaseAndGetAddressOf()) >>
-            chk;
-      } else {
-        CreateDDSTextureFromMemory(pDevice.Get(), upload, missing_dds,
-                                   missing_dds_size,
-                                   model.tbuffer.ReleaseAndGetAddressOf()) >>
-            chk;
+        {
+          const CD3DX12_HEAP_PROPERTIES heapProps{D3D12_HEAP_TYPE_UPLOAD};
+          const auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(ibuffSize);
+          pDevice->CreateCommittedResource(
+              &heapProps, D3D12_HEAP_FLAG_NONE, &resourceDesc,
+              D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+              IID_PPV_ARGS(&Buffer.uibuffer)) >>
+              chk;
+        }
+        {
+          {
+
+            Vertex *mappedVertexData = nullptr;
+            Buffer.uvbuffer->Map(
+                0, nullptr, reinterpret_cast<void **>(&mappedVertexData)) >>
+                chk;
+            uint32_t *mappedIndexData = nullptr;
+            Buffer.uibuffer->Map(0, nullptr,
+                                 reinterpret_cast<void **>(&mappedIndexData)) >>
+                chk;
+
+            memcpy(mappedVertexData, model.MappedVertices.data(), vbuffSize);
+            memcpy(mappedIndexData, model.sIndex.data(), ibuffSize);
+          }
+          Buffer.uvbuffer->Unmap(0, nullptr);
+          Buffer.uibuffer->Unmap(0, nullptr);
+        }
       }
+      if (Buffer.cbvwriteBuffer != nullptr) {
+        objectAllocator->Free(Buffer.cbvCpuHandle, Buffer.cbvGpuHandle);
+        Buffer.cbvwriteBuffer->Unmap(0, nullptr);
+        Buffer.cbvwriteBuffer.Reset();
+      }
+      objectAllocator->Alloc(&Buffer.cbvCpuHandle, &Buffer.cbvGpuHandle);
+
+      uint32_t size =
+          (sizeof(CBVData) * oTracker.ModelObjectCount(umID)) +
+          (256 - ((sizeof(CBVData) * oTracker.ModelObjectCount(umID)) % 256));
       {
-        D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-        srvDesc.Shader4ComponentMapping =
-            D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-        // Remember to change to bc7 textures when gimp gets support
-        srvDesc.Format = DXGI_FORMAT_UNKNOWN;
-        srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-        srvDesc.Texture2D.MipLevels = -1;
-        objectAllocator->Alloc(&model.srvCpuHandle, &model.srvGpuHandle);
-        pDevice->CreateShaderResourceView(model.tbuffer.Get(), &srvDesc,
-                                          model.srvCpuHandle);
+        const CD3DX12_HEAP_PROPERTIES heapProps{D3D12_HEAP_TYPE_UPLOAD};
+        const auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(size);
+        pDevice->CreateCommittedResource(
+            &heapProps, D3D12_HEAP_FLAG_NONE, &resourceDesc,
+            D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+            IID_PPV_ARGS(&Buffer.cbvwriteBuffer)) >>
+            chk;
       }
+      CD3DX12_RANGE readRange(0, 0);
+      Buffer.cbvwriteBuffer->Map(
+          0, &readRange,
+          reinterpret_cast<void **>(oTracker.GetViewMatrixAddress(umID))) >>
+          chk;
+      {
+        D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
+        cbvDesc.BufferLocation = Buffer.cbvwriteBuffer->GetGPUVirtualAddress();
+        cbvDesc.SizeInBytes = size;
+        pDevice->CreateConstantBufferView(&cbvDesc, Buffer.cbvCpuHandle);
+      }
+      if (Buffer.tbuffer == nullptr) {
+        DirectX::ResourceUploadBatch ResourceUpload(pDevice.Get());
+        ResourceUpload.Begin();
+
+        // Check if texture exists. This does not currently do that
+        auto tname = oTracker.GetResource(umID)->name; 
+        if (tname != "") {
+          CreateDDSTextureFromFile(pDevice.Get(), ResourceUpload,
+                                   oTracker.GetTexture(tname).c_str(),
+                                   Buffer.tbuffer.ReleaseAndGetAddressOf()) >>
+              chk;
+        } else {
+          CreateDDSTextureFromMemory(pDevice.Get(), ResourceUpload, missing_dds,
+                                     missing_dds_size,
+                                     Buffer.tbuffer.ReleaseAndGetAddressOf()) >>
+              chk;
+        }
+
+        {
+          D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+          srvDesc.Shader4ComponentMapping =
+              D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+          // Remember to change to bc7 textures when gimp gets support
+          srvDesc.Format = DXGI_FORMAT_UNKNOWN;
+          srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+          srvDesc.Texture2D.MipLevels = -1;
+          objectAllocator->Alloc(&Buffer.srvCpuHandle, &Buffer.srvGpuHandle);
+          pDevice->CreateShaderResourceView(Buffer.tbuffer.Get(), &srvDesc,
+                                            Buffer.srvCpuHandle);
+        }
+        ResourceUpload.End(commandQueue.Get());
+      }
+      pDevice->GetDeviceRemovedReason() >> chk;
     }
-    pDevice->GetDeviceRemovedReason() >> chk;
   }
-  upload.End(commandQueue.Get());
 }
 
 // Requires you to open and close command list
-void Graphics::UpdBuffer(
-    RStorage::bmResource &model,
-    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList,
-    Microsoft::WRL::ComPtr<ID3D12Device> pDevice,
-    Microsoft::WRL::ComPtr<ID3D12CommandAllocator> commandAllocator,
-    Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue) {
+void const Graphics::UpdateBuffer(
+    RenderBuffers& buffers,
+    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList) {
   {
     const auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-        model.vbuffer.Get(), D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,
+        buffers.vbuffer.Get(), D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,
         D3D12_RESOURCE_STATE_COPY_DEST);
     commandList->ResourceBarrier(1, &barrier);
   }
   {
     const auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-        model.ibuffer.Get(), D3D12_RESOURCE_STATE_INDEX_BUFFER,
+        buffers.ibuffer.Get(), D3D12_RESOURCE_STATE_INDEX_BUFFER,
         D3D12_RESOURCE_STATE_COPY_DEST);
     commandList->ResourceBarrier(1, &barrier);
   }
-  commandList->CopyResource(model.vbuffer.Get(), model.uvbuffer.Get());
-  commandList->CopyResource(model.ibuffer.Get(), model.uibuffer.Get());
+  commandList->CopyResource(buffers.vbuffer.Get(), buffers.uvbuffer.Get());
+  commandList->CopyResource(buffers.ibuffer.Get(), buffers.uibuffer.Get());
   {
     const auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-        model.vbuffer.Get(), D3D12_RESOURCE_STATE_COPY_DEST,
+        buffers.vbuffer.Get(), D3D12_RESOURCE_STATE_COPY_DEST,
         D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
     commandList->ResourceBarrier(1, &barrier);
   }
   {
     const auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-        model.ibuffer.Get(), D3D12_RESOURCE_STATE_COPY_DEST,
+        buffers.ibuffer.Get(), D3D12_RESOURCE_STATE_COPY_DEST,
         D3D12_RESOURCE_STATE_INDEX_BUFFER);
     commandList->ResourceBarrier(1, &barrier);
   }
 }
-
-void Graphics::LoadResources(Tracker::Instance &tInstance) {
+//Needs some barriers here to prevent resetting every frame
+void Graphics::UpdateResources() {
   commandAllocator->Reset() >> chk;
   commandList->Reset(commandAllocator.Get(), nullptr) >> chk;
-  CreateBuffers(tInstance);
-
+  for (auto &buffers : RenderBufferMap) {
+    auto &Buffer = buffers.second;
+    {
+      auto& model= *oTracker.GetModel(buffers.first);
+      Vertex *mappedVertexData = nullptr;
+      Buffer.uvbuffer->Map(0, nullptr,
+                           reinterpret_cast<void **>(&mappedVertexData)) >>
+          chk;
+      uint32_t vbuffSize = model.sIndex.size() * sizeof(Vertex);
+      memcpy(mappedVertexData, model.MappedVertices.data(), vbuffSize);
+    }
+    Buffer.uvbuffer->Unmap(0, nullptr);
+    UpdateBuffer(buffers.second, commandList);
+  }
   commandList->Close() >> chk;
-
   {
     ID3D12CommandList *const commandLists[] = {commandList.Get()};
     commandQueue->ExecuteCommandLists(std::size(commandLists), commandLists);
@@ -637,65 +679,61 @@ void Graphics::LoadResources(Tracker::Instance &tInstance) {
 
 void Graphics::UpdateLocalTransform(RenderedObject &bm) {
   using namespace DirectX;
-  if (std::strstr(bm.model->uData->bdata[0].name.c_str(), "placeholder"))
+  if (std::strstr(oTracker.GetModel(bm.ModelID)->bdata[0].name.c_str(), "placeholder"))
     return;
   const FLOAT4X4 temp{1.f, 0.f, 0.f, 0.f, 
                 0.f, 1.f, 0.f, 0.f,
                 0.f, 0.f, 1.f, 0.f,
                 0.f, 0.f, 0.f, 1.f};
-  bm.model->uData->ndata.LocalTransform = temp * bm.model->uData->ndata.matrix;
+  oTracker.GetModel(bm.ModelID)->ndata.LocalTransform = temp * oTracker.GetModel(bm.ModelID)->ndata.matrix;
 
-  for (auto &c : bm.model->uData->ndata.children) {
-    RecurLTrans(&c, &bm.model->uData->ndata);
+  for (auto &c : oTracker.GetModel(bm.ModelID)->ndata.children) {
+    RecurLTrans(&c, &oTracker.GetModel(bm.ModelID)->ndata);
   }
 
-  for (auto &P : bm.model->uData->ndata.aChildren) {
+  for (auto &P : oTracker.GetModel(bm.ModelID)->ndata.aChildren) {
     for (auto &n : P->aChildren) {
       RecurLTrans(n, P);
     }
   }
 }
 
-void Graphics::RecurLTrans(ModelData::Node *n, ModelData::Node *P) {
+void Graphics::RecurLTrans(Node *n, Node *P) {
   n->LocalTransform = P->LocalTransform * n->matrix;
 }
 
 // Fix model updates
 void Graphics::UpdateModel(RenderedObject *bm) {
   auto GlobITrans =
-      bm->model->uData->ndata.matrix.Inverse();
-  if (!std::strstr(bm->model->uData->bdata[0].name.c_str(), "placeholder"))
-    for (auto &b : bm->model->uData->bdata) {
+      oTracker.GetModel(bm->ModelID)->ndata.matrix.Inverse();
+  if (!std::strstr(oTracker.GetModel(bm->ModelID)->bdata[0].name.c_str(), "placeholder"))
+    for (auto &b : oTracker.GetModel(bm->ModelID)->bdata) {
       b.finalTransform = b.matrix * b.node->LocalTransform * GlobITrans;
     };
-  auto vdata = bm->model->uData->MappedVertices;
-  auto &idata = bm->model->uData->mIndex;
-  ModelData::Vertex *mappedVertexData = nullptr;
-  bm->model->uvbuffer->Map(0, nullptr,
-                           reinterpret_cast<void **>(&mappedVertexData)) >>
-      chk;
+  auto vdata = oTracker.GetModel(bm->ModelID)->MappedVertices;
+  auto &idata = oTracker.GetModel(bm->ModelID)->sIndex;
+  Vertex *mappedVertexData = nullptr;
+  //oTracker.GetModel(bm->ModelID).uvbuffer->Map(0, nullptr, reinterpret_cast<void **>(&mappedVertexData)) >> chk;
   // Fix animations
-  UpdateLocalTransform(*bm);
-  using namespace DirectX;
-  if (bm->model->uData->bdata.size() > 0) {
+  //UpdateLocalTransform(*bm);
+  if (oTracker.GetModel(bm->ModelID)->bdata.size() > 0) {
     for (auto v = 0; v < std::size(idata); v++) {
-      auto &weights = bm->model->uData->weights[v];
+      auto &weights = oTracker.GetModel(bm->ModelID)->weights[v];
       FLOAT4 vd = vdata[idata[v]][v % 3].position;
 
       for (auto w = 0; w < std::size(weights.weight); w++) {
-        vd = (vd * (bm->model->uData->bdata[weights.bIndex[w]].finalTransform * weights.weight[w]));
+        vd = (vd * (oTracker.GetModel(bm->ModelID)->bdata[weights.bIndex[w]].finalTransform * weights.weight[w]));
       }
       vdata[idata[v]][v % 3].position.x += vd.x;
       vdata[idata[v]][v % 3].position.y += vd.y;
       vdata[idata[v]][v % 3].position.z += vd.z;
     }
   }
-  memcpy(mappedVertexData, vdata.data(),
-         sizeof(ModelData::Vertex) * idata.size());
+  //memcpy(mappedVertexData, vdata.data(), sizeof(Vertex) * idata.size());
 
-  bm->model->uvbuffer->Unmap(0, nullptr);
+  //oTracker.GetModel(bm->ModelID).uvbuffer->Unmap(0, nullptr);
 
-  UpdBuffer(*bm->model, commandList, pDevice, commandAllocator, commandQueue);
+  //UpdBuffer(oTracker.GetModel(bm->ModelID), commandList, pDevice, commandAllocator, commandQueue);
 }
 
 #ifdef __USEDXC
@@ -797,20 +835,16 @@ Slang::ComPtr<slang::IBlob> Graphics::CompileShaderSlang(std::string ShaderSrc,
                                          diag.writeRef()) >>
       chk;
   if (diag) {
-    printf("ERROR: %s /n", (const char *)diag->getBufferPointer());
-    fflush(stdout);
+    std::string((const char *)diag->getBufferPointer()).c_str() >> Exceptions::CheckerToken();
   }
   Slang::ComPtr<slang::IComponentType> LinkedShader;
   ComposedShader->link(LinkedShader.writeRef(), diag.writeRef()) >> chk;
   if (diag) {
-    printf("ERROR: %s /n", (const char *)diag->getBufferPointer());
-    fflush(stdout);
+    std::string((const char *)diag->getBufferPointer()).c_str() >> Exceptions::CheckerToken();
   }
   LinkedShader->getEntryPointCode(0, 0, Result.writeRef(), diag.writeRef());
   if (diag) {
-    printf("ERROR: %s /n", (const char *)diag->getBufferPointer());
-    fflush(stdout);
-    assert(false);
+    std::string((const char *)diag->getBufferPointer()).c_str() >> Exceptions::CheckerToken();
   }
   return Result;
 }
@@ -899,7 +933,7 @@ void Graphics::UpdateFrameResources() {
         chk;
     scissorRect = CD3DX12_RECT(0, 0, windowResolution.wr.right, windowResolution.wr.bottom );
     viewport = CD3DX12_VIEWPORT(0.f, 0.f, windowResolution.wr.right, windowResolution.wr.bottom );
-    float fov90Deg = DirectX::XM_PIDIV2;
+    float fov90Deg = std::numbers::pi_v<float>*0.5;
     float aspectRatio = float(windowResolution.wr.right) / float(windowResolution.wr.bottom);
     float nearplane = 0.f;
     FovPerspectiveRHInfinite(fovPerspective, fov90Deg, aspectRatio, nearplane);
@@ -915,6 +949,11 @@ void Graphics::UpdateFrameResources() {
 Graphics::~Graphics() {
   // iGui Is not very graceful to shutdown. Need to close it first before
   // graphics unload.
+  for(auto& b : RenderBufferMap){
+    if(b.second.cbvwriteBuffer.Get()){
+      b.second.cbvwriteBuffer->Unmap(0, nullptr);
+    }
+  }
   if (pDevice != nullptr) {
     fenceValue = fence->GetCompletedValue();
     {

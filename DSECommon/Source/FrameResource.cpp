@@ -81,7 +81,7 @@ void FrameResource::UpdateResolution(Pipeline &PipeLine) {
 
 void FrameResource::PopulateCommandList(
     CD3DX12_RECT *scissorRect, CD3DX12_VIEWPORT *viewport,
-    Tracker::Instance& Instance,
+    std::unordered_map<umID, RenderBuffers> &Buffers,
     std::vector<ID3D12DescriptorHeap *> &ppHeaps,
     D3D12_GPU_DESCRIPTOR_HANDLE &SamplerHeapGpuHandle) {
 
@@ -113,14 +113,13 @@ void FrameResource::PopulateCommandList(
   pCommandList->SetGraphicsRootDescriptorTable(2, SamplerHeapGpuHandle);
   pCommandList->SetPipelineState(pPipelineState);
 
-  for (auto &tModels : Instance.GetRenderObjects()) {
-    auto &model = Instance.pTracker.GetModel(tModels.first);
-    pCommandList->IASetIndexBuffer(&model.ibuffView);
-    pCommandList->IASetVertexBuffers(0, 1, &model.vbuffView);
-    pCommandList->SetGraphicsRootDescriptorTable(0, model.cbvGpuHandle);
-    pCommandList->SetGraphicsRootDescriptorTable(1, model.srvGpuHandle);
-    pCommandList->DrawIndexedInstanced(model.uData->sIndex.size(),
-                                       tModels.second.size(), 0, 0, 0);
+  for (auto &Pair : Buffers) {
+    auto & Buff = Pair.second;
+    pCommandList->IASetIndexBuffer(&Buff.ibuffView);
+    pCommandList->IASetVertexBuffers(0, 1, &Buff.vbuffView);
+    pCommandList->SetGraphicsRootDescriptorTable(0, Buff.cbvGpuHandle);
+    pCommandList->SetGraphicsRootDescriptorTable(1, Buff.srvGpuHandle);
+    pCommandList->DrawIndexedInstanced(Buff.IndexCount,Buff.InstanceCount, 0, 0, 0);
   }
 
   {

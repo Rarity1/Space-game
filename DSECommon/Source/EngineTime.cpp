@@ -6,9 +6,8 @@
 EngineTime::EngineTime()
 {
 	using namespace std::chrono;
-
-	last = std::chrono::utc_clock::now();
-	Mark();
+	last = utc_clock::now();
+  frame = duration<double>(utc_clock::now() - last).count();
 }
 double EngineTime::Mark() noexcept
 {
@@ -20,7 +19,7 @@ double EngineTime::Mark() noexcept
 	last = utc_clock::now();
 	return frame;
 }
-double EngineTime::Peek() noexcept
+double EngineTime::Peek() const noexcept
 {
 	using namespace std::chrono;
 
@@ -28,7 +27,7 @@ double EngineTime::Peek() noexcept
 	return duration<double>(utc_clock::now() - last).count();
 }
 
-double EngineTime::Current() noexcept
+double EngineTime::Current()const noexcept
 {
 	using namespace std::chrono;
 
@@ -37,7 +36,7 @@ double EngineTime::Current() noexcept
 
 }
 
-long long EngineTime::TimeLook() const
+long long EngineTime::TimeLook() const noexcept
 {
 	using namespace std::chrono;
 

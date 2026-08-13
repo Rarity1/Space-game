@@ -2,110 +2,177 @@
 #include "InputHandler.h"
 #include "RStorage.h"
 #include "ePhysics.h"
-#include <functional>
+#include <cstdint>
+#include <iterator>
 #include <memory>
 
 
 
 
-void Tracker::lModel(RenderedObject* obj, umID umID) noexcept
-{
-  auto& ob = *obj;
-	ob.model = storage.loadModel(umID);
-	ob.model->curTexture = storage.getTexture(ob.model->name);
-	ob.loadedModel = true;
+
+
+Tracker::Instance::Instance(Tracker& Parent, std::function<void()> func):
+InstanceObject(Parent.initOriginObject(func)),
+uOID(InstanceObject->GetID()),
+pTracker(Parent)
+{};
+
+
+Tracker::Instance &Tracker::initInstance(std::function<void()> func) {
+  auto inst = std::make_unique<Instance>(*this, func);
+  auto ID = inst->uOID;
+  Instances.insert({ID, std::move(inst)});
+  return *Instances[ID];
 }
 
-
-Tracker::Instance::Instance(InstID instanceID, Tracker& Parent,  std::function<void()> func):
-instanceID(instanceID),
-pTracker(Parent){
-   InstanceObject = Parent.initOriginObject(this, func);
-};
-
-RStorage::bmResource& Tracker::GetModel(umID umID)
-{
-	return storage.GetModel(umID);
-}
-
-Tracker::Instance& Tracker::initInstance(InstID instanceID, std::function<void()> func)
-{
-  if(Instances.contains(instanceID)){
-    return initInstance(instanceID + 1);
-  }else{
-    Instances.insert({instanceID, std::make_unique<Instance>(instanceID, *this, func)});
-    return *Instances[instanceID];
-  }
-}
-
-Tracker::Instance& Tracker::getInstance(InstID instanceID)
+Tracker::Instance* Tracker::getInstance(UOID instanceID)
 {
 	if (!Instances.contains(instanceID)) {
-		return initInstance(instanceID);
+		return nullptr;
 	}
-	return *Instances[instanceID];
+	return Instances[instanceID].get();
 }
+std::unordered_map<UOID, std::shared_ptr<Object>>& Tracker::Instance::GetInstanceObjects()
+{
+  return InstanceObject->GetChildren();
+};
 
-void Tracker::MakeInstanceActive(Instance &inst) {
-  if (isInstanceActive.contains(inst.instanceID)) {
-    if (isInstanceActive[inst.instanceID] != &inst.Active) {
-      isInstanceActive[inst.instanceID] = &inst.Active;
-      inst.Active.store(true);
-      ActiveInstances.emplace_back(&inst);
-    }
-    inst.Active.store(true);
-    ActiveInstances.emplace_back(&inst);
-
-    return;
+void Tracker::MakeInstanceActive(UOID id) {
+  if (!isInstanceActive(id)) {
+    ActiveInstances.insert({id, Instances[id]});
   }
-  inst.Active.store(true);
-  ActiveInstances.emplace_back(&inst);
-  isInstanceActive.insert({inst.instanceID, &inst.Active});
 }
 
-Object *Tracker::initOriginObject(Instance* oInstance,
-                            std::function<void()> func) {
+void Tracker::Instance::MakeInstanceActive() {
+  pTracker.MakeInstanceActive(uOID);
+}
+
+void Tracker::Instance::AddObject(std::shared_ptr<Object>& obj){
+  obj->AddParent(InstanceObject);
+}
+
+std::shared_ptr<Object>& Tracker::initOriginObject(std::function<void()> func) {
   auto uOID = idTracker.AllocID();
-  oInstance->uniqueOrigin =  std::make_unique<Object>(uOID, func, oInstance);
-  return oInstance->uniqueOrigin.get();
+  Objects.insert({uOID, std::make_shared<Object>("OriginObject", uOID, *this)});
+  if (func) {
+    Objects[uOID]->linkScript(func);
+  }
+  Objects[uOID]->isOrigin = true;
+  return Objects[uOID];
 }
 
-Object *Tracker::initObject(Instance &oInstance, std::string Name,
-                            std::function<void()> func) {
+std::shared_ptr<Object>& Tracker::initObject(std::string Name,
+                            std::function<void()> func, Instance* oInstance) {
   auto uOID = idTracker.AllocID();
-  TrackedObjects.insert(
-      {uOID, std::make_unique<Object>(Name, uOID, func, &oInstance)});
-  return TrackedObjects[uOID].get();
+  Objects.insert({uOID, std::make_shared<Object>(Name, uOID, *this)});
+  if (func) {
+    Objects[uOID]->linkScript(func);
+  }
+  return Objects[uOID];
 }
 
-CameraObject* Tracker::initCameraObject(Tracker::Instance& pInstance, std::string name, std::function<void()> func, 
-     FLOAT3 initPos, 
-    FLOAT4 initRot, FLOAT4 initUpDirection, 
-    RenderedObject* link, bool Active){
-      auto UOID = idTracker.AllocID();
-  TrackedObjects.insert(
-      {UOID, std::make_unique<CameraObject>(name,  UOID, func, 
-    &pInstance, initPos, 
-    initRot, initUpDirection, 
-    link, Active)});
-  return (CameraObject *)TrackedObjects[UOID].get();
-    }
+std::shared_ptr<Object>& Tracker::initCameraObject(std::string name, std::function<void()> func,
+                                        FLOAT3 initPos, 
+                                        FLOAT4 initRot,
+                                        FLOAT4 initUpDirection,
+                                        bool Active) {
+  auto UOID = idTracker.AllocID();
+  Objects.insert({UOID, std::make_unique<CameraObject>(
+                                   name, UOID, *this, initPos, initRot,
+                                   initUpDirection, Active)});
+  CameraObjects.insert({UOID, Objects[UOID]});
+  if (func) {
+    Objects[UOID]->linkScript(func);
+  }
+  return Objects[UOID];
+}
 
 // Make objects able to be in multiple instances without loading new data
-PhysicsObject *
-Tracker::initPhysObject(Instance &Instance, std::string Name,
-                    std::function<void()> func, umID filebModelIndex,
-                    float mScale, FLOAT3 initPos,
-                    FLOAT4 initRot, float mMass, float mFriction,
-                    FLOAT3 initVelDir, float initSpeed) {
-
+std::shared_ptr<Object>& Tracker::initPhysObject(std::string Name, std::function<void()> func,
+                                       umID filebModelIndex, float mScale,
+                                       FLOAT3 initPos, FLOAT4 initRot,
+                                       float mMass, float mFriction,
+                                       FLOAT3 initVelDir, float initSpeed) {
   auto UOID = idTracker.AllocID();
-  TrackedObjects.insert(
-      {UOID, std::make_unique<PhysicsObject>(
-                 Name, UOID, func, &Instance, nullptr,
-                 filebModelIndex, mScale,
-                 initPos, initRot, mMass, mFriction, initVelDir, initSpeed)});
-  return (PhysicsObject *)TrackedObjects[UOID].get();
+  Objects.insert({UOID, std::make_unique<PhysicsObject>(
+                                   Name, UOID, *this, mScale, initPos, initRot, mMass,
+                                   mFriction, initVelDir, initSpeed)});
+  RenderObjects.insert({UOID, Objects[UOID]});
+  PhysicsObjects.insert({UOID, Objects[UOID]});
+  ((PhysicsObject*)Objects[UOID].get())->LinkToModel(filebModelIndex);
+  if (func) {
+    Objects[UOID]->linkScript(func);
+  }
+  return Objects[UOID];
+}
+
+void Tracker::MakeCameraObj(UOID uOID) {
+  std::unique_ptr<CameraObject> old = std::make_unique<CameraObject>(*Objects[uOID]);
+  Objects[uOID].reset(old.release());
+  CameraObjects.insert({uOID, Objects[uOID]});
+}
+
+void Tracker::MakeRenderObj(UOID ID){
+  std::unique_ptr<RenderedObject> old = std::make_unique<RenderedObject>(*Objects[ID]);
+  Objects[ID].reset(old.release());
+  RenderObjects.insert({ID, Objects[ID]});
+}
+//Will leak memory and probably cause issues if not removed from previous tracker.
+void Tracker::MakePhysicsObj(UOID uOID) {
+  if(!IsRendered(uOID)){
+    MakeRenderObj(uOID);
+  }
+  std::unique_ptr<PhysicsObject> old = std::make_unique<PhysicsObject>(*(RenderedObject*)Objects[uOID].get());
+  Objects[uOID].reset(old.release());
+  PhysicsObjects.insert({uOID, Objects[uOID]});
+}
+
+CameraObject *Tracker::IsCamera(Object *Obj){return IsCamera(Obj->GetID());};
+RenderedObject *Tracker::IsRendered(Object *Obj){return IsRendered(Obj->GetID());};
+PhysicsObject *Tracker::IsPhysics(Object *Obj){return IsPhysics(Obj->GetID());};
+
+// Really should validate if model ID is actually valid.
+void Tracker::LinkModel(UOID ID, umID mID) {
+  auto Object = IsRendered(ID);
+  if (Object) {
+    if (ViewBuffers.contains(mID)) {
+
+      ViewBuffers[mID].ViewBuffLock.lock();
+      Object->CBVIndex = ViewBuffers[mID].LinkedObjects.size();
+      ViewBuffers[mID].LinkedObjects.emplace_back(Objects[ID]);
+      Object->CBVRef = --ViewBuffers[mID].LinkedObjects.end();
+      ViewBuffers[mID].vCount+=1;
+      ViewBuffers[mID].ViewBuffLock.unlock();
+    } else {
+      ViewBuffers[mID].ViewBuffLock.lock();
+      auto list =std::list{Objects[ID]};
+      ViewBuffers.insert(std::pair{mID, ModelLinkedViewBuffers()});
+      Object->CBVIndex = ViewBuffers[mID].LinkedObjects.size();
+      ViewBuffers[mID].LinkedObjects.emplace_back(Objects[ID]);
+      Object->CBVRef = --ViewBuffers[mID].LinkedObjects.end();
+      ViewBuffers[mID].vCount+=1;
+      ViewBuffers[mID].ViewBuffLock.unlock();
+    }
+  } else {
+    if (Objects.contains(ID)) {
+      MakeRenderObj(ID);
+      LinkModel(ID, mID);
+    }
+  }
+}
+
+void Tracker::unLinkModel(UOID ID) {
+  auto RenderObjPtr = IsRendered(ID);
+  if (RenderObjPtr) {
+    if (ViewBuffers.contains(RenderObjPtr->ModelID)) {
+      ViewBuffers[RenderObjPtr->ModelID].ViewBuffLock.lock();
+      ViewBuffers[RenderObjPtr->ModelID].LinkedObjects.erase(
+          RenderObjPtr->CBVRef);
+      ViewBuffers[RenderObjPtr->ModelID].vCount -= 1;
+      ViewBuffers[RenderObjPtr->ModelID].FlaggedForUpdate = true;
+      ViewBuffers[RenderObjPtr->ModelID].ViewBuffLock.unlock();
+    }
+  }
 }
 
 void Tracker::unloadObject(UOID obj)
@@ -113,65 +180,33 @@ void Tracker::unloadObject(UOID obj)
 
 }
 
-void Tracker::Instance::AddObject(Object* obj){
-  InstanceObjLock.lock();
-  InstanceObjects.emplace_back(obj);
-  Count++;
-  obj->LinkedInstance = this;
-  InstanceObjLock.unlock();
-}
-
-
 
 
 //This will definitely leak memory if the previous link isnt removed
-void Tracker::Instance::LinkToModel(RenderedObject *obj, umID umID) {
-  obj->CBVIndex = ModelLinkedObjects[umID].size();
-  ModelLinkedObjects[umID].emplace_back(obj);
-  if (!instancedCBVData.contains(umID))
-    instancedCBVData.insert({umID, nullptr});
-}
-
-//Will leak memory and probably cause issues if not removed from previous tracker.
-void Tracker::Instance::EnablePhysics(PhysicsObject *obj, UOID uOID) {
-  PhysicsObjects.emplace_back(obj);
-  physEnabled.insert({uOID, true});
-}
-
-
-void Tracker::Instance::MakeCamera(CameraObject *obj, UOID uOID) {
-  Cameras.insert({uOID,obj});
-  physEnabled.insert({uOID, true});
-}
-
-CameraObject* Tracker::Instance::ActiveCamera(CameraObject *obj) {
-  if(obj != nullptr){
-    if(Cameras.contains(obj->uOID)){
-      auto oldCamera = activeCamera;
-      activeCamera = obj;
-      return (CameraObject*)oldCamera;
-    }
-  }else{
-    return (CameraObject*)activeCamera;
+void RenderedObject::LinkToModel(umID mID) {
+  if(hasModel.load()){
+    pTracker.unLinkModel(uOID);
   }
+  ModelID = mID;
+  pTracker.LinkModel(uOID, mID);
+
 }
 
-Object::Object(UOID uOID, std::function<void()> func,
-               Tracker::Instance *pInstance)
-    : name("OriginObject"), uOID(uOID), Script(func) {
-      isOrigin = true;
-      LinkedInstance = pInstance;
-    };
+void RenderedObject::loadModel() noexcept
+{
+  pTracker.loadModel(ModelID);
+  hasModel.store(true);
+}
 
-Object::Object(std::string name, UOID uOID, std::function<void()> func,
-               Tracker::Instance *pInstance)
-    : name(name), uOID(uOID), Script(func) {
-  pInstance->AddObject(this);
-  AddParent(pInstance->InstanceObject);
-};
+
+Object::Object(std::string name, UOID uOID, Tracker& tracker)
+    : name(name), uOID(uOID), pTracker(tracker) {};
 
 void CameraObject::Update() {
-  Script();
+  if(Script){
+    Script();
+  }
+
   // Toggle Freecam
 	struct Movement {
 		float forward = 0.0;
@@ -182,7 +217,7 @@ void CameraObject::Update() {
 
   //Make a helper function for this so I dont have to do it for every single key
   if(dispID.Empty.load()){
-    dispID = LinkedInstance->pTracker.InputHndlr.linkEvent('J', [this]{
+    dispID = pTracker.InputHndlr.linkEvent('J', [this]{
     ToggleFreedom();
   });
   }
@@ -195,23 +230,23 @@ void CameraObject::Update() {
   {
     // Rotation per second in radians //Currently 90 degrees per second
     double rotationPS = ucontrolClock.Peek() * _DEGREES90;
-    if (LinkedInstance->pTracker.InputHndlr.keyboard.KeyIsPressed(VK_UP)) {
+    if (pTracker.InputHndlr.keyboard.KeyIsPressed(0x26)) {//up
       pitch += rotationPS;
     }
-    if (LinkedInstance->pTracker.InputHndlr.keyboard.KeyIsPressed(VK_DOWN)) {
+    if (pTracker.InputHndlr.keyboard.KeyIsPressed(0x28)) {//down
       pitch += -rotationPS;
     }
-    if (LinkedInstance->pTracker.InputHndlr.keyboard.KeyIsPressed(VK_LEFT)) {
+    if (pTracker.InputHndlr.keyboard.KeyIsPressed(0x25)) {//left
       yaw += -rotationPS;
     }
-    if (LinkedInstance->pTracker.InputHndlr.keyboard.KeyIsPressed(VK_RIGHT)) {
+    if (pTracker.InputHndlr.keyboard.KeyIsPressed(0x27)) {//right
       yaw += rotationPS;
     }
 
-    if (LinkedInstance->pTracker.InputHndlr.keyboard.KeyIsPressed('Q')) {
+    if (pTracker.InputHndlr.keyboard.KeyIsPressed('Q')) {
       roll += rotationPS;
     }
-    if (LinkedInstance->pTracker.InputHndlr.keyboard.KeyIsPressed('E')) {
+    if (pTracker.InputHndlr.keyboard.KeyIsPressed('E')) {
       roll += -rotationPS;
     }
   }
@@ -224,19 +259,19 @@ void CameraObject::Update() {
       // Figure this out
 
       auto movespeed = 2.0 * ucontrolClock.Peek();
-      if (LinkedInstance->pTracker.InputHndlr.keyboard.KeyIsPressed('W')) {
+      if (pTracker.InputHndlr.keyboard.KeyIsPressed('W')) {
         move.forward += movespeed;
       }
-      if (LinkedInstance->pTracker.InputHndlr.keyboard.KeyIsPressed('S')) {
+      if (pTracker.InputHndlr.keyboard.KeyIsPressed('S')) {
         move.forward -= movespeed;
       }
-      if (LinkedInstance->pTracker.InputHndlr.keyboard.KeyIsPressed('D')) {
+      if (pTracker.InputHndlr.keyboard.KeyIsPressed('D')) {
         move.right += movespeed;
       }
-      if (LinkedInstance->pTracker.InputHndlr.keyboard.KeyIsPressed('A')) {
+      if (pTracker.InputHndlr.keyboard.KeyIsPressed('A')) {
         move.right -= movespeed;
       }
-      if (LinkedInstance->pTracker.InputHndlr.keyboard.KeyIsPressed('K')) {
+      if (pTracker.InputHndlr.keyboard.KeyIsPressed('K')) {
         move.movestop = true;
       }
   if (move.forward != 0 || move.right != 0) {
@@ -253,7 +288,7 @@ void CameraObject::Update() {
       cPos.Move(mv);
   }
   } else if (GetLinked() && !isFree()) {
-    FLOAT3 mv = GetLinked()->mPos.Get();
+    FLOAT3 mv = ((RenderedObject*)GetLinked().get())->mPos.Get();
     cPos.Move(mv);
   }
   ucontrolClock.Mark();
@@ -265,11 +300,10 @@ void CameraObject::Update() {
   cMatrix = LookTo(position*-1.f, rotation*-1.f, upDirection);
 }
 
-void CameraObject::LinkTo(RenderedObject *obj) {
-  if (linkedObject) {
-    linkedObject = nullptr;
+void CameraObject::LinkTo(const std::shared_ptr<Object>& obj) {
+  if (pTracker.IsRendered(obj->GetID()) ) {
+      linkedObject = obj;
   }
-  linkedObject = obj;
 }
 
 void CameraObject::Rotate(float &Pitch, float &Yaw, float &Roll) {
@@ -306,56 +340,57 @@ void CameraObject::Rotate(float &Pitch, float &Yaw, float &Roll) {
  
 }
 
-CameraObject::CameraObject(Object &obj, FLOAT3 initPos, FLOAT4 initRot,
-                           FLOAT4 initUpDirection,
-                           RenderedObject *link, bool Active)
-    : Object(obj),
-      isActive(Active), linkedObject(link), cPos(CameraPosition(initPos, initRot, initUpDirection))
-      {
-};
-
-CameraObject::CameraObject(std::string name, UOID uOID,
-                           std::function<void()> func,
-                           Tracker::Instance *pInstance,
+CameraObject::CameraObject(Object& obj,
                            FLOAT3 initPos, FLOAT4 initRot,
                            FLOAT4 initUpDirection,
-                           RenderedObject *link, bool Active)
-    : Object(
-          name, uOID, func, pInstance),
+                           bool Active)
+    : Object(obj),
       isActive(Active), 
-      linkedObject(link), cPos(CameraPosition(initPos, initRot, initUpDirection)) {
-      LinkedInstance->MakeCamera(this, uOID);
+     cPos(CameraPosition(initPos, initRot, initUpDirection)) {
 };
 
 
+CameraObject::CameraObject(std::string name, UOID uOID,
+                          Tracker& tracker,
+                           FLOAT3 initPos, FLOAT4 initRot,
+                           FLOAT4 initUpDirection,
+                            bool Active)
+    : Object(name, uOID, tracker),
+      isActive(Active), 
+       cPos(CameraPosition(initPos, initRot, initUpDirection)) {
+};
 
-RenderedObject::RenderedObject(std::string name, UOID UOID,
-                               std::function<void()> func,
-                               Tracker::Instance *pInstance,
-                               RStorage::bmResource *model, umID filebModelIndex,
+
+RenderedObject::RenderedObject(Object& old,
                                float mScale, FLOAT3 initPos,
                                FLOAT4 initRot)
-    : Object(
-          name, UOID, func, pInstance),
-      model(model), scale(mScale),
-      mPos(relposVect(initPos, initRot)) {
-  LinkedInstance->LinkToModel(this, filebModelIndex);
-};
+    : Object(std::move(old)), scale(mScale),
+      mPos(relposVect(initPos, initRot)) {};
+
+RenderedObject::RenderedObject(std::string name, UOID UOID,
+                                Tracker& tracker,
+                               float mScale, FLOAT3 initPos,
+                               FLOAT4 initRot)
+    : Object(name, UOID, tracker),
+       scale(mScale),
+      mPos(relposVect(initPos, initRot)) {};
+
+PhysicsObject::PhysicsObject(RenderedObject& obj,
+                             float mScale, FLOAT3 initPos, FLOAT4 initRot,
+                             float mMass, float mFriction, FLOAT3 initVelDir,
+                             float initSpeed)
+    : RenderedObject(obj),
+      mass(mMass), friction(mFriction), velDir(initVelDir), speed(initSpeed) {};
+
 
 PhysicsObject::PhysicsObject(std::string name, UOID UOID,
-                             std::function<void()> func,
-                             Tracker::Instance *pInstance,
-                             RStorage::bmResource *model, umID filebModelIndex,
-                             float mScale, FLOAT3 initPos,
-                             FLOAT4 initRot, float mMass,
-                             float mFriction, FLOAT3 initVelDir,
+                             Tracker& tracker,
+                             float mScale, FLOAT3 initPos, FLOAT4 initRot,
+                             float mMass, float mFriction, FLOAT3 initVelDir,
                              float initSpeed)
-    : RenderedObject(
-          name, UOID, func, pInstance, model, filebModelIndex,
-          mScale, initPos, initRot),
-      mass(mMass), friction(mFriction), velDir(initVelDir), speed(initSpeed) {
-  LinkedInstance->EnablePhysics(this, uOID);
-};
+    : RenderedObject(name, UOID, tracker, mScale,
+                     initPos, initRot),
+      mass(mMass), friction(mFriction), velDir(initVelDir), speed(initSpeed) {};
 
 //"Thread Safe" way to change position. Uses vector and direction to change
 //position
@@ -434,19 +469,18 @@ const FLOAT4 CameraPosition::GetUpDirection(){
 
 void PhysicsObject::Update()
 {
+  if(Script){
   Script();
+  }
 	FLOAT3 nDir{ 0,0,0 };
 	PhysicsUpdate.lock();
 	std::for_each(pDir.begin(), pDir.end(), [&nDir](auto& x) {
 		nDir = nDir + x;
 	});
 	PhysicsUpdate.unlock();
-
-
   auto position = mPos.Get();
 	position = position + nDir;
 	CollReset();
 	position = position + (velDir * speed);
   mPos.Move(position);
-
 }

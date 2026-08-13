@@ -43,7 +43,7 @@ TRIANGLE;
 
 typedef struct WORKDATA
 {
-    int bIndex[2];
+    unsigned int bIndex[2];
     float3 Position;
 }
 WORKDATA;

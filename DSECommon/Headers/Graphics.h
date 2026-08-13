@@ -1,13 +1,13 @@
-#include <DirectXMath.h>
-
 #pragma once
+
 #include "FrameResource.h"
 #include "EngineTime.h"
 
-
 #include <slang.h>
+#include "GraphicsErrors.h"
 #include "slang-com-ptr.h"
 #include <condition_variable>
+#include <unordered_map>
 
 #ifdef __WIN32
 #ifdef __USEDXC
@@ -37,23 +37,21 @@ public:
   ImGui_ImplDX12_InitInfo ImGuiInfo;
 #endif
 private:
-Tracker& oTracker;
+
+  Tracker& oTracker;
   const DXGI_FORMAT SwapChainFormat = DXGI_FORMAT_R10G10B10A2_UNORM;
   HMODULE DXGIDebug;
   void dxgichk();
   // update graphics for a list of tracked objects. Preferably objects loaded in
   // memory and meant to be rendered
   void Update();
-  void CreateBuffers(Tracker::Instance &tInstance);
-  void
-  UpdBuffer(RStorage::bmResource &bm,
-            Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList,
-            Microsoft::WRL::ComPtr<ID3D12Device> pDevice,
-            Microsoft::WRL::ComPtr<ID3D12CommandAllocator> commandAllocator,
-            Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue);
+  void CreateBuffers();
+  void const static UpdateBuffer(
+      RenderBuffers &bm,
+      Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList);
   void UpdateModel(RenderedObject *bm);
   void RenderFrame();
-  void LoadResources(Tracker::Instance &tInstance);
+  void UpdateResources();
   void LoadPipeline();
   void UpdateLocalTransform(RenderedObject &bm);
   #ifdef __USEDXC
@@ -73,7 +71,7 @@ Tracker& oTracker;
 
   FLOAT4X4 fovPerspective;
   float timesincestart;
-  void RecurLTrans(ModelData::Node *n, ModelData::Node *P);
+  void RecurLTrans(Node *n, Node *P);
 
   // uint16_t& width;
   // uint16_t& height;
@@ -130,19 +128,89 @@ Tracker& oTracker;
   std::vector<D3D12_VERTEX_BUFFER_VIEW *> vbvarr;
   std::vector<D3D12_INDEX_BUFFER_VIEW *> ibvarr;
   Microsoft::WRL::ComPtr<ID3D12PipelineState> pPipelineState;
-
-  GErrors Errors;
-
   GErrors::CheckerToken chk;
-
   UINT modelSubCount;
-
   HANDLE fenceEvent;
-
   EngineTime timer;
+
+  class DescriptorHeapAllocator {
+  public:
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> DescHeap;
+    D3D12_DESCRIPTOR_HEAP_TYPE HeapType;
+    D3D12_CPU_DESCRIPTOR_HANDLE HeapStartCpu;
+    D3D12_GPU_DESCRIPTOR_HANDLE HeapStartGpu;
+    struct handls {
+      D3D12_CPU_DESCRIPTOR_HANDLE *cpuHndl;
+      D3D12_GPU_DESCRIPTOR_HANDLE *gpuHndl;
+      // Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> originHeap;
+    };
+    // std::unordered_map<uint64_t, handls> allocatedHandles;
+    // std::unordered_map<SIZE_T, uint64_t> uidHndls;
+
+    Microsoft::WRL::ComPtr<ID3D12Device9> pDevice;
+    uint64_t HeapHandleIncrement;
+    std::vector<uint64_t> FreeIndices;
+    uint64_t lastSize = 0;
+    DescriptorHeapAllocator(Microsoft::WRL::ComPtr<ID3D12Device9> &pD,
+                            uint64_t DescpCount = 1000000)
+        : pDevice(pD) {
+      {
+        D3D12_DESCRIPTOR_HEAP_DESC desc = {};
+        desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+        desc.NumDescriptors = DescpCount;
+        desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+        pDevice->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&DescHeap));
+      }
+
+      D3D12_DESCRIPTOR_HEAP_DESC desc;
+      DescHeap->GetDesc(&desc);
+      HeapType = desc.Type;
+      DescHeap->GetCPUDescriptorHandleForHeapStart(&HeapStartCpu);
+      DescHeap->GetGPUDescriptorHandleForHeapStart(&HeapStartGpu);
+      HeapHandleIncrement = pDevice->GetDescriptorHandleIncrementSize(HeapType);
+      FreeIndices.reserve(desc.NumDescriptors);
+      FreeIndices.resize(desc.NumDescriptors);
+      std::iota(FreeIndices.begin(), FreeIndices.end(), 0);
+      std::reverse(FreeIndices.begin(), FreeIndices.end());
+      lastSize = desc.NumDescriptors;
+    }
+    ~DescriptorHeapAllocator() { Destroy(); }
+
+    void Destroy() {
+      DescHeap = nullptr;
+      FreeIndices.clear();
+    }
+    void Alloc(D3D12_CPU_DESCRIPTOR_HANDLE *out_cpu_desc_handle,
+               D3D12_GPU_DESCRIPTOR_HANDLE *out_gpu_desc_handle) {
+      uint64_t idx = FreeIndices.back();
+      FreeIndices.pop_back();
+      out_cpu_desc_handle->ptr = HeapStartCpu.ptr + (idx * HeapHandleIncrement);
+      out_gpu_desc_handle->ptr = HeapStartGpu.ptr + (idx * HeapHandleIncrement);
+
+      // Is a map faster than division?
+      // uidHndls[out_cpu_desc_handle->ptr] = idx;
+      // allocatedHandles[idx] = { out_cpu_desc_handle , out_gpu_desc_handle};
+    }
+    void Free(D3D12_CPU_DESCRIPTOR_HANDLE out_cpu_desc_handle,
+              D3D12_GPU_DESCRIPTOR_HANDLE out_gpu_desc_handle) {
+      // Map faster or slower than division ?
+      // uint64_t cpu_idx = uidHndls[out_cpu_desc_handle.ptr];
+      // uidHndls.erase(out_cpu_desc_handle.ptr);
+      uint64_t cpu_idx =
+          (out_cpu_desc_handle.ptr - HeapStartCpu.ptr) / HeapHandleIncrement;
+      uint64_t gpu_idx =
+          (out_gpu_desc_handle.ptr - HeapStartGpu.ptr) / HeapHandleIncrement;
+      //_ASSERT(cpu_idx == gpu_idx);
+      // allocatedHandles.erase(cpu_idx);
+      FreeIndices.push_back(cpu_idx);
+    }
+  };
 
   std::unique_ptr<DescriptorHeapAllocator> lmodelSRVCVB;
   std::shared_ptr<DescriptorHeapAllocator> imHAllocator;
   std::unique_ptr<DescriptorHeapAllocator> objectAllocator;
+
+
+  std::unordered_map<umID, RenderBuffers> RenderBufferMap;
 };
 

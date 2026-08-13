@@ -1,51 +1,46 @@
 #include "Exceptions.h"
+#include <iostream>
 #include <sstream>
+#include <string>
 
 
 #if defined(_WIN32)
 #include <CWin.h>
 #endif
 
-Exceptions::Exceptions(int line, const char* file) noexcept
-	:
-	line(line),
-	file(file) {
-}
+
 
 
 
 const char* Exceptions::what() const noexcept {
-	std::ostringstream oss;
-	oss << GetType() << '\n'
-		<< GetOriginString();
-	whatBuffer = oss.str();
 	return whatBuffer.c_str();
-
 }
 const char* Exceptions::GetType() const noexcept
 {
-	return "My Exception";
+	return "String Based";
 }
 
 int Exceptions::GetLine() const noexcept
 {
-	return line;
+	return source.line();
 }
 
-const std::string& Exceptions::GetFile() const noexcept
+const std::string Exceptions::GetFile() const noexcept
 {
-	return file;
+	return source.file_name();
 }
 
 std::string Exceptions::GetOriginString() const noexcept
 {
 	std::ostringstream oss;
-	oss << "[File] " << file << '\n'
-		<< "[Line] " << line;
+	oss << "[File] " << GetFile() << '\n'
+		<< " [Line] " << GetLine();
 	return oss.str();
 }
 
-//Window Exception
+//Windows Exceptions
+HrException::HrException(ERRORCODE hr, std::source_location src)noexcept:Exceptions(TranslateErrorCode(hr).c_str(), src),hr(hr){};
+
 std::string HrException::TranslateErrorCode(ERRORCODE hr) const noexcept
 {
 	char* pMsgBuf = nullptr;
@@ -67,52 +62,59 @@ std::string HrException::TranslateErrorCode(ERRORCODE hr) const noexcept
 	LocalFree(pMsgBuf);
 	return errorString;
 }
-HrException::HrException(ERRORCODE hr, int line, const char* file) noexcept
-	:
-	Exceptions(line, file),
-	hr(hr)
-{
-}
+
 const char* HrException::what() const noexcept
 {
 	std::ostringstream oss;
 	oss << GetType() << '\n'
 		<< "[Error Code] 0x" << std::hex << std::uppercase << GetErrorCode() << '\n'
-		<< "[Description] " << GetErrorDescription() << '\n'
+		<< "[Description] " << what() << '\n'
 		<< GetOriginString();
-        whatBuffer = oss.str();
-        return whatBuffer.c_str();
+    strBuffer = oss.str();
+    return strBuffer.c_str();
 }
+
 const char *HrException::GetType() const noexcept {
-  return "Demo Window Exception";
+  return "HR Exception";
 }
 ERRORCODE HrException::GetErrorCode() const noexcept { return hr; }
-std::string HrException::GetErrorDescription() const noexcept {
-  return TranslateErrorCode(hr);
-}
 
-
-
-
-std::vector<std::string> tsPrintBuffer::Buffer = {{""}};
-std::vector<std::string> tsPrintBuffer::Format = {{""}};
+std::queue<std::function<void()>> tsPrintBuffer::Queue;
 std::mutex tsPrintBuffer::bufferLock;
 void tsPrintBuffer::PrintFBuffered() {
   bufferLock.lock();
-  auto b = Buffer.begin();
-  for(auto f : Format){
-    printf(f.c_str(), b->c_str());
-    b++;
+  while(!Queue.empty()){
+    Queue.front()();
+    Queue.pop();
   }
-  
   fflush(stdout);
-  Format =  {{""}};
-  Buffer =  {{""}};
   bufferLock.unlock();
 }
-void tsPrintBuffer::QueuePrintF(std::string format, std::vector<std::string> str) {
-  bufferLock.lock();
-  Buffer.append_range(str);
-  Format.emplace_back(format);
-  bufferLock.unlock();
-}
+
+
+void operator>>(Exceptions Grabber, Exceptions::CheckerToken tkn) {
+  if ((strcmp(Grabber.what(), "ERROR:") > 0)) {
+    std::string err = Grabber.what();
+    printf("%s := \n  %s \n", err.c_str(), Grabber.GetOriginString().c_str());
+    fflush(stdout);
+    throw Grabber;
+  } else{
+    std::string mssg = Grabber.what();
+    std::printf("%s := \n  %s \n", mssg.c_str(), Grabber.GetOriginString().c_str());
+
+  }
+};
+
+void operator>>(HrException Grabber, Exceptions::CheckerToken tkn) {
+  if (FAILED(Grabber.hr)) {
+    std::string err = Grabber.TranslateErrorCode(Grabber.hr);
+    printf("ERROR: %s \n %s \n Error Code: %ld \n", err.c_str(), Grabber.GetOriginString().c_str(), Grabber.hr);
+    fflush(stdout);
+    throw Grabber;
+  } else if (Grabber.hr != S_OK) {
+    // get error description as narrow string with crlf removed
+    std::string Message = Grabber.TranslateErrorCode(Grabber.hr);
+    printf("INFO: %s \n %s \n", Message.c_str(), Grabber.GetOriginString().c_str());
+    fflush(stdout);
+  }
+};

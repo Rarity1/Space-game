@@ -2,6 +2,7 @@
 #include <cmath>
 #include <cstdint>
 #include <mutex>
+#include <sstream>
 
 // Need to make non windows version of dynamic library exporting
 #ifndef DLL
@@ -16,6 +17,13 @@
 #define _COMMONDSE
 constexpr double degrees90 = std::numbers::pi_v<double>*0.5;
 #define _DEGREES90 degrees90
+
+//Current path to find files etc
+#define _CURRENTPATH std::filesystem::current_path().parent_path().parent_path()
+
+// Unique Object ID
+typedef uint64_t UOID;
+
 
 struct alignas(8) FLOAT2 {
 
@@ -49,12 +57,12 @@ struct alignas(16) FLOAT3 {
     return { x - a.x,  y - a.y, z - a.z};
   };
   FLOAT3 operator/(const float &a) const { return {x / a, y / a, z / a}; };
-  FLOAT3 operator*(const FLOAT3 &a) const {
+  float operator*(const FLOAT3 &a) const {
     float result = 0;
     result += a.x * x;
     result += a.y * y;
     result += a.z * z;
-    return {result, result, result};
+    return result;
   };
 
   FLOAT3 operator*(const float &a) const {
@@ -64,7 +72,12 @@ struct alignas(16) FLOAT3 {
     result.z = a * z;
     return result;
   };
-
+  inline FLOAT3 Normal()const{
+    auto& tf = *this;
+    float dp = tf * tf;
+    dp = dp > 0 ? 1.f / sqrtf(dp) : dp;
+    return tf * dp;
+  };
   FLOAT3 CrossP(const FLOAT3 &Other) const {
     FLOAT3 result;
 
@@ -226,14 +239,18 @@ struct FLOAT3X3 {
   FLOAT3X3 operator*(const FLOAT3X3 &other) const {
     FLOAT3X3 result;
     // columns
-    FLOAT3 zero = {other.a.x, other.b.x, other.c.x};
-    FLOAT3 one = {other.a.y, other.b.y, other.c.y};
-    FLOAT3 two = {other.a.z, other.b.z, other.c.z};
+    FLOAT3X3 TOther = other.Transpose();
     // dot products
-    result.a = a * zero;
-    result.b = b * one;
-    result.c = c * two;
+    result.a = {a * TOther.a,a * TOther.b,a * TOther.c};
+    result.b = {b * TOther.a,b * TOther.b,b * TOther.c};
+    result.c = {c * TOther.a,c * TOther.b,c * TOther.c};
     return result;
+  };
+  inline FLOAT3X3 Transpose() const{
+    FLOAT3 na = {a.x, b.x, c.x};
+    FLOAT3 nb = {a.y, b.y, c.y};
+    FLOAT3 nc = {a.z, b.z, c.z};
+    return FLOAT3X3(na, nb, nc);
   };
   float Determinant() {
     float xd = CofactorHelp(b, c, 0) * a.x;
@@ -301,8 +318,6 @@ struct FLOAT4X4 {
   };
   FLOAT4X4 operator*(const float &other) const {
     FLOAT4X4 result;
-    // columns
-    // dot products
     result.a = a * other;
     result.b = b * other;
     result.c = c * other;
@@ -395,6 +410,14 @@ struct FLOAT4X4 {
   
 };
 
+struct CBVData {
+  FLOAT4X4 cbvMatrix;
+  uint32_t Texture = 0;
+  // do not use
+  // UINT Padding[3];
+};
+
+
 // transformation ???
 inline FLOAT4 operator*(const FLOAT4 &b, const FLOAT4X4 &a) {
   FLOAT4 result;
@@ -425,6 +448,7 @@ static FLOAT4X4 LookTo(const FLOAT4 &EyePos, const FLOAT4 &EyeDir,
     return Result.Transpose();
   };
 
+//Add intersection detection etc etc
 struct SphereCollider {
   FLOAT3 Center{0, 0, 0};
   float Radius = 1.f;
@@ -441,4 +465,51 @@ struct WRect {
   WindowRect wr;
   std::mutex Mtx;
 };
+
+
+
+static inline float fDistance(FLOAT3& pos1, FLOAT3& pos2) {
+    FLOAT3 Result{ 0,0,0};
+    Result = pos2 - pos1;
+    return sqrt(Result * Result);
+}
+
+static inline FLOAT3 fDirection(FLOAT3& pos1, FLOAT3& pos2) {
+    FLOAT3 Result{ 0,0,0 };
+    Result = pos2 - pos1;
+    float dir = Result * Result;
+    if (dir != 0) {
+        return Result / sqrt(dir);
+    }
+    return { 0,0,0};
+}
+
+inline FLOAT4X4 strToMatrix(std::istringstream &rawmatri) {
+  FLOAT4X4 float4x4;
+  float x, y, z, w;
+  int caser = 0;
+  while (rawmatri >> x >> y >> z >> w) {
+    switch (caser) {
+    case (0):
+      float4x4.a = {x, y, z, w};
+      break;
+    case (1):
+      float4x4.b = {x, y, z, w};
+      break;
+    case (2):
+      float4x4.c = {x, y, z, w};
+      break;
+    case (3):
+      float4x4.d = {x, y, z, w};
+      break;
+    }
+
+    caser++;
+  }
+  return float4x4;
+}
+
+
+
+
 #endif

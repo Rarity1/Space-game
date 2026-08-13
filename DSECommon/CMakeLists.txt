@@ -3,11 +3,12 @@
 set(DSECppPath Source/)
 
 set(DSESources
+${DSECppPath}Exceptions.cpp 
 ${DSECppPath}Engine.cpp 
 ${DSECppPath}InputHandler.cpp 
-${DSECppPath}EngineTime.cpp 
+${DSECppPath}EngineTime.cpp
 ${DSECppPath}ePhysics.cpp 
-${DSECppPath}Exceptions.cpp 
+${DSECppPath}Profiler.cpp 
 ${DSECppPath}FrameResource.cpp 
 ${DSECppPath}Graphics.cpp 
 ${DSECppPath}GraphicsErrors.cpp 
@@ -32,5 +33,5 @@ add_compile_definitions(DESCDLL=0 IMGUI_DISABLE_OBSOLETE_FUNCTIONS=0
 set_target_properties(DSECommon PROPERTIES COMPILE_TAGS "-save-temps")
 
 
-target_link_libraries(DSECommon rapidxml OpenCL::OpenCL OpenCL::Headers OpenCL::HeadersCpp dxgi
+target_link_libraries(DSECommon stdc++exp rapidxml OpenCL::OpenCL OpenCL::Headers OpenCL::HeadersCpp dxgi
 DirectX-Headers DirectXTK12 DirectX-Guids d3d12 DirectXMath ${dxclibs}/dxcompiler.lib ${slang} ImGui)
